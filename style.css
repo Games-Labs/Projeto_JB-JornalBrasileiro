@@ -1,0 +1,659 @@
+/* =========================================
+   1. VARIÁVEIS E PALETA DE CORES DO JB
+   ========================================= */
+:root {
+    --carmine: #C70B2E;       /* Destaque / Identidade / Urgência */
+    --carmine-dark: #9e0824;  /* Hover de botões principais */
+    --champagne: #f1eade;     /* Fundo Principal (Papel de jornal) */
+    --coffee: #342A21;        /* Tipografia / Texto / Alto contraste */
+    --khaki: #cfc1ad;         /* Divisores / Cards / Hover secundário */
+    --khaki-light: #e4d6c2;   /* Variação sutil para blocos internos */
+
+    --font-serif: 'Merriweather', Georgia, serif;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* =========================================
+   2. RESET E CONFIGURAÇÕES GERAIS
+   ========================================= */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background-color: var(--champagne);
+    color: var(--coffee);
+    font-family: var(--font-sans);
+    line-height: 1.6;
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+    transition: 0.2s ease;
+}
+
+h1, h2, h3, h4, .logo-sigla {
+    font-family: var(--font-serif);
+    color: var(--coffee);
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+}
+
+.hidden-checkbox {
+    display: none;
+}
+
+/* =========================================
+   3. TICKER DE ÚLTIMA HORA (BREAKING NEWS)
+   ========================================= */
+.breaking-news-bar {
+    background-color: var(--coffee);
+    color: var(--champagne);
+    display: flex;
+    align-items: center;
+    font-size: 0.85rem;
+    border-bottom: 2px solid var(--carmine);
+    overflow: hidden;
+}
+
+.badge-urgente {
+    background-color: var(--carmine);
+    color: #fff;
+    font-weight: 700;
+    padding: 6px 14px;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    font-size: 0.75rem;
+}
+
+.ticker-wrapper {
+    overflow: hidden;
+    white-space: nowrap;
+    width: 100%;
+    padding: 6px 15px;
+}
+
+.ticker-text {
+    display: inline-block;
+    animation: tickerScroll 28s linear infinite;
+}
+
+.ticker-text:hover {
+    animation-play-state: paused;
+}
+
+@keyframes tickerScroll {
+    0% { transform: translateX(60%); }
+    100% { transform: translateX(-100%); }
+}
+
+/* =========================================
+   4. HEADER / CABEÇALHO
+   ========================================= */
+.site-header {
+    background-color: var(--champagne);
+    border-bottom: 3px double var(--coffee);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 14px;
+    padding-bottom: 14px;
+    gap: 15px;
+}
+
+/* Esquerda: "Hambúrguer" e Logo */
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.hamburger-btn {
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    padding: 6px;
+    border: 1px solid var(--khaki);
+    border-radius: 4px;
+}
+
+.hamburger-btn:hover {
+    background-color: var(--khaki);
+}
+
+.hamburger-btn span {
+    width: 22px;
+    height: 2px;
+    background-color: var(--coffee);
+    display: block;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.logo-sigla {
+    background-color: var(--carmine);
+    color: var(--champagne);
+    font-weight: 900;
+    font-size: 1.5rem;
+    padding: 4px 10px;
+    border-radius: 2px;
+    letter-spacing: -1px;
+}
+
+.logo-texto {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+}
+
+.logo-texto strong {
+    font-family: var(--font-serif);
+    font-size: 1.15rem;
+}
+
+.logo-texto small {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.85;
+}
+
+/* Gaveta Lateral de Tópicos (Menu Hambúrguer) */
+.topics-drawer {
+    position: fixed;
+    top: 0;
+    left: -280px;
+    width: 270px;
+    height: 100vh;
+    background-color: var(--champagne);
+    border-right: 2px solid var(--coffee);
+    padding: 20px;
+    transition: left 0.3s ease;
+    z-index: 200;
+    box-shadow: 4px 0 15px rgba(52, 42, 33, 0.25);
+}
+
+#menu-toggle:checked ~ .topics-drawer {
+    left: 0;
+}
+
+.drawer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid var(--khaki);
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+}
+
+.close-drawer {
+    font-size: 1.8rem;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.topics-drawer ul {
+    list-style: none;
+}
+
+.topics-drawer li a {
+    display: block;
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--khaki);
+    font-weight: 600;
+}
+
+.topics-drawer li a:hover {
+    background-color: var(--khaki);
+    padding-left: 14px;
+}
+
+/* Centro: Navegação Principal */
+.main-nav {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+}
+
+.main-nav a {
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 6px 4px;
+    border-bottom: 2px solid transparent;
+}
+
+.main-nav a:hover,
+.main-nav a.active {
+    border-bottom-color: var(--carmine);
+    color: var(--carmine);
+}
+
+.main-nav .nav-highlight {
+    background-color: var(--khaki-light);
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--khaki);
+}
+
+/* Direita: Busca e Usuário */
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.search-box {
+    display: flex;
+    border: 1px solid var(--coffee);
+    border-radius: 4px;
+    overflow: hidden;
+    background-color: rgba(255, 255, 255, 0.35);
+}
+
+.search-box input {
+    border: none;
+    background: transparent;
+    padding: 6px 10px;
+    color: var(--coffee);
+    font-family: var(--font-sans);
+    outline: none;
+    width: 150px;
+}
+
+.search-box button {
+    border: none;
+    background-color: var(--khaki);
+    padding: 0 10px;
+    cursor: pointer;
+}
+
+.btn-user {
+    background-color: var(--coffee);
+    color: var(--champagne);
+    padding: 7px 16px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.btn-user:hover {
+    background-color: var(--carmine);
+}
+
+/* =========================================
+   5. CORPO PRINCIPAL E LAYOUT EDITORIAL
+   ========================================= */
+.main-layout {
+    padding-top: 30px;
+    padding-bottom: 50px;
+}
+
+.category-tag {
+    display: inline-block;
+    color: var(--carmine);
+    font-weight: 700;
+    font-size: 0.75rem;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+
+.editorial-divider {
+    border: none;
+    border-top: 1px solid var(--khaki);
+    margin: 35px 0;
+}
+
+/* Hero Grid (Manchete + Lateral) */
+.hero-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 30px;
+}
+
+.lead-story {
+    padding-right: 25px;
+    border-right: 1px solid var(--khaki);
+}
+
+.lead-story h1 {
+    font-size: 2.1rem;
+    line-height: 1.22;
+    margin-bottom: 12px;
+    font-weight: 900;
+}
+
+.lead-story .subtitle {
+    font-size: 1.05rem;
+    margin-bottom: 18px;
+    opacity: 0.9;
+}
+
+.story-image-placeholder {
+    background-color: var(--khaki);
+    border: 1px solid var(--coffee);
+    height: 280px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.meta-info {
+    font-size: 0.82rem;
+    opacity: 0.8;
+}
+
+/* Barra Lateral de Últimas Notícias */
+.section-title {
+    font-size: 1.25rem;
+    border-bottom: 2px solid var(--coffee);
+    padding-bottom: 6px;
+    margin-bottom: 16px;
+}
+
+.mini-card {
+    padding-bottom: 14px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--khaki);
+}
+
+.mini-card:last-child {
+    border-bottom: none;
+}
+
+.mini-card h3 {
+    font-size: 1rem;
+    line-height: 1.35;
+    margin-bottom: 4px;
+}
+
+.mini-card h3 a:hover {
+    color: var(--carmine);
+}
+
+.mini-card .time {
+    font-size: 0.78rem;
+    opacity: 0.75;
+}
+
+/* Feed em 3 Colunas */
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 20px;
+}
+
+.edition-date {
+    font-size: 0.85rem;
+    font-style: italic;
+}
+
+.cards-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+}
+
+.news-card {
+    background-color: rgba(201, 183, 156, 0.25);
+    border: 1px solid var(--khaki);
+    padding: 16px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.news-card:hover {
+    background-color: var(--khaki);
+}
+
+.card-thumb {
+    background-color: var(--khaki);
+    height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+    font-size: 0.85rem;
+    border: 1px solid rgba(52, 42, 33, 0.2);
+}
+
+.news-card h3 {
+    font-size: 1.08rem;
+    line-height: 1.35;
+    margin-bottom: 8px;
+}
+
+.news-card p {
+    font-size: 0.9rem;
+}
+
+/* =========================================
+   6. SEÇÃO DENUNCIE / ENVIE UMA PAUTA
+   ========================================= */
+.whistleblower-box {
+    background-color: var(--khaki-light);
+    border: 2px solid var(--coffee);
+    padding: 30px;
+    display: grid;
+    grid-template-columns: 1fr 1.2fr;
+    gap: 30px;
+    border-radius: 4px;
+}
+
+.whistleblower-info h2 {
+    font-size: 1.6rem;
+    margin: 10px 0;
+}
+
+.security-notes {
+    margin-top: 15px;
+    list-style: none;
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.whistleblower-form .form-group {
+    margin-bottom: 14px;
+}
+
+.whistleblower-form label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-bottom: 4px;
+}
+
+.whistleblower-form input[type="text"],
+.whistleblower-form textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--coffee);
+    background-color: var(--champagne);
+    color: var(--coffee);
+    font-family: var(--font-sans);
+    border-radius: 4px;
+}
+
+.btn-primary {
+    background-color: var(--carmine);
+    color: #fff;
+    border: none;
+    padding: 11px 20px;
+    font-weight: 700;
+    font-size: 0.95rem;
+    border-radius: 4px;
+    cursor: pointer;
+    display: inline-block;
+}
+
+.btn-primary:hover {
+    background-color: var(--carmine-dark);
+}
+
+/* =========================================
+   7. RODAPÉ / FOOTER
+   ========================================= */
+.site-footer {
+    background-color: var(--coffee);
+    color: var(--champagne);
+    padding-top: 40px;
+    border-top: 4px solid var(--carmine);
+}
+
+.footer-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr 1.3fr;
+    gap: 30px;
+    padding-bottom: 30px;
+}
+
+.footer-brand h3 {
+    color: var(--champagne);
+    margin: 10px 0 8px;
+}
+
+.footer-brand .logo-sigla {
+    display: inline-block;
+}
+
+.footer-grid h4 {
+    color: var(--khaki);
+    font-size: 1rem;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.footer-links ul {
+    list-style: none;
+}
+
+.footer-links li {
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+}
+
+.footer-links a:hover {
+    color: var(--khaki);
+    text-decoration: underline;
+}
+
+.footer-address p {
+    font-size: 0.88rem;
+    margin-bottom: 8px;
+}
+
+.footer-bottom {
+    background-color: rgba(0, 0, 0, 0.25);
+    text-align: center;
+    padding: 14px;
+    font-size: 0.82rem;
+    color: var(--khaki);
+}
+
+/* =========================================
+   8. BANNER LGPD (COOKIES)
+   ========================================= */
+.lgpd-banner {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: var(--coffee);
+    color: var(--champagne);
+    border-top: 2px solid var(--khaki);
+    padding: 14px 0;
+    z-index: 300;
+}
+
+.lgpd-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    font-size: 0.88rem;
+}
+
+.lgpd-content a {
+    color: var(--khaki);
+    text-decoration: underline;
+}
+
+#accept-cookies:checked + .lgpd-banner {
+    display: none;
+}
+
+/* =========================================
+   9. RESPONSIVIDADE (TABLET E MOBILE)
+   ========================================= */
+@media (max-width: 900px) {
+    .hero-grid,
+    .whistleblower-box {
+        grid-template-columns: 1fr;
+    }
+
+    .lead-story {
+        border-right: none;
+        padding-right: 0;
+        border-bottom: 1px solid var(--khaki);
+        padding-bottom: 20px;
+    }
+
+    .cards-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .footer-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .search-box {
+        display: none;
+    }
+}
+
+@media (max-width: 600px) {
+    .header-content {
+        flex-wrap: wrap;
+    }
+
+    .main-nav {
+        order: 3;
+        width: 100%;
+        justify-content: space-around;
+        border-top: 1px solid var(--khaki);
+        padding-top: 10px;
+        font-size: 0.85rem;
+    }
+
+    .cards-grid,
+    .footer-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .lgpd-content {
+        flex-direction: column;
+        text-align: center;
+    }
+}
