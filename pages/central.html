@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minha Central — Jornal Brasileiro (JB)</title>
+    <link rel="icon" href="../assets/favicon/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon/favicon-16x16.png">
+    <link rel="apple-touch-icon" href="../assets/favicon/apple-touch-icon.png">
+    <link rel="manifest" href="../assets/favicon/site.webmanifest">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Merriweather:ital,wght@0,700;0,900;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/vendor/bootstrap/bootstrap.min.css">
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <script>try{if(localStorage.getItem('jb_theme')==='dark')document.documentElement.setAttribute('data-bs-theme','dark')}catch(e){}</script>
+</head>
+<body data-root="../" data-page="central">
+    <div id="site-top"></div>
+    <main class="container main-layout">
+        <h1 class="page-title">Minha Central</h1>
+        <p class="page-lead">Seus favoritos, seu histórico de leitura e sugestões. Tudo fica salvo apenas neste navegador.</p>
+
+        <section class="mb-5">
+            <h2 class="section-title">Recomendadas para você</h2>
+            <p class="small text-muted" id="reco-info"></p>
+            <div class="row g-4" id="reco"></div>
+        </section>
+
+        <section class="mb-5">
+            <h2 class="section-title">Favoritos (<span id="fav-count">0</span>)</h2>
+            <div class="row g-4" id="favs"></div>
+        </section>
+
+        <section class="mb-5">
+            <div class="d-flex justify-content-between align-items-baseline">
+                <h2 class="section-title flex-grow-1 me-3">Histórico de leitura</h2>
+                <button class="btn btn-outline-dark btn-sm" id="clear-history" type="button">Limpar histórico</button>
+            </div>
+            <div class="row g-4" id="history"></div>
+        </section>
+    </main>
+    <div id="site-bottom"></div>
+    <script src="../assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="../assets/js/storage.js"></script>
+    <script src="../assets/js/layout.js"></script>
+    <script src="../assets/js/central.js"></script>
+</body>
+</html>

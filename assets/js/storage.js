@@ -6,7 +6,7 @@
 (function () {
     'use strict';
 
-    const KEYS = { news: 'jb_news', users: 'jb_users', session: 'jb_session', reports: 'jb_reports', cookies: 'jb_cookies', views: 'jb_views' };
+    const KEYS = { news: 'jb_news', users: 'jb_users', session: 'jb_session', reports: 'jb_reports', cookies: 'jb_cookies', views: 'jb_views', favs: 'jb_favs', history: 'jb_history', comments: 'jb_comments', newsletter: 'jb_newsletter', theme: 'jb_theme' };
 
     // Fallback em memória caso o localStorage esteja bloqueado
     const memory = {};
@@ -26,8 +26,18 @@
         esportes: { label: 'Esportes', page: 'pages/esportes.html' },
         investigacao: { label: 'Investigação Especial', page: 'pages/noticias.html?cat=investigacao' },
         tecnologia: { label: 'Tecnologia & Ciência', page: 'pages/noticias.html?cat=tecnologia' },
-        infraestrutura: { label: 'Infraestrutura', page: 'pages/noticias.html?cat=infraestrutura' }
+        infraestrutura: { label: 'Infraestrutura', page: 'pages/noticias.html?cat=infraestrutura' },
+        brasil: { label: 'Brasil', page: 'pages/noticias.html?cat=brasil' },
+        mundo: { label: 'Mundo', page: 'pages/noticias.html?cat=mundo' },
+        educacao: { label: 'Educação', page: 'pages/noticias.html?cat=educacao' },
+        saude: { label: 'Saúde', page: 'pages/noticias.html?cat=saude' },
+        meioambiente: { label: 'Meio Ambiente', page: 'pages/noticias.html?cat=meioambiente' },
+        cultura: { label: 'Cultura', page: 'pages/noticias.html?cat=cultura' }
     };
+    // Fluxo editorial: rascunho → em revisão → aprovada → publicada → arquivada
+    const STATUS = { rascunho: 'Rascunho', revisao: 'Em revisão', aprovada: 'Aprovada', publicada: 'Publicada', arquivada: 'Arquivada' };
+    const STATUS_FLOW = ['rascunho', 'revisao', 'aprovada', 'publicada', 'arquivada'];
+    const isPublished = n => !n.status || n.status === 'publicada';   // dados antigos (sem status) contam como publicados
 
     // Imagens locais disponíveis (usadas no painel e como fallback por categoria)
     const IMAGES = {
@@ -37,11 +47,18 @@
         'assets/img/seguranca-digital.jpg': 'Chave sobre código digital',
         'assets/img/cat-politica.svg': 'Ilustração — Política',
         'assets/img/cat-economia.svg': 'Ilustração — Economia',
-        'assets/img/cat-esportes.svg': 'Ilustração — Esportes'
+        'assets/img/cat-esportes.svg': 'Ilustração — Esportes',
+        'assets/img/cat-brasil.svg': 'Ilustração — Brasil',
+        'assets/img/cat-mundo.svg': 'Ilustração — Mundo',
+        'assets/img/cat-educacao.svg': 'Ilustração — Educação',
+        'assets/img/cat-saude.svg': 'Ilustração — Saúde',
+        'assets/img/cat-meioambiente.svg': 'Ilustração — Meio Ambiente',
+        'assets/img/cat-cultura.svg': 'Ilustração — Cultura'
     };
     const FALLBACK_IMG = {
         politica: 'assets/img/cat-politica.svg', economia: 'assets/img/cat-economia.svg', esportes: 'assets/img/cat-esportes.svg',
-        investigacao: 'assets/img/obras-publicas.jpg', tecnologia: 'assets/img/seguranca-digital.jpg', infraestrutura: 'assets/img/ferrovia.webp'
+        investigacao: 'assets/img/obras-publicas.jpg', tecnologia: 'assets/img/seguranca-digital.jpg', infraestrutura: 'assets/img/ferrovia.webp',
+        brasil: 'assets/img/cat-brasil.svg', mundo: 'assets/img/cat-mundo.svg', educacao: 'assets/img/cat-educacao.svg', saude: 'assets/img/cat-saude.svg', meioambiente: 'assets/img/cat-meioambiente.svg', cultura: 'assets/img/cat-cultura.svg'
     };
 
     // Hash simples SOMENTE para simulação (não é seguro para produção)
@@ -70,7 +87,13 @@
                 n('economia', 'Mercado financeiro reage às novas projeções fiscais', 'Bolsa e câmbio oscilam após divulgação do relatório bimestral.', 'assets/img/cat-economia.svg', 360),
                 n('investigacao', 'Exclusivo JB: documentos revelam falhas em contratos de infraestrutura', 'Análise de aditivos contratuais aponta reajustes acima da média de mercado.', 'assets/img/obras-publicas.jpg', 420),
                 n('tecnologia', 'Plataformas digitais terão de ampliar transparência sobre moderação de conteúdo', 'Debate sobre regras para redes sociais avança entre especialistas e legisladores.', 'assets/img/redes-sociais.jpg', 500),
-                n('esportes', 'Clubes discutem regras de equilíbrio financeiro para a próxima temporada', 'Proposta prevê limites de endividamento e relatórios públicos.', 'assets/img/cat-esportes.svg', 600)
+                n('esportes', 'Clubes discutem regras de equilíbrio financeiro para a próxima temporada', 'Proposta prevê limites de endividamento e relatórios públicos.', 'assets/img/cat-esportes.svg', 600),
+                n('brasil', 'Estados ampliam cooperação para monitorar obras de grande porte', 'Consórcio regional pretende unificar dados de acompanhamento.', 'assets/img/cat-brasil.svg', 700),
+                n('mundo', 'Cúpula internacional discute metas comuns de transparência fiscal', 'Países-membros avaliam padrões de divulgação de contas públicas.', 'assets/img/cat-mundo.svg', 800),
+                n('educacao', 'Rede pública testa novo modelo de acompanhamento da frequência escolar', 'Painel reúne dados de presença para identificar risco de evasão.', 'assets/img/cat-educacao.svg', 900),
+                n('saude', 'Municípios divulgam painel de tempo de espera em unidades básicas', 'Indicadores ajudam a planejar a distribuição de equipes.', 'assets/img/cat-saude.svg', 1000),
+                n('meioambiente', 'Relatório aponta avanço de programas de recuperação de áreas degradadas', 'Dados fictícios de demonstração indicam aumento da área monitorada.', 'assets/img/cat-meioambiente.svg', 1100),
+                n('cultura', 'Festival regional anuncia programação gratuita de cinema e música', 'Evento ocupará espaços públicos durante o fim de semana.', 'assets/img/cat-cultura.svg', 1200)
             ]);
         }
         if (store.get(KEYS.users) === null) {
@@ -82,7 +105,8 @@
 
     /* ---------- Notícias ---------- */
     const News = {
-        all() { return read(KEYS.news, []).slice().sort((a, b) => new Date(b.date) - new Date(a.date)); },
+        everything() { return read(KEYS.news, []).slice().sort((a, b) => new Date(b.date) - new Date(a.date)); },   // painel: todos os status
+        all() { return News.everything().filter(isPublished); },                                                      // leitores: só publicadas
         get(id) { return read(KEYS.news, []).find(x => x.id === id) || null; },
         save(item) {
             const list = read(KEYS.news, []);
@@ -95,7 +119,7 @@
         byCategory(cat) { return News.all().filter(x => x.category === cat); },
         search(q) {
             q = q.toLowerCase();
-            return News.all().filter(x => (x.title + ' ' + x.subtitle + ' ' + x.body.join(' ')).toLowerCase().includes(q));
+            return News.all().filter(x => (x.title + ' ' + x.subtitle + ' ' + x.author + ' ' + x.body.join(' ')).toLowerCase().includes(q));
         }
     };
 
@@ -159,6 +183,33 @@
     };
     const readingTime = n => Math.max(1, Math.round(n.body.join(' ').split(/\s+/).length / 200));
 
+    /* ---------- Favoritos, histórico, comentários, newsletter e tema ---------- */
+    const Favs = {
+        all() { return read(KEYS.favs, []).map(News.get).filter(n => n && isPublished(n)); },
+        has(id) { return read(KEYS.favs, []).includes(id); },
+        toggle(id) { let l = read(KEYS.favs, []); const had = l.includes(id); l = had ? l.filter(x => x !== id) : [id].concat(l); write(KEYS.favs, l); return !had; }
+    };
+    const History = {
+        all() { return read(KEYS.history, []).map(News.get).filter(n => n && isPublished(n)); },
+        add(id) { write(KEYS.history, [id].concat(read(KEYS.history, []).filter(x => x !== id)).slice(0, 30)); },
+        clear() { write(KEYS.history, []); }
+    };
+    const Comments = {
+        forNews(id) { return (read(KEYS.comments, {})[id] || []).slice().sort((a, b) => new Date(b.date) - new Date(a.date)); },
+        add(id, c) { const all = read(KEYS.comments, {}); (all[id] = all[id] || []).push({ id: uid(), name: c.name, text: c.text, date: new Date().toISOString() }); write(KEYS.comments, all); },
+        remove(newsId, cid) { const all = read(KEYS.comments, {}); all[newsId] = (all[newsId] || []).filter(c => c.id !== cid); write(KEYS.comments, all); },
+        flat() { const all = read(KEYS.comments, {}); return Object.keys(all).flatMap(id => all[id].map(c => Object.assign({ newsId: id }, c))).sort((a, b) => new Date(b.date) - new Date(a.date)); }
+    };
+    const Newsletter = {
+        count() { return read(KEYS.newsletter, []).length; },
+        add(email) { email = email.trim().toLowerCase(); const l = read(KEYS.newsletter, []); if (l.includes(email)) return false; l.push(email); write(KEYS.newsletter, l); return true; }
+    };
+    const Theme = {
+        get() { return store.get(KEYS.theme) === 'dark' ? 'dark' : 'light'; },
+        set(t) { store.set(KEYS.theme, t); if (t === 'dark') document.documentElement.setAttribute('data-bs-theme', 'dark'); else document.documentElement.removeAttribute('data-bs-theme'); },
+        toggle() { Theme.set(Theme.get() === 'dark' ? 'light' : 'dark'); return Theme.get(); }
+    };
+
     /* ---------- Cookies (LGPD) ---------- */
     const Cookies = {
         get() { return read(KEYS.cookies, null); },
@@ -193,5 +244,5 @@
     }
 
     seed();
-    window.JB = { storageOk: () => storageOk, KEYS, CATEGORIES, IMAGES, News, Auth, Reports, Cookies, Views, util: { avatarHTML, readingTime, root, esc, imgSrc, timeAgo, fmtDate, articleUrl, catLabel, catUrl, newsCard } };
+    window.JB = { storageOk: () => storageOk, KEYS, CATEGORIES, IMAGES, STATUS, STATUS_FLOW, News, Auth, Reports, Cookies, Views, Favs, History, Comments, Newsletter, Theme, util: { isPublished, avatarHTML, readingTime, root, esc, imgSrc, timeAgo, fmtDate, articleUrl, catLabel, catUrl, newsCard } };
 })();

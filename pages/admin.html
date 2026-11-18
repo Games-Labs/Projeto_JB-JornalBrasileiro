@@ -15,6 +15,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Merriweather:ital,wght@0,700;0,900;1,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/vendor/bootstrap/bootstrap.min.css">
     <link rel="stylesheet" href="../assets/css/style.css">
+    <script>try{if(localStorage.getItem('jb_theme')==='dark')document.documentElement.setAttribute('data-bs-theme','dark')}catch(e){}</script>
 </head>
 <body data-root="../" data-page="admin">
     <div id="site-top"></div>
@@ -29,10 +30,12 @@
             <h1 class="page-title">Painel Administrativo</h1>
             <p class="page-lead">Gerencie as notícias exibidas no portal e as denúncias recebidas.</p>
             <div class="alert" id="admin-msg" role="status" hidden></div>
+            <div class="row g-3 mb-4" id="stats"></div>
 
             <ul class="nav nav-tabs mb-4" role="tablist">
                 <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-news" type="button" role="tab">Notícias (<span id="news-count">0</span>)</button></li>
                 <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-reports" type="button" role="tab">Denúncias (<span id="reports-count">0</span>)</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-comments" type="button" role="tab">Comentários (<span id="comments-count">0</span>)</button></li>
             </ul>
 
             <div class="tab-content">
@@ -47,6 +50,12 @@
                                 <div class="row g-3 mb-3">
                                     <div class="col-sm-6"><label class="form-label" for="f-cat">Categoria</label><select class="form-select" id="f-cat" name="category"></select></div>
                                     <div class="col-sm-6"><label class="form-label" for="f-author">Autor</label><input class="form-control" id="f-author" name="author" placeholder="Redação JB"></div>
+                                    <div class="col-12"><label class="form-label" for="f-status">Status editorial</label>
+                                        <select class="form-select" id="f-status" name="status">
+                                            <option value="rascunho">Rascunho</option><option value="revisao">Em revisão</option><option value="aprovada">Aprovada</option>
+                                            <option value="publicada" selected>Publicada</option><option value="arquivada">Arquivada</option>
+                                        </select>
+                                        <div class="form-text">Só matérias <strong>Publicadas</strong> aparecem para os leitores.</div></div>
                                 </div>
                                 <div class="mb-3">
                                     <span class="form-label d-block">Imagem da notícia</span>
@@ -72,7 +81,7 @@
                         <div class="col-xl-7">
                             <div class="table-responsive panel-box">
                                 <table class="table align-middle mb-0">
-                                    <thead><tr><th></th><th>Título</th><th>Categoria</th><th>Data</th><th>Ações</th></tr></thead>
+                                    <thead><tr><th></th><th>Título</th><th>Categoria</th><th>Status</th><th>Data</th><th>Ações</th></tr></thead>
                                     <tbody id="news-rows"></tbody>
                                 </table>
                             </div>
@@ -80,6 +89,7 @@
                     </div>
                 </div>
                 <div class="tab-pane fade" id="tab-reports" role="tabpanel"><div id="report-rows"></div></div>
+                <div class="tab-pane fade" id="tab-comments" role="tabpanel"><div id="comment-rows"></div></div>
             </div>
         </div>
     </main>

@@ -5,7 +5,7 @@
    ========================================================= */
 (function () {
     'use strict';
-    const { Auth, News, Cookies, CATEGORIES, util } = JB;
+    const { Auth, News, Cookies, Theme, Newsletter, CATEGORIES, util } = JB;
     const { esc, root } = util;
     const R = root();
     const page = document.body.dataset.page || '';
@@ -27,6 +27,7 @@
         if (!u) return '<a href="' + R + 'pages/login.html" class="btn btn-user btn-sm px-3">Entrar</a>';
         return '<div class="dropdown"><button class="btn btn-user btn-sm ps-1 pe-3 d-flex align-items-center gap-2 dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Menu do usuário">' + util.avatarHTML(u, 'avatar-sm') + '<span>' + esc(u.name.split(' ')[0]) + '</span></button>' +
             '<ul class="dropdown-menu dropdown-menu-end">' +
+            '<li><a class="dropdown-item" href="' + R + 'pages/central.html">Minha Central</a></li>' +
             '<li><a class="dropdown-item" href="' + R + 'pages/perfil.html">Minhas Informações</a></li>' +
             (u.role === 'admin' ? '<li><a class="dropdown-item" href="' + R + 'pages/admin.html">Painel Administrativo</a></li>' : '') +
             '<li><hr class="dropdown-divider"></li><li><button class="dropdown-item" id="jb-logout">Sair</button></li></ul></div>';
@@ -45,18 +46,20 @@
             link('institucional', 'pages/institucional.html', 'Institucional') + link('denuncias', 'pages/denuncias.html', 'Denuncie / Envie uma Pauta', 'nav-highlight') +
             '</ul><div class="d-flex flex-column flex-xxl-row align-items-xxl-center gap-2">' +
             '<form class="search-box" action="' + R + 'pages/noticias.html" method="get" role="search"><input type="search" name="q" placeholder="Buscar no JB..." aria-label="Buscar notícias"><button type="submit">Buscar</button></form>' +
+            '<button type="button" class="btn btn-outline-dark btn-sm text-nowrap" id="themeToggle" aria-label="Alternar tema claro/escuro">' + (Theme.get() === 'dark' ? 'Claro' : 'Escuro') + '</button>' +
             userArea() + '</div></div></div></nav></header>' +
             '<div class="offcanvas offcanvas-start" tabindex="-1" id="topicsDrawer" aria-labelledby="topicsLabel"><div class="offcanvas-header border-bottom"><h5 class="offcanvas-title" id="topicsLabel">Editorias</h5>' +
-            '<button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button></div><div class="offcanvas-body"><ul class="topics-list">' + topics + '</ul></div></div>';
+            '<button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button></div><div class="offcanvas-body"><ul class="topics-list">' + topics + '<li><a href="' + R + 'pages/central.html"><strong>Minha Central</strong></a></li></ul></div></div>';
     }
 
     /* ---------- Rodapé ---------- */
     function footer() {
         return '<footer class="site-footer"><div class="container"><div class="row g-4">' +
-            '<div class="col-lg-4 footer-brand"><div class="logo-sigla">JB</div><h3>Jornal Brasileiro</h3><p>Compromisso com o jornalismo independente, investigativo e pautado pelo interesse público.</p></div>' +
+            '<div class="col-lg-4 footer-brand"><div class="logo-sigla">JB</div><h3>Jornal Brasileiro</h3><p>Compromisso com o jornalismo independente, investigativo e pautado pelo interesse público.</p>' +
+            '<form id="newsletterForm" class="mt-3"><label class="form-label small" for="nlEmail">Newsletter (demonstração)</label><div class="input-group input-group-sm"><input type="email" id="nlEmail" class="form-control" placeholder="seu@email.com" required><button class="btn btn-primary" type="submit">Assinar</button></div><div class="small mt-1" id="nlMsg" role="status"></div></form></div>' +
             '<div class="col-6 col-lg-2"><h4>Institucional</h4><ul class="footer-links">' +
             '<li><a href="' + R + 'pages/institucional.html#quem-somos">Quem Somos</a></li><li><a href="' + R + 'pages/institucional.html#expediente">Expediente</a></li><li><a href="' + R + 'pages/institucional.html#contato">Fale com a Redação</a></li>' +
-            '<li><a href="' + R + 'pages/admin.html">Acesso Editorial</a></li></ul></div>' +
+            '<li><a href="' + R + 'pages/central.html">Minha Central</a></li><li><a href="' + R + 'pages/admin.html">Acesso Editorial</a></li></ul></div>' +
             '<div class="col-6 col-lg-3"><h4>Transparência &amp; Legal</h4><ul class="footer-links">' +
             '<li><a href="' + R + 'pages/institucional.html#termos">Termos de Uso</a></li><li><a href="' + R + 'pages/institucional.html#privacidade">Política de Privacidade (LGPD)</a></li>' +
             '<li><button type="button" data-open-cookies>Preferências de Cookies</button></li></ul></div>' +
@@ -94,6 +97,13 @@
     document.getElementById('site-top').innerHTML = ticker() + header();
     document.getElementById('site-bottom').innerHTML = footer() + cookieUI();
     initCookies();
+    document.getElementById('themeToggle').addEventListener('click', e => { e.currentTarget.textContent = Theme.toggle() === 'dark' ? 'Claro' : 'Escuro'; });
+    document.getElementById('newsletterForm').addEventListener('submit', e => {
+        e.preventDefault();
+        const msg = document.getElementById('nlMsg');
+        msg.textContent = Newsletter.add(document.getElementById('nlEmail').value) ? 'Inscrição registrada (simulada neste navegador).' : 'Este e-mail já está inscrito.';
+        e.target.reset();
+    });
     const out = document.getElementById('jb-logout');
     if (out) out.addEventListener('click', () => { Auth.logout(); location.href = R + 'index.html'; });
 })();

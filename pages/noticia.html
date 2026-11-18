@@ -14,11 +14,25 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Merriweather:ital,wght@0,700;0,900;1,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/vendor/bootstrap/bootstrap.min.css">
     <link rel="stylesheet" href="../assets/css/style.css">
+    <script>try{if(localStorage.getItem('jb_theme')==='dark')document.documentElement.setAttribute('data-bs-theme','dark')}catch(e){}</script>
 </head>
 <body data-root="../" data-page="noticias">
     <div id="site-top"></div>
     <main class="container main-layout">
         <article id="article"></article>
+        <section id="comments-wrap" class="mt-5 no-print" hidden>
+            <hr class="editorial-divider">
+            <h2 class="section-title">Comentários (<span id="comment-count">0</span>)</h2>
+            <p class="small text-muted">Comentários simulados: ficam salvos apenas neste navegador e são moderados pelo editor.</p>
+            <form id="comment-form" class="panel-box mb-3" novalidate>
+                <div class="row g-3">
+                    <div class="col-md-4"><label class="form-label" for="c-name">Nome</label><input class="form-control" id="c-name" name="name" maxlength="60" required></div>
+                    <div class="col-md-8"><label class="form-label" for="c-text">Comentário</label><textarea class="form-control" id="c-text" name="text" rows="2" maxlength="500" required></textarea></div>
+                </div>
+                <button class="btn btn-primary btn-sm mt-3" type="submit">Comentar</button>
+            </form>
+            <div id="comment-list"></div>
+        </section>
         <div id="related-wrap" hidden>
             <hr class="editorial-divider">
             <h2 class="section-title">Leia também</h2>

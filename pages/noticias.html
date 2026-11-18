@@ -14,12 +14,24 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Merriweather:ital,wght@0,700;0,900;1,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/vendor/bootstrap/bootstrap.min.css">
     <link rel="stylesheet" href="../assets/css/style.css">
+    <script>try{if(localStorage.getItem('jb_theme')==='dark')document.documentElement.setAttribute('data-bs-theme','dark')}catch(e){}</script>
 </head>
 <body data-root="../" data-page="noticias">
     <div id="site-top"></div>
     <main class="container main-layout">
         <h1 class="page-title">Notícias</h1>
         <p class="page-lead">Todas as matérias do Jornal Brasileiro. Filtre por editoria ou use a busca.</p>
+        <details class="panel-box mb-3" id="adv-box">
+            <summary class="fw-semibold">Busca avançada</summary>
+            <form class="row g-3 mt-1" id="adv-form" method="get">
+                <div class="col-md-4"><label class="form-label" for="a-q">Palavras</label><input class="form-control" id="a-q" name="q"></div>
+                <div class="col-md-4"><label class="form-label" for="a-author">Autor</label><select class="form-select" id="a-author" name="author"><option value="">Todos</option></select></div>
+                <div class="col-md-4"><label class="form-label" for="a-cat">Editoria</label><select class="form-select" id="a-cat" name="cat"><option value="">Todas</option></select></div>
+                <div class="col-md-4"><label class="form-label" for="a-from">De</label><input type="date" class="form-control" id="a-from" name="from"></div>
+                <div class="col-md-4"><label class="form-label" for="a-to">Até</label><input type="date" class="form-control" id="a-to" name="to"></div>
+                <div class="col-md-4 d-flex align-items-end gap-2"><button class="btn btn-primary" type="submit">Buscar</button><a class="btn btn-outline-dark" href="noticias.html">Limpar</a></div>
+            </form>
+        </details>
         <div class="filter-bar d-flex flex-wrap gap-2 mb-3" id="filter-bar" aria-label="Filtrar por categoria"></div>
         <p class="text-muted small" id="result-info"></p>
         <div class="row g-4" id="news-grid"></div>

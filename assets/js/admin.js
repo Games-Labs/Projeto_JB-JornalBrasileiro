@@ -49,15 +49,44 @@
     });
 
     function renderNews() {
-        const list = News.all();
+        const list = News.everything();
+        const nextOf = n => { const i = JB.STATUS_FLOW.indexOf(n.status || 'publicada'); return i >= 0 && i < JB.STATUS_FLOW.length - 1 ? JB.STATUS_FLOW[i + 1] : ''; };
         tbody.innerHTML = list.map(n =>
             '<tr><td><img class="admin-thumb" src="' + esc(util.imgSrc(n)) + '" alt=""></td>' +
             '<td><a href="' + esc(util.articleUrl(n)) + '">' + esc(n.title) + '</a>' + (n.featured ? ' <span class="badge bg-primary">Destaque</span>' : '') + '</td>' +
-            '<td>' + esc(util.catLabel(n.category)) + '</td><td class="text-nowrap">' + new Date(n.date).toLocaleDateString('pt-BR') + '</td>' +
-            '<td class="text-nowrap"><button class="btn btn-sm btn-outline-dark" data-edit="' + n.id + '">Editar</button> ' +
-            '<button class="btn btn-sm btn-outline-primary" data-del="' + n.id + '">Excluir</button></td></tr>').join('') ||
-            '<tr><td colspan="5" class="text-center text-muted">Nenhuma notícia cadastrada.</td></tr>';
+            '<td>' + esc(util.catLabel(n.category)) + '</td>' +
+            '<td><span class="badge status-badge ' + (util.isPublished(n) ? 'bg-success' : 'bg-secondary') + '">' + esc(JB.STATUS[n.status || 'publicada']) + '</span></td>' +
+            '<td class="text-nowrap">' + new Date(n.date).toLocaleDateString('pt-BR') + '</td>' +
+            '<td><div class="d-flex flex-wrap gap-1">' + (nextOf(n) ? '<button class="btn btn-sm btn-primary" data-adv="' + n.id + '" title="Mover para: ' + esc(JB.STATUS[nextOf(n)]) + '">→ ' + esc(JB.STATUS[nextOf(n)]) + '</button>' : '') +
+            '<button class="btn btn-sm btn-outline-dark" data-edit="' + n.id + '">Editar</button>' +
+            '<button class="btn btn-sm btn-outline-primary" data-del="' + n.id + '">Excluir</button></div></td></tr>').join('') ||
+            '<tr><td colspan="6" class="text-center text-muted">Nenhuma notícia cadastrada.</td></tr>';
         document.getElementById('news-count').textContent = list.length;
+        renderStats(list);
+    }
+
+    function renderStats(list) {
+        const views = JSON.parse(localStorage.getItem(JB.KEYS.views) || '{}');
+        const total = Object.keys(views).reduce((s, k) => s + views[k], 0);
+        const cards = [
+            ['Publicadas', list.filter(util.isPublished).length], ['Rascunhos / revisão', list.filter(n => ['rascunho', 'revisao', 'aprovada'].includes(n.status)).length],
+            ['Arquivadas', list.filter(n => n.status === 'arquivada').length], ['Denúncias', Reports.all().length],
+            ['Comentários', JB.Comments.flat().length], ['Leituras', total], ['Newsletter', JB.Newsletter.count()]
+        ];
+        document.getElementById('stats').innerHTML = cards.map(c => '<div class="col-6 col-md-3 col-xl"><div class="stat-card"><strong>' + c[1] + '</strong><span>' + c[0] + '</span></div></div>').join('');
+    }
+
+    function renderComments() {
+        const list = JB.Comments.flat();
+        document.getElementById('comments-count').textContent = list.length;
+        document.getElementById('comment-rows').innerHTML = list.map(c => {
+            const n = News.get(c.newsId);
+            return '<div class="panel-box mb-3"><div class="d-flex justify-content-between gap-2"><strong>' + esc(c.name) + '</strong>' +
+                '<button class="btn btn-sm btn-outline-primary" data-cdel="' + c.newsId + '|' + c.id + '">Excluir</button></div>' +
+                '<small class="text-muted">' + esc(util.fmtDate(c.date)) + ' • em ' + (n ? esc(n.title) : 'matéria removida') + '</small>' +
+                '<p class="mb-0 mt-2" style="white-space:pre-wrap">' + esc(c.text) + '</p></div>';
+        }).join('') || '<p class="text-muted">Nenhum comentário.</p>';
+        renderStats(News.everything());
     }
 
     function renderReports() {
@@ -79,23 +108,31 @@
         if (!form.checkValidity()) { form.classList.add('was-validated'); return; }
         const item = {
             id: field('newsId').value || undefined, title: field('title').value.trim(), subtitle: field('subtitle').value.trim(), category: field('category').value,
-            image: field('image').value, author: field('author').value.trim() || 'Redação JB', featured: field('featured').checked,
+            image: field('image').value, status: field('status').value, author: field('author').value.trim() || 'Redação JB', featured: field('featured').checked,
             body: field('body').value.split(/\n+/).map(s => s.trim()).filter(Boolean)
         };
-        if (item.featured) News.all().filter(n => n.featured && n.id !== item.id).forEach(n => News.save({ id: n.id, featured: false })); // apenas uma manchete
+        if (item.status === 'publicada' && !item.id) item.date = new Date().toISOString();
+        if (item.featured) News.everything().filter(n => n.featured && n.id !== item.id).forEach(n => News.save({ id: n.id, featured: false })); // apenas uma manchete
         const editing = !!item.id;
         News.save(item);
         if (!JB.storageOk()) { note('Atenção: o armazenamento do navegador está cheio; a notícia não foi salva de forma permanente. Use uma imagem menor ou da galeria.', 'danger'); resetForm(); renderNews(); return; }
-        note(editing ? 'Notícia atualizada.' : 'Notícia publicada.');
+        note((editing ? 'Notícia atualizada' : 'Notícia salva') + ' — status: ' + JB.STATUS[item.status] + '.');
         resetForm(); renderNews();
     });
     document.getElementById('cancel-edit').addEventListener('click', resetForm);
 
     tbody.addEventListener('click', e => {
-        const ed = e.target.closest('[data-edit]'), del = e.target.closest('[data-del]');
+        const ed = e.target.closest('[data-edit]'), del = e.target.closest('[data-del]'), adv = e.target.closest('[data-adv]');
+        if (adv) {
+            const n = News.get(adv.dataset.adv);
+            const next = JB.STATUS_FLOW[JB.STATUS_FLOW.indexOf(n.status || 'publicada') + 1];
+            const patch = { id: n.id, status: next };
+            if (next === 'publicada') patch.date = new Date().toISOString();   // data de publicação = momento em que foi publicada
+            News.save(patch); note('“' + n.title + '” movida para: ' + JB.STATUS[next] + '.'); renderNews();
+        }
         if (ed) {
             const n = News.get(ed.dataset.edit);
-            field('newsId').value = n.id; field('title').value = n.title; field('subtitle').value = n.subtitle; field('category').value = n.category; field('author').value = n.author;
+            field('newsId').value = n.id; field('title').value = n.title; field('subtitle').value = n.subtitle; field('category').value = n.category; field('author').value = n.author; field('status').value = n.status || 'publicada';
             field('body').value = n.body.join('\n\n'); field('featured').checked = !!n.featured;
             setImage(n.image || '');
             formTitle.textContent = 'Editar notícia'; form.scrollIntoView({ behavior: 'smooth' });
@@ -107,6 +144,11 @@
         if (b && confirm('Excluir esta denúncia?')) { Reports.remove(b.dataset.rdel); renderReports(); }
     });
 
+    document.getElementById('comment-rows').addEventListener('click', e => {
+        const b = e.target.closest('[data-cdel]');
+        if (b && confirm('Excluir este comentário?')) { const p = b.dataset.cdel.split('|'); JB.Comments.remove(p[0], p[1]); renderComments(); }
+    });
+
     setImage('');
-    renderNews(); renderReports();
+    renderNews(); renderReports(); renderComments();
 })();

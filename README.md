@@ -29,16 +29,17 @@ Aplicação **Multi-Page** puramente *client-side*, feita com **HTML5, CSS3 e Ja
 1. Execução integral no navegador local, sem servidor externo.
 2. Ticker rotativo no topo com as notícias mais recentes.
 3. Navegação entre **páginas HTML independentes**.
-4. Filtro de notícias por categoria (Política, Economia, Esportes, Investigação, Tecnologia, Infraestrutura) e busca por texto.
+4. Filtro de notícias por 12 editorias (Política, Economia, Esportes, Investigação, Tecnologia, Infraestrutura, Brasil, Mundo, Educação, Saúde, Meio Ambiente, Cultura), busca por texto e **busca avançada** (autor, período e editoria).
 5. Formulário de denúncias / envio de pautas, com armazenamento local e opção de anonimato.
 6. Cadastro e login simulados via `localStorage`.
 7. Salvamento e edição do perfil.
 8. Área **Minhas Informações** para usuários autenticados.
-9. Painel Administrativo com **CRUD** de notícias (criar, editar, excluir) e caixa de denúncias.
+9. Painel Administrativo com **CRUD** de notícias, **fluxo editorial** (rascunho → em revisão → aprovada → publicada → arquivada), dashboard, caixa de denúncias e moderação de comentários.
 10. Aviso e painel de consentimento de cookies, com referência à LGPD.
 11. Interface responsiva para celulares e desktops.
 
-**Extras:** ranking **Mais lidas** (contador de leituras local), tempo de leitura nas matérias e seletor de imagem no painel (galeria local, envio do computador com redução automática, ou URL).
+**Extras para o leitor:** **Modo escuro**, **Minha Central** (favoritos, histórico e recomendações), comentários simulados, compartilhar e imprimir matérias, ranking **Mais lidas**, tempo de leitura, newsletter demonstrativa e foto de perfil.
+**Extras para o editor:** seletor de imagem (galeria local, envio do computador com redução automática ou URL) e visualização prévia de matérias ainda não publicadas.
 
 ### C) Usuários
 
@@ -66,7 +67,8 @@ JB/
 │   ├── politica.html          # Editoria Política
 │   ├── economia.html          # Editoria Economia
 │   ├── esportes.html          # Editoria Esportes
-│   ├── noticia.html           # Leitura de uma matéria (?id=)
+│   ├── noticia.html           # Leitura de uma matéria (?id=), favoritos e comentários
+│   ├── central.html           # Minha Central: favoritos, histórico, recomendações
 │   ├── denuncias.html         # Denuncie / Envie uma Pauta
 │   ├── institucional.html     # Quem somos, expediente, termos, LGPD
 │   ├── login.html · cadastro.html · perfil.html
@@ -76,7 +78,7 @@ JB/
 │   ├── js/
 │   │   ├── storage.js         # Camada de dados (localStorage) compartilhada
 │   │   ├── layout.js          # Ticker, cabeçalho, rodapé e cookies
-│   │   └── home · news-list · article · denuncias · auth · perfil · admin .js
+│   │   └── home · news-list · article · central · denuncias · auth · perfil · admin .js
 │   ├── favicon/               # Ícones do site (favicon.io)
 │   ├── favicon/               # Ícones do site (favicon.io)
 │   ├── img/                   # Imagens locais e ilustrações SVG
@@ -96,9 +98,14 @@ JB/
 | `jb_reports` | Denúncias e pautas enviadas |
 | `jb_cookies` | Preferências de cookies (LGPD) |
 | `jb_views` | Contador de leituras por matéria |
+| `jb_favs` · `jb_history` | Favoritos e histórico de leitura |
+| `jb_comments` | Comentários simulados |
+| `jb_newsletter` | E-mails da newsletter demonstrativa |
+| `jb_theme` | Tema claro/escuro |
 
 > ⚠️ O login é **simulado**: as senhas são guardadas com um hash simples apenas para demonstração e **não** oferecem segurança real.
-> Os dados ficam só no navegador em uso. Para reiniciar o portal, limpe o armazenamento do site.
+> Os dados ficam só no navegador em uso (o `localStorage` é isolado por navegador e origem): outro computador não vê as notícias criadas, favoritos nem contas, e o navegador pode apagar os dados. Tudo aqui é **simulação local**, não um serviço distribuído.
+> Para reiniciar o portal, limpe o armazenamento do site.
 
 ## 🧰 Tecnologias
 
