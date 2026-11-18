@@ -126,4 +126,4 @@ A licença cobre o código-fonte do projeto. Componentes de terceiros mantêm su
 ## 👥 Equipe e autoria
 
 - **Responsável:** Mathias Silva Cunha
-- **Desenvolvimento:** GamesYutuber — mathiasscgamesyutuber2007@gmail.com
+- **Desenvolvimento:** GamesYutuber
