@@ -22,6 +22,13 @@
         '<h3><a href="' + esc(util.articleUrl(n)) + '">' + esc(n.title) + '</a></h3><span class="time">' + util.timeAgo(n.date) + '</span></article>').join('');
 
     document.getElementById('feed-grid').innerHTML = rest.slice(3, 9).map(n => '<div class="col-md-6 col-lg-4">' + util.newsCard(n) + '</div>').join('');
+    const top = JB.Views.top(5);
+    const box = document.getElementById('most-read');
+    if (top.length) {
+        box.hidden = false;
+        document.getElementById('most-read-list').innerHTML = top.map((n, i) =>
+            '<li class="most-read-item"><span class="rank">' + (i + 1) + '</span><a href="' + esc(util.articleUrl(n)) + '">' + esc(n.title) + '</a></li>').join('');
+    }
     const d = new Date().toLocaleDateString('pt-BR', { weekday: 'long' });
     document.getElementById('edition-date').textContent = 'Edição Nacional • ' + d.charAt(0).toUpperCase() + d.slice(1);
 })();

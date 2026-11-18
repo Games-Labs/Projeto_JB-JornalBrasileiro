@@ -15,8 +15,38 @@
     const field = n => form.elements[n];
 
     field('category').innerHTML = Object.keys(CATEGORIES).map(k => '<option value="' + k + '">' + esc(CATEGORIES[k].label) + '</option>').join('');
-    field('image').innerHTML = '<option value="">Automática (pela categoria)</option>' +
-        Object.keys(IMAGES).map(p => '<option value="' + p + '">' + esc(IMAGES[p]) + '</option>').join('');
+
+    /* ---------- Seletor de imagem: galeria local, upload ou URL ---------- */
+    const preview = document.getElementById('img-preview');
+    const options = document.getElementById('img-options');
+    const warn = document.getElementById('img-warn');
+    options.innerHTML = '<button type="button" class="img-option auto" data-img="" title="Automática (pela categoria)">Automática</button>' +
+        Object.keys(IMAGES).map(p => '<button type="button" class="img-option" data-img="' + p + '" title="' + esc(IMAGES[p]) + '"><img src="' + util.root() + p + '" alt="' + esc(IMAGES[p]) + '"></button>').join('');
+
+    function setImage(value) {            // value: '' | caminho local | data URL | URL
+        field('image').value = value;
+        warn.hidden = true;
+        const fake = { image: value, category: field('category').value };
+        preview.src = util.imgSrc(fake);
+        options.querySelectorAll('.img-option').forEach(b => b.classList.toggle('selected', b.dataset.img === value));
+        if (!(value in IMAGES)) field('imageUrl').value = /^https?:/.test(value) ? value : '';
+    }
+    options.addEventListener('click', e => { const b = e.target.closest('.img-option'); if (b) { document.getElementById('img-file').value = ''; setImage(b.dataset.img); } });
+    field('category').addEventListener('change', () => { if (!field('image').value) setImage(''); });
+    field('imageUrl').addEventListener('input', e => setImage(e.target.value.trim()));
+    document.getElementById('img-file').addEventListener('change', e => {
+        const file = e.target.files[0]; if (!file) return;
+        const img = new Image(), url = URL.createObjectURL(file);
+        img.onload = () => {
+            const scale = Math.min(1, 1200 / Math.max(img.width, img.height));
+            const c = document.createElement('canvas'); c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
+            c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+            URL.revokeObjectURL(url);
+            setImage(c.toDataURL('image/jpeg', 0.8));
+        };
+        img.onerror = () => { warn.textContent = 'Não foi possível ler esse arquivo como imagem.'; warn.hidden = false; };
+        img.src = url;
+    });
 
     function renderNews() {
         const list = News.all();
@@ -42,19 +72,20 @@
             '<p class="text-muted">Nenhuma denúncia recebida.</p>';
     }
 
-    function resetForm() { form.reset(); field('newsId').value = ''; formTitle.textContent = 'Nova notícia'; form.classList.remove('was-validated'); }
+    function resetForm() { form.reset(); field('newsId').value = ''; setImage(''); formTitle.textContent = 'Nova notícia'; form.classList.remove('was-validated'); }
 
     form.addEventListener('submit', e => {
         e.preventDefault();
         if (!form.checkValidity()) { form.classList.add('was-validated'); return; }
         const item = {
             id: field('newsId').value || undefined, title: field('title').value.trim(), subtitle: field('subtitle').value.trim(), category: field('category').value,
-            image: field('imageUrl').value.trim() || field('image').value, author: field('author').value.trim() || 'Redação JB', featured: field('featured').checked,
+            image: field('image').value, author: field('author').value.trim() || 'Redação JB', featured: field('featured').checked,
             body: field('body').value.split(/\n+/).map(s => s.trim()).filter(Boolean)
         };
         if (item.featured) News.all().filter(n => n.featured && n.id !== item.id).forEach(n => News.save({ id: n.id, featured: false })); // apenas uma manchete
         const editing = !!item.id;
         News.save(item);
+        if (!JB.storageOk()) { note('Atenção: o armazenamento do navegador está cheio; a notícia não foi salva de forma permanente. Use uma imagem menor ou da galeria.', 'danger'); resetForm(); renderNews(); return; }
         note(editing ? 'Notícia atualizada.' : 'Notícia publicada.');
         resetForm(); renderNews();
     });
@@ -66,7 +97,7 @@
             const n = News.get(ed.dataset.edit);
             field('newsId').value = n.id; field('title').value = n.title; field('subtitle').value = n.subtitle; field('category').value = n.category; field('author').value = n.author;
             field('body').value = n.body.join('\n\n'); field('featured').checked = !!n.featured;
-            const local = n.image in IMAGES; field('image').value = local ? n.image : ''; field('imageUrl').value = local ? '' : (n.image || '');
+            setImage(n.image || '');
             formTitle.textContent = 'Editar notícia'; form.scrollIntoView({ behavior: 'smooth' });
         }
         if (del && confirm('Excluir esta notícia?')) { News.remove(del.dataset.del); note('Notícia excluída.', 'warning'); renderNews(); }
@@ -76,5 +107,6 @@
         if (b && confirm('Excluir esta denúncia?')) { Reports.remove(b.dataset.rdel); renderReports(); }
     });
 
+    setImage('');
     renderNews(); renderReports();
 })();

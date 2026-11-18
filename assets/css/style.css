@@ -82,13 +82,14 @@ img { max-width: 100%; }
     white-space: nowrap;
     font-size: .75rem;
 }
-.ticker-wrapper { overflow: hidden; white-space: nowrap; width: 100%; min-width: 0; padding: 6px 15px; }
-.ticker-text { display: inline-block; margin: 0; animation: tickerScroll 40s linear infinite; }
-.ticker-text a { color: var(--champagne); }
-.ticker-text a:hover { color: var(--khaki); text-decoration: underline; }
-.ticker-text:hover { animation-play-state: paused; }
-@keyframes tickerScroll { 0% { transform: translateX(60%); } 100% { transform: translateX(-100%); } }
-@media (prefers-reduced-motion: reduce) { .ticker-text { animation: none; } .ticker-wrapper { text-overflow: ellipsis; } }
+.ticker-wrapper { overflow: hidden; width: 100%; min-width: 0; padding: 6px 0; }
+.ticker-track { display: flex; width: max-content; animation: tickerScroll 60s linear infinite; }
+.ticker-group { display: flex; flex-shrink: 0; white-space: nowrap; min-width: 100vw; }
+.ticker-group a { color: var(--champagne); }
+.ticker-group a:hover { color: var(--khaki); text-decoration: underline; }
+.ticker-sep { margin: 0 18px; color: var(--carmine); }
+.ticker-wrapper:hover .ticker-track { animation-play-state: paused; }
+@keyframes tickerScroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
 /* 4. Cabeçalho ------------------------------------------ */
 .site-header { background-color: var(--champagne); border-bottom: 3px double var(--coffee); z-index: 1030; }
@@ -117,7 +118,8 @@ img { max-width: 100%; }
 
 .search-box { display: flex; border: 1px solid var(--coffee); border-radius: 4px; overflow: hidden; background-color: rgba(255,255,255,.35); }
 .search-box input { border: none; background: transparent; padding: 6px 10px; color: var(--coffee); outline: none; width: 150px; font-size: .9rem; }
-.search-box button { border: none; background-color: var(--khaki); padding: 0 10px; cursor: pointer; }
+.search-box button { border: none; background-color: var(--carmine); color: #fff; font-weight: 700; font-size: .85rem; padding: 0 14px; cursor: pointer; }
+.search-box button:hover { background-color: var(--carmine-dark); }
 
 .btn-user { background-color: var(--coffee); color: var(--champagne); font-weight: 600; font-size: .9rem; }
 .btn-user:hover, .btn-user:focus, .btn-user.show { background-color: var(--carmine); color: #fff; }
@@ -187,7 +189,7 @@ a.category-tag:hover { color: var(--carmine-dark); text-decoration: underline; }
 .auth-card { max-width: 480px; margin: 0 auto; background: var(--khaki-light); border: 2px solid var(--coffee); border-radius: 4px; padding: 30px; }
 .panel-box { background: rgba(255,255,255,.35); border: 1px solid var(--khaki); border-radius: 4px; padding: 20px; }
 .table { --bs-table-bg: transparent; --bs-table-color: var(--coffee); --bs-table-border-color: var(--khaki); }
-.admin-thumb { width: 64px; height: 40px; object-fit: cover; border: 1px solid var(--khaki); }
+.admin-thumb { width: 64px; min-width: 64px; max-width: none; height: 40px; object-fit: cover; border: 1px solid var(--khaki); }
 
 /* 7. Rodapé --------------------------------------------- */
 .site-footer { background-color: var(--coffee); color: var(--champagne); padding-top: 40px; border-top: 4px solid var(--carmine); }
@@ -218,3 +220,20 @@ a.category-tag:hover { color: var(--carmine-dark); text-decoration: underline; }
     .lead-story h1, .article-title { font-size: 1.6rem; }
     .whistleblower-box, .auth-card { padding: 18px; }
 }
+
+/* Seletor de imagem do painel */
+.img-picker { border: 1px solid var(--khaki); border-radius: 4px; padding: 12px; background: rgba(255,255,255,.35); }
+.img-preview { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border: 1px solid var(--coffee); background: var(--khaki); }
+.img-options { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+.img-option { padding: 0; border: 2px solid transparent; border-radius: 4px; background: none; cursor: pointer; overflow: hidden; }
+.img-option img { display: block; width: 100%; aspect-ratio: 16 / 10; object-fit: cover; }
+.img-option:hover { border-color: var(--khaki); }
+.img-option.selected { border-color: var(--carmine); box-shadow: 0 0 0 2px rgba(199, 11, 46, .25); }
+.img-option.auto { font-size: .72rem; font-weight: 700; aspect-ratio: 16 / 10; display: flex; align-items: center; justify-content: center; background: var(--khaki-light); color: var(--coffee); }
+
+/* Mais lidas */
+.most-read-list { list-style: none; padding: 0; margin: 0; }
+.most-read-item { display: flex; gap: 12px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--khaki); }
+.most-read-item .rank { font-family: var(--font-serif); font-weight: 900; font-size: 1.5rem; color: var(--carmine); min-width: 1.2em; }
+.most-read-item a { color: var(--coffee); font-weight: 600; line-height: 1.3; }
+.most-read-item a:hover { color: var(--carmine); }

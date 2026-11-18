@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jornal Brasileiro (JB) — Informação e Investigação</title>
+    <link rel="icon" href="assets/favicon/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="assets/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="assets/favicon/favicon-16x16.png">
+    <link rel="apple-touch-icon" href="assets/favicon/apple-touch-icon.png">
+    <link rel="manifest" href="assets/favicon/site.webmanifest">
     <meta name="description" content="Jornal Brasileiro (JB): portal de webjornalismo informativo e investigativo (projeto acadêmico).">
 
     <!-- Fontes (opcionais: há fallback para fontes do sistema) -->
@@ -26,6 +31,10 @@
                 <h2 class="section-title">Últimas Publicações</h2>
                 <div id="latest-news"></div>
                 <a href="pages/noticias.html" class="btn btn-outline-dark btn-sm">Ver todas as notícias</a>
+                <div id="most-read" class="mt-4" hidden>
+                    <h2 class="section-title">Mais lidas</h2>
+                    <ol class="most-read-list" id="most-read-list"></ol>
+                </div>
             </aside>
         </section>
 

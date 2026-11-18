@@ -12,10 +12,13 @@
 
     /* ---------- Ticker ---------- */
     function ticker() {
-        const items = News.all().slice(0, 6).map(n => '<a href="' + esc(util.articleUrl(n)) + '">' + esc(n.title) + '</a>').join(' &nbsp;•&nbsp; ');
-        return '<div class="breaking-news-bar" role="marquee" aria-label="Últimas notícias">' +
+        const items = News.all().slice(0, 8).map(n => '<a href="' + esc(util.articleUrl(n)) + '">' + esc(n.title) + '</a>');
+        // O trilho repete o conteúdo duas vezes: a animação anda -50% e recomeça sem "salto".
+        const group = '<span class="ticker-group">' + (items.length ? items.join('<span class="ticker-sep">•</span>') + '<span class="ticker-sep">•</span>' : 'Sem notícias no momento.') + '</span>';
+        const secs = Math.max(30, items.length * 9);
+        return '<div class="breaking-news-bar" aria-label="Últimas notícias">' +
             '<span class="badge-urgente">EM CIMA DA HORA</span>' +
-            '<div class="ticker-wrapper"><p class="ticker-text">' + (items || 'Sem notícias no momento.') + '</p></div></div>';
+            '<div class="ticker-wrapper"><div class="ticker-track" style="animation-duration:' + secs + 's">' + group + group + '</div></div></div>';
     }
 
     /* ---------- Cabeçalho ---------- */
@@ -41,7 +44,7 @@
             link('economia', 'pages/economia.html', 'Economia') + link('esportes', 'pages/esportes.html', 'Esportes') +
             link('institucional', 'pages/institucional.html', 'Institucional') + link('denuncias', 'pages/denuncias.html', 'Denuncie / Envie uma Pauta', 'nav-highlight') +
             '</ul><div class="d-flex flex-column flex-xxl-row align-items-xxl-center gap-2">' +
-            '<form class="search-box" action="' + R + 'pages/noticias.html" method="get" role="search"><input type="search" name="q" placeholder="Buscar no JB..." aria-label="Buscar notícias"><button type="submit" aria-label="Buscar">🔍</button></form>' +
+            '<form class="search-box" action="' + R + 'pages/noticias.html" method="get" role="search"><input type="search" name="q" placeholder="Buscar no JB..." aria-label="Buscar notícias"><button type="submit">Buscar</button></form>' +
             userArea() + '</div></div></div></nav></header>' +
             '<div class="offcanvas offcanvas-start" tabindex="-1" id="topicsDrawer" aria-labelledby="topicsLabel"><div class="offcanvas-header border-bottom"><h5 class="offcanvas-title" id="topicsLabel">Editorias</h5>' +
             '<button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button></div><div class="offcanvas-body"><ul class="topics-list">' + topics + '</ul></div></div>';

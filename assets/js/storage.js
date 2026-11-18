@@ -6,13 +6,14 @@
 (function () {
     'use strict';
 
-    const KEYS = { news: 'jb_news', users: 'jb_users', session: 'jb_session', reports: 'jb_reports', cookies: 'jb_cookies' };
+    const KEYS = { news: 'jb_news', users: 'jb_users', session: 'jb_session', reports: 'jb_reports', cookies: 'jb_cookies', views: 'jb_views' };
 
     // Fallback em memória caso o localStorage esteja bloqueado
     const memory = {};
+    let storageOk = true;
     const store = {
         get(k) { try { return localStorage.getItem(k); } catch (e) { return k in memory ? memory[k] : null; } },
-        set(k, v) { try { localStorage.setItem(k, v); } catch (e) { memory[k] = v; } },
+        set(k, v) { try { localStorage.setItem(k, v); storageOk = true; } catch (e) { storageOk = false; memory[k] = v; } },
         del(k) { try { localStorage.removeItem(k); } catch (e) { delete memory[k]; } }
     };
     const read = (k, fallback) => { const raw = store.get(k); if (raw === null) return fallback; try { return JSON.parse(raw); } catch (e) { return fallback; } };
@@ -147,6 +148,17 @@
         remove(id) { write(KEYS.reports, read(KEYS.reports, []).filter(r => r.id !== id)); }
     };
 
+    /* ---------- Visualizações (ranking "Mais lidas") ---------- */
+    const Views = {
+        hit(id) { const v = read(KEYS.views, {}); v[id] = (v[id] || 0) + 1; write(KEYS.views, v); },
+        count(id) { return read(KEYS.views, {})[id] || 0; },
+        top(n) {
+            const v = read(KEYS.views, {});
+            return News.all().filter(x => v[x.id]).sort((a, b) => v[b.id] - v[a.id]).slice(0, n);
+        }
+    };
+    const readingTime = n => Math.max(1, Math.round(n.body.join(' ').split(/\s+/).length / 200));
+
     /* ---------- Cookies (LGPD) ---------- */
     const Cookies = {
         get() { return read(KEYS.cookies, null); },
@@ -177,5 +189,5 @@
     }
 
     seed();
-    window.JB = { KEYS, CATEGORIES, IMAGES, News, Auth, Reports, Cookies, util: { root, esc, imgSrc, timeAgo, fmtDate, articleUrl, catLabel, catUrl, newsCard } };
+    window.JB = { storageOk: () => storageOk, KEYS, CATEGORIES, IMAGES, News, Auth, Reports, Cookies, Views, util: { readingTime, root, esc, imgSrc, timeAgo, fmtDate, articleUrl, catLabel, catUrl, newsCard } };
 })();

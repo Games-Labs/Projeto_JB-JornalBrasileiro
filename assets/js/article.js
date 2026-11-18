@@ -9,10 +9,11 @@
         box.innerHTML = '<div class="alert alert-warning">Matéria não encontrada. <a href="noticias.html">Ver todas as notícias</a>.</div>';
         return;
     }
+    JB.Views.hit(n.id);
     document.title = n.title + ' — Jornal Brasileiro (JB)';
     box.innerHTML = '<a class="category-tag" href="' + esc(util.catUrl(n.category)) + '">' + esc(util.catLabel(n.category)) + '</a>' +
         '<h1 class="article-title">' + esc(n.title) + '</h1><p class="lead">' + esc(n.subtitle) + '</p>' +
-        '<p class="meta-info">Por <strong>' + esc(n.author) + '</strong> • ' + esc(util.fmtDate(n.date)) + '</p>' +
+        '<p class="meta-info">Por <strong>' + esc(n.author) + '</strong> • ' + esc(util.fmtDate(n.date)) + ' • ' + util.readingTime(n) + ' min de leitura • ' + JB.Views.count(n.id) + ' leituras</p>' +
         '<img class="lead-img" src="' + esc(util.imgSrc(n)) + '" alt="' + esc(n.title) + '">' +
         '<div class="article-body">' + n.body.map(p => '<p>' + esc(p) + '</p>').join('') + '</div>';
 

@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex">
     <title>Painel Administrativo — Jornal Brasileiro (JB)</title>
+    <link rel="icon" href="../assets/favicon/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon/favicon-16x16.png">
+    <link rel="apple-touch-icon" href="../assets/favicon/apple-touch-icon.png">
+    <link rel="manifest" href="../assets/favicon/site.webmanifest">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Merriweather:ital,wght@0,700;0,900;1,400&display=swap" rel="stylesheet">
@@ -43,8 +48,21 @@
                                     <div class="col-sm-6"><label class="form-label" for="f-cat">Categoria</label><select class="form-select" id="f-cat" name="category"></select></div>
                                     <div class="col-sm-6"><label class="form-label" for="f-author">Autor</label><input class="form-control" id="f-author" name="author" placeholder="Redação JB"></div>
                                 </div>
-                                <div class="mb-3"><label class="form-label" for="f-img">Imagem (local)</label><select class="form-select" id="f-img" name="image"></select></div>
-                                <div class="mb-3"><label class="form-label" for="f-imgurl">ou URL da imagem</label><input class="form-control" id="f-imgurl" name="imageUrl" placeholder="https://..."></div>
+                                <div class="mb-3">
+                                    <span class="form-label d-block">Imagem da notícia</span>
+                                    <div class="img-picker">
+                                        <input type="hidden" name="image">
+                                        <img class="img-preview mb-3" id="img-preview" alt="Pré-visualização da imagem escolhida">
+                                        <p class="small fw-semibold mb-1">1. Escolha da galeria</p>
+                                        <div class="img-options mb-3" id="img-options"></div>
+                                        <p class="small fw-semibold mb-1">2. Envie do seu computador</p>
+                                        <input type="file" class="form-control form-control-sm mb-1" id="img-file" accept="image/*">
+                                        <div class="form-text mb-3">A imagem é reduzida (máx. 1200 px) e salva neste navegador.</div>
+                                        <p class="small fw-semibold mb-1">3. Ou cole o endereço (URL)</p>
+                                        <input class="form-control form-control-sm" id="img-url" name="imageUrl" placeholder="https://...">
+                                        <div class="alert alert-warning py-1 px-2 small mt-2 mb-0" id="img-warn" hidden></div>
+                                    </div>
+                                </div>
                                 <div class="mb-3"><label class="form-label" for="f-body">Texto (um parágrafo por linha)</label><textarea class="form-control" id="f-body" name="body" rows="6" required></textarea><div class="invalid-feedback">Escreva o texto.</div></div>
                                 <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="f-feat" name="featured"><label class="form-check-label" for="f-feat">Manchete da capa</label></div>
                                 <button class="btn btn-primary" type="submit">Salvar notícia</button>

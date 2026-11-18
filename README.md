@@ -38,6 +38,8 @@ Aplicação **Multi-Page** puramente *client-side*, feita com **HTML5, CSS3 e Ja
 10. Aviso e painel de consentimento de cookies, com referência à LGPD.
 11. Interface responsiva para celulares e desktops.
 
+**Extras:** ranking **Mais lidas** (contador de leituras local), tempo de leitura nas matérias e seletor de imagem no painel (galeria local, envio do computador com redução automática, ou URL).
+
 ### C) Usuários
 
 | Perfil | O que pode fazer |
@@ -75,6 +77,8 @@ JB/
 │   │   ├── storage.js         # Camada de dados (localStorage) compartilhada
 │   │   ├── layout.js          # Ticker, cabeçalho, rodapé e cookies
 │   │   └── home · news-list · article · denuncias · auth · perfil · admin .js
+│   ├── favicon/               # Ícones do site (favicon.io)
+│   ├── favicon/               # Ícones do site (favicon.io)
 │   ├── img/                   # Imagens locais e ilustrações SVG
 │   └── vendor/bootstrap/      # Bootstrap 5.3.3 (cópia local, funciona offline)
 ├── docs/                      # Capturas de tela
@@ -91,6 +95,7 @@ JB/
 | `jb_session` | Id do usuário autenticado |
 | `jb_reports` | Denúncias e pautas enviadas |
 | `jb_cookies` | Preferências de cookies (LGPD) |
+| `jb_views` | Contador de leituras por matéria |
 
 > ⚠️ O login é **simulado**: as senhas são guardadas com um hash simples apenas para demonstração e **não** oferecem segurança real.
 > Os dados ficam só no navegador em uso. Para reiniciar o portal, limpe o armazenamento do site.
