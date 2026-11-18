@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Notícias — Jornal Brasileiro (JB)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Merriweather:ital,wght@0,700;0,900;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/vendor/bootstrap/bootstrap.min.css">
+    <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body data-root="../" data-page="noticias">
+    <div id="site-top"></div>
+    <main class="container main-layout">
+        <h1 class="page-title">Notícias</h1>
+        <p class="page-lead">Todas as matérias do Jornal Brasileiro. Filtre por editoria ou use a busca.</p>
+        <div class="filter-bar d-flex flex-wrap gap-2 mb-3" id="filter-bar" aria-label="Filtrar por categoria"></div>
+        <p class="text-muted small" id="result-info"></p>
+        <div class="row g-4" id="news-grid"></div>
+    </main>
+    <div id="site-bottom"></div>
+    <script src="../assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="../assets/js/storage.js"></script>
+    <script src="../assets/js/layout.js"></script>
+    <script src="../assets/js/news-list.js"></script>
+</body>
+</html>

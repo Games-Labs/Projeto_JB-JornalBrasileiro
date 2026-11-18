@@ -4,246 +4,60 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jornal Brasileiro (JB) — Informação e Investigação</title>
-    <link rel="stylesheet" href="style.css">
+    <meta name="description" content="Jornal Brasileiro (JB): portal de webjornalismo informativo e investigativo (projeto acadêmico).">
 
-    <!-- Fontes: Merriweather (Editorial/Títulos) e Inter (Interface/Leitura) -->
+    <!-- Fontes (opcionais: há fallback para fontes do sistema) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Merriweather:ital,wght@0,700;0,900;1,400&display=swap" rel="stylesheet">
 
-    <!--Boodstrap-->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
-
+    <!-- Bootstrap local (primeiro) + tema do JB (depois, para poder sobrescrever) -->
+    <link rel="stylesheet" href="assets/vendor/bootstrap/bootstrap.min.css">
+    <link rel="stylesheet" href="assets/css/style.css">
 </head>
-<body>
+<body data-root="" data-page="inicio">
 
-    <!-- TICKER DE ÚLTIMA HORA (BREAKING NEWS) -->
-    <div class="breaking-news-bar">
-        <span class="badge-urgente">EM CIMA DA HORA</span>
-        <div class="ticker-wrapper">
-            <p class="ticker-text">
-                Comissão aprova novo marco regulatório para transparência pública • Mercado financeiro reage às novas projeções fiscais • Exclusivo JB: Documentos revelam falhas em contratos de infraestrutura.
-            </p>
-        </div>
-    </div>
+    <div id="site-top"></div>
 
-    <!-- CABEÇALHO / HEADER -->
-    <header class="site-header">
-        <div class="container header-content">
-            
-            <!-- Esquerda: Logo + Menu Hambúrguer (Tópicos) -->
-            <div class="header-left">
-                <input type="checkbox" id="menu-toggle" class="hidden-checkbox">
-                <label for="menu-toggle" class="hamburger-btn" title="Filtrar Tópicos">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </label>
-
-                <a href="#inicio" class="logo">
-                    <span class="logo-sigla">JB</span>
-                    <div class="logo-texto">
-                        <strong>Jornal Brasileiro</strong>
-                        <small>Investigação & Fatos</small>
-                    </div>
-                </a>
-
-                <!-- Menu Lateral de Tópicos -->
-                <aside class="topics-drawer">
-                    <div class="drawer-header">
-                        <h3>Editorias</h3>
-                        <label for="menu-toggle" class="close-drawer">&times;</label>
-                    </div>
-                    <ul>
-                        <li><a href="#politica">Política</a></li>
-                        <li><a href="#economia">Economia</a></li>
-                        <li><a href="#investigacao">Investigação Especial</a></li>
-                        <li><a href="#esportes">Esportes</a></li>
-                        <li><a href="#tecnologia">Tecnologia & Ciência</a></li>
-                        <li><a href="#opiniao">Colunas & Opinião</a></li>
-                    </ul>
-                </aside>
-            </div>
-
-            <!-- Centro: Abas Principais -->
-            <nav class="main-nav">
-                <a href="#inicio" class="active">Início</a>
-                <a href="#noticias">Notícias</a>
-                <a href="#denuncie" class="nav-highlight">Denuncie / Envie uma Pauta</a>
-            </nav>
-
-            <!-- Direita: Busca e Área do Usuário -->
-            <div class="header-right">
-                <form class="search-box" action="#busca">
-                    <input type="search" placeholder="Buscar no JB..." aria-label="Buscar notícias">
-                    <button type="submit">🔍</button>
-                </form>
-
-                <a href="#login" class="btn-user">Entrar</a>
-                <!-- Exemplo de estado logado (comentado para referência futura):
-                <a href="#perfil" class="user-profile-link">Minhas Informações</a> 
-                -->
-            </div>
-        </div>
-    </header>
-
-    <!-- CONTEÚDO PRINCIPAL -->
     <main class="container main-layout">
-
-        <!-- SEÇÃO 1: MANCHETE PRINCIPAL + DESTAQUES LATERAIS -->
-        <section id="inicio" class="hero-grid">
-            
-            <!-- Manchete de Capa -->
-            <article class="lead-story">
-                <span class="category-tag">INVESTIGAÇÃO EXCLUSIVA</span>
-                <h1>Dossiê aponta gargalos na fiscalização de obras públicas em 14 estados</h1>
-                <p class="subtitle">Levantamento cruzou dados de portais de transparência e contratos emergenciais firmados nos últimos 24 meses.</p>
-                <div class="story-image-placeholder">
-                    <span>[ Fotografia Principal / Infográfico da Reportagem ]</span>
-                </div>
-                <div class="meta-info">
-                    <span>Por <strong>Redação Investigativa JB</strong></span> • <span>Atualizado há 18 min</span>
-                </div>
-            </article>
-
-            <!-- Coluna Secundária (Últimas Notícias) -->
-            <aside class="sidebar-news">
+        <section class="row g-4">
+            <article class="col-lg-8 lead-story" id="lead-story"></article>
+            <aside class="col-lg-4">
                 <h2 class="section-title">Últimas Publicações</h2>
-                
-                <article class="mini-card">
-                    <span class="category-tag">ECONOMIA</span>
-                    <h3><a href="#">Banco Central sinaliza cautela com juros diante de pressão inflacionária no setor de serviços</a></h3>
-                    <span class="time">Há 42 minutos</span>
-                </article>
-
-                <article class="mini-card">
-                    <span class="category-tag">POLÍTICA</span>
-                    <h3><a href="#">Relator apresenta parecer final sobre reforma administrativa nesta quinta-feira</a></h3>
-                    <span class="time">Há 1 hora</span>
-                </article>
-
-                <article class="mini-card">
-                    <span class="category-tag">ESPORTES</span>
-                    <h3><a href="#">Confederação divulga calendário ajustado para as fases finais do campeonato nacional</a></h3>
-                    <span class="time">Há 2 horas</span>
-                </article>
+                <div id="latest-news"></div>
+                <a href="pages/noticias.html" class="btn btn-outline-dark btn-sm">Ver todas as notícias</a>
             </aside>
         </section>
 
         <hr class="editorial-divider">
 
-        <!-- SEÇÃO 2: FEED DE NOTÍCIAS EM COLUNAS -->
-        <section id="noticias" class="news-feed-section">
-            <div class="section-header">
-                <h2 class="section-title">Destaques do Dia</h2>
-                <span class="edition-date">Edição Nacional • Terça-feira</span>
+        <section aria-labelledby="destaques">
+            <div class="d-flex justify-content-between align-items-baseline mb-3">
+                <h2 class="section-title flex-grow-1 me-3" id="destaques">Destaques do Dia</h2>
+                <span class="edition-date" id="edition-date"></span>
             </div>
-
-            <div class="cards-grid">
-                <article class="news-card">
-                    <div class="card-thumb">[ Imagem ]</div>
-                    <span class="category-tag">TECNOLOGIA</span>
-                    <h3>Novas diretrizes de proteção de dados exigem auditoria em algoritmos públicos</h3>
-                    <p>Especialistas explicam como a fiscalização vai afetar sistemas automatizados de atendimento ao cidadão.</p>
-                </article>
-
-                <article class="news-card">
-                    <div class="card-thumb">[ Imagem ]</div>
-                    <span class="category-tag">INFRAESTRUTURA</span>
-                    <h3>Malha ferroviária regional recebe novo plano de concessão para transporte de cargas</h3>
-                    <p>Projeto prevê integração entre polos agrícolas e terminais portuários do Sudeste.</p>
-                </article>
-
-                <article class="news-card">
-                    <div class="card-thumb">[ Imagem ]</div>
-                    <span class="category-tag">INSTITUCIONAL</span>
-                    <h3>Como operamos: conheça nossa metodologia de checagem e sigilo de fonte</h3>
-                    <p>Entenda os protocolos de verificação dupla aplicados antes da publicação de qualquer reportagem no JB.</p>
-                </article>
-            </div>
+            <div class="row g-4" id="feed-grid"></div>
         </section>
 
         <hr class="editorial-divider">
 
-        <!-- SEÇÃO 3: CANAL DE DENÚNCIAS / ENVIO DE PAUTA -->
-        <section id="denuncie" class="whistleblower-box">
-            <div class="whistleblower-info">
-                <span class="badge-urgente">CANAL SEGURO</span>
-                <h2>Denuncie ou Envie uma Pauta</h2>
-                <p>Tem documentos, imagens ou informações de interesse público? Nossa equipe garante sigilo absoluto da fonte conforme previsto na Constituição Federal.</p>
-                <ul class="security-notes">
-                    <li>✔ Anonimato garantido (envio sem identificação obrigatória)</li>
-                    <li>✔ Metadados de arquivos removidos na triagem</li>
-                </ul>
+        <section class="whistleblower-box">
+            <div class="row g-4 align-items-center">
+                <div class="col-lg-8">
+                    <span class="badge-urgente">CANAL SEGURO</span>
+                    <h2>Denuncie ou Envie uma Pauta</h2>
+                    <p class="mb-0">Tem documentos, imagens ou informações de interesse público? Envie pelo nosso canal, com opção de anonimato.</p>
+                </div>
+                <div class="col-lg-4 text-lg-end"><a href="pages/denuncias.html" class="btn btn-primary btn-lg">Enviar Denúncia</a></div>
             </div>
-
-            <form class="whistleblower-form" action="#" method="post">
-                <div class="form-group">
-                    <label for="assunto">Assunto / Área da Denúncia</label>
-                    <input type="text" id="assunto" placeholder="Ex: Irregularidade em licitação municipal" required>
-                </div>
-                <div class="form-group">
-                    <label for="relato">Relato Detalhado</label>
-                    <textarea id="relato" rows="4" placeholder="Descreva os fatos, datas e envolvidos..." required></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="anexo">Anexar Evidências (PDF, Imagens)</label>
-                    <input type="file" id="anexo">
-                </div>
-                <button type="submit" class="btn-primary">Enviar Denúncia com Sigilo</button>
-            </form>
         </section>
-
     </main>
 
-    <!-- RODAPÉ / FOOTER -->
-    <footer class="site-footer">
-        <div class="container footer-grid">
-            <div class="footer-brand">
-                <div class="logo-sigla">JB</div>
-                <h3>Jornal Brasileiro</h3>
-                <p>Compromisso com o jornalismo independente, investigativo e pautado pelo interesse público.</p>
-            </div>
+    <div id="site-bottom"></div>
 
-            <div class="footer-links">
-                <h4>Institucional</h4>
-                <ul>
-                    <li><a href="#quem-somos">Quem Somos</a></li>
-                    <li><a href="#expediente">Expediente</a></li>
-                    <li><a href="#contato">Fale com a Redação</a></li>
-                </ul>
-            </div>
-
-            <div class="footer-links">
-                <h4>Transparência & Legal</h4>
-                <ul>
-                    <li><a href="#termos">Termos de Uso</a></li>
-                    <li><a href="#privacidade">Política de Privacidade (LGPD)</a></li>
-                    <li><a href="#cookies">Preferências de Cookies</a></li>
-                </ul>
-            </div>
-
-            <div class="footer-address">
-                <h4>Redação Central</h4>
-                <p>Av. da Imprensa Nacional, 1450 — Sala 802<br>Centro, Brasília - DF • CEP 70000-000</p>
-                <p><strong>Contato:</strong> redacao@jornalbrasileiro.com.br</p>
-            </div>
-        </div>
-
-        <div class="footer-bottom">
-            <p>&copy; 2026 Jornal Brasileiro (JB). Todos os direitos reservados.</p>
-        </div>
-    </footer>
-
-    <input type="checkbox" id="accept-cookies" class="hidden-checkbox">
-    <div class="lgpd-banner">
-        <div class="container lgpd-content">
-            <p>
-                <strong>Privacidade e Cookies (LGPD):</strong> Utilizamos cookies essenciais para o funcionamento do portal e métricas anônimas de audiência. Leia nossa <a href="#privacidade">Política de Privacidade</a>.
-            </p>
-            <label for="accept-cookies" class="btn-primary">Concordar e Fechar</label>
-        </div>
-    </div>
-
+    <script src="assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="assets/js/storage.js"></script>
+    <script src="assets/js/layout.js"></script>
+    <script src="assets/js/home.js"></script>
 </body>
 </html>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Denuncie / Envie uma Pauta — Jornal Brasileiro (JB)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Merriweather:ital,wght@0,700;0,900;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/vendor/bootstrap/bootstrap.min.css">
+    <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body data-root="../" data-page="denuncias">
+    <div id="site-top"></div>
+    <main class="container main-layout">
+        <section class="whistleblower-box">
+            <div class="row g-4">
+                <div class="col-lg-5">
+                    <span class="badge-urgente">CANAL SEGURO</span>
+                    <h1 class="h2">Denuncie ou Envie uma Pauta</h1>
+                    <p>Tem documentos, imagens ou informações de interesse público? Nossa equipe garante sigilo da fonte conforme previsto na Constituição Federal.</p>
+                    <ul class="security-notes">
+                        <li>✔ Anonimato garantido (envio sem identificação obrigatória)</li>
+                        <li>✔ Metadados de arquivos removidos na triagem</li>
+                    </ul>
+                    <img src="../assets/img/seguranca-digital.jpg" class="img-fluid rounded border mt-3" alt="Chave sobre fundo de código digital, simbolizando sigilo e segurança" loading="lazy">
+                    <p class="small mt-3 mb-0"><em>Projeto acadêmico: os dados enviados ficam apenas no armazenamento local do seu navegador.</em></p>
+                </div>
+                <div class="col-lg-7">
+                    <div class="alert alert-success" id="report-ok" role="status" hidden>✔ Denúncia registrada com sucesso. Obrigado por colaborar com o jornalismo de interesse público.</div>
+                    <form id="report-form" novalidate>
+                        <div class="mb-3">
+                            <label class="form-label" for="assunto">Assunto / Área da Denúncia</label>
+                            <input type="text" class="form-control" id="assunto" name="assunto" placeholder="Ex: Irregularidade em licitação municipal" required>
+                            <div class="invalid-feedback">Informe o assunto.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="relato">Relato Detalhado</label>
+                            <textarea class="form-control" id="relato" name="relato" rows="5" placeholder="Descreva os fatos, datas e envolvidos..." required minlength="20"></textarea>
+                            <div class="invalid-feedback">Descreva o caso com pelo menos 20 caracteres.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label" for="anexo">Anexar Evidências (PDF, Imagens)</label>
+                            <input type="file" class="form-control" id="anexo" accept=".pdf,image/*">
+                            <div class="form-text">Somente o nome e o tamanho do arquivo são registrados neste protótipo.</div>
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="anonimo" checked>
+                            <label class="form-check-label" for="anonimo">Enviar de forma anônima</label>
+                        </div>
+                        <div id="contato-wrap" hidden class="row g-3 mb-3">
+                            <div class="col-md-6"><label class="form-label" for="nome">Nome</label><input type="text" class="form-control" id="nome" name="nome"></div>
+                            <div class="col-md-6"><label class="form-label" for="email">E-mail</label><input type="email" class="form-control" id="email" name="email"></div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Enviar Denúncia com Sigilo</button>
+                    </form>
+                </div>
+            </div>
+        </section>
+    </main>
+    <div id="site-bottom"></div>
+    <script src="../assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="../assets/js/storage.js"></script>
+    <script src="../assets/js/layout.js"></script>
+    <script src="../assets/js/denuncias.js"></script>
+</body>
+</html>

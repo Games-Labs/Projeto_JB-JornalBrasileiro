@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" role="img" aria-label="Ilustração genérica: gráfico de barras e linha de tendência">
+<rect width="640" height="360" fill="#e4d6c2"/>
+<g fill="#342A21">
+<rect x="130" y="210" width="60" height="90"/><rect x="215" y="170" width="60" height="130"/><rect x="300" y="190" width="60" height="110"/><rect x="385" y="120" width="60" height="180"/><rect x="470" y="80" width="60" height="220"/>
+</g>
+<polyline points="160,190 245,150 330,170 415,100 500,60" fill="none" stroke="#C70B2E" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="100" y="300" width="460" height="6" fill="#cfc1ad"/>
+<text x="320" y="340" text-anchor="middle" font-family="Georgia,serif" font-weight="700" font-size="22" fill="#342A21">ECONOMIA</text>
+</svg>

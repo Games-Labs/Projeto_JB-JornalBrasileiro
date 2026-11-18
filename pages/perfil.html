@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minhas Informações — Jornal Brasileiro (JB)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Merriweather:ital,wght@0,700;0,900;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/vendor/bootstrap/bootstrap.min.css">
+    <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body data-root="../" data-page="perfil">
+    <div id="site-top"></div>
+    <main class="container main-layout">
+        <div id="profile-content" hidden>
+            <h1 class="page-title">Minhas Informações</h1>
+            <p class="page-lead"><span class="badge bg-dark" id="role-badge"></span> Membro desde <span id="since"></span> · <a id="admin-link" href="admin.html" hidden>Abrir Painel Administrativo</a></p>
+            <div class="row g-4">
+                <div class="col-lg-7">
+                    <form id="profile-form" class="panel-box">
+                        <h2 class="h5 mb-3">Dados do perfil</h2>
+                        <div class="alert alert-success" id="profile-msg" role="status" hidden></div>
+                        <div class="mb-3"><label class="form-label" for="p-name">Nome</label><input class="form-control" id="p-name" name="name" required></div>
+                        <div class="mb-3"><label class="form-label" for="p-email">E-mail</label><input class="form-control" id="p-email" name="email" readonly></div>
+                        <div class="mb-3"><label class="form-label" for="p-city">Cidade</label><input class="form-control" id="p-city" name="city"></div>
+                        <div class="mb-3"><label class="form-label" for="p-bio">Sobre você</label><textarea class="form-control" id="p-bio" name="bio" rows="3"></textarea></div>
+                        <div class="mb-3"><span class="form-label d-block">Editorias de interesse</span><div id="interests"></div></div>
+                        <button class="btn btn-primary" type="submit">Salvar perfil</button>
+                    </form>
+                </div>
+                <div class="col-lg-5">
+                    <form id="pass-form" class="panel-box mb-4">
+                        <h2 class="h5 mb-3">Alterar senha</h2>
+                        <div class="alert alert-success" id="pass-msg" role="status" hidden></div>
+                        <div class="mb-3"><label class="form-label" for="p-cur">Senha atual</label><input type="password" class="form-control" id="p-cur" name="current" autocomplete="current-password" required></div>
+                        <div class="mb-3"><label class="form-label" for="p-new">Nova senha</label><input type="password" class="form-control" id="p-new" name="next" autocomplete="new-password" required></div>
+                        <button class="btn btn-dark" type="submit">Alterar senha</button>
+                    </form>
+                    <div class="panel-box d-flex flex-wrap gap-2">
+                        <button class="btn btn-outline-dark" id="logout" type="button">Sair</button>
+                        <button class="btn btn-outline-primary" id="delete-account" type="button">Excluir minha conta</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    <div id="site-bottom"></div>
+    <script src="../assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="../assets/js/storage.js"></script>
+    <script src="../assets/js/layout.js"></script>
+    <script src="../assets/js/perfil.js"></script>
+</body>
+</html>
