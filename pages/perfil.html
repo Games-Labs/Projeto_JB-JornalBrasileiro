@@ -25,6 +25,15 @@
                 <div class="col-lg-7">
                     <form id="profile-form" class="panel-box">
                         <h2 class="h5 mb-3">Dados do perfil</h2>
+                        <div class="d-flex align-items-center gap-3 mb-4">
+                            <span id="avatar-box"></span>
+                            <div>
+                                <label class="btn btn-outline-dark btn-sm mb-1" for="avatar-file">Alterar foto</label>
+                                <input type="file" id="avatar-file" accept="image/*" hidden>
+                                <button type="button" class="btn btn-link btn-sm text-decoration-none" id="avatar-remove">Remover</button>
+                                <div class="form-text mt-0">A foto é recortada em quadrado e fica salva só neste navegador.</div>
+                            </div>
+                        </div>
                         <div class="alert alert-success" id="profile-msg" role="status" hidden></div>
                         <div class="mb-3"><label class="form-label" for="p-name">Nome</label><input class="form-control" id="p-name" name="name" required></div>
                         <div class="mb-3"><label class="form-label" for="p-email">E-mail</label><input class="form-control" id="p-email" name="email" readonly></div>

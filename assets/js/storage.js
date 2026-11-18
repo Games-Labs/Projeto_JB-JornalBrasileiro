@@ -180,6 +180,10 @@
     const catLabel = c => (CATEGORIES[c] ? CATEGORIES[c].label : c);
     const catUrl = c => root() + (CATEGORIES[c] ? CATEGORIES[c].page : 'pages/noticias.html');
 
+    // Avatar do usuário: foto (data URL) ou inicial do nome sobre fundo carmim
+    const avatarHTML = (u, cls) => '<span class="avatar ' + (cls || '') + '" data-avatar>' +
+        (u.avatar ? '<img src="' + esc(u.avatar) + '" alt="">' : esc((u.name || '?').trim().charAt(0).toUpperCase())) + '</span>';
+
     function newsCard(n) {
         return '<article class="news-card">' +
             '<img class="card-thumb" loading="lazy" src="' + esc(imgSrc(n)) + '" alt="' + esc(n.title) + '">' +
@@ -189,5 +193,5 @@
     }
 
     seed();
-    window.JB = { storageOk: () => storageOk, KEYS, CATEGORIES, IMAGES, News, Auth, Reports, Cookies, Views, util: { readingTime, root, esc, imgSrc, timeAgo, fmtDate, articleUrl, catLabel, catUrl, newsCard } };
+    window.JB = { storageOk: () => storageOk, KEYS, CATEGORIES, IMAGES, News, Auth, Reports, Cookies, Views, util: { avatarHTML, readingTime, root, esc, imgSrc, timeAgo, fmtDate, articleUrl, catLabel, catUrl, newsCard } };
 })();

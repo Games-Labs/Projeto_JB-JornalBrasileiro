@@ -18,6 +18,30 @@
     }
     fill(me);
 
+    /* ---------- Foto de perfil ---------- */
+    const renderAvatar = () => {
+        const u = JB.Auth.current();
+        document.getElementById('avatar-box').innerHTML = JB.util.avatarHTML(u);
+        document.getElementById('avatar-remove').hidden = !u.avatar;
+        document.querySelectorAll('.site-header [data-avatar]').forEach(el => { el.outerHTML = JB.util.avatarHTML(u, 'avatar-sm'); });
+    };
+    renderAvatar();
+    document.getElementById('avatar-file').addEventListener('change', e => {
+        const file = e.target.files[0]; if (!file) return;
+        const img = new Image(), url = URL.createObjectURL(file);
+        img.onload = () => {
+            const size = 256, side = Math.min(img.width, img.height);   // recorte quadrado central
+            const c = document.createElement('canvas'); c.width = c.height = size;
+            c.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, size, size);
+            URL.revokeObjectURL(url);
+            JB.Auth.update({ avatar: c.toDataURL('image/jpeg', 0.85) });
+            renderAvatar(); toast('profile-msg', 'Foto atualizada.');
+        };
+        img.onerror = () => toast('profile-msg', 'Não foi possível ler esse arquivo como imagem.', 'danger');
+        img.src = url; e.target.value = '';
+    });
+    document.getElementById('avatar-remove').addEventListener('click', () => { JB.Auth.update({ avatar: '' }); renderAvatar(); toast('profile-msg', 'Foto removida.'); });
+
     f.addEventListener('submit', e => {
         e.preventDefault();
         if (!f.elements.name.value.trim()) return;

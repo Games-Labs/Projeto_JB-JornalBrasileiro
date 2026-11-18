@@ -25,7 +25,7 @@
     function userArea() {
         const u = Auth.current();
         if (!u) return '<a href="' + R + 'pages/login.html" class="btn btn-user btn-sm px-3">Entrar</a>';
-        return '<div class="dropdown"><button class="btn btn-user btn-sm px-3 dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">' + esc(u.name.split(' ')[0]) + '</button>' +
+        return '<div class="dropdown"><button class="btn btn-user btn-sm ps-1 pe-3 d-flex align-items-center gap-2 dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" aria-label="Menu do usuário">' + util.avatarHTML(u, 'avatar-sm') + '<span>' + esc(u.name.split(' ')[0]) + '</span></button>' +
             '<ul class="dropdown-menu dropdown-menu-end">' +
             '<li><a class="dropdown-item" href="' + R + 'pages/perfil.html">Minhas Informações</a></li>' +
             (u.role === 'admin' ? '<li><a class="dropdown-item" href="' + R + 'pages/admin.html">Painel Administrativo</a></li>' : '') +
