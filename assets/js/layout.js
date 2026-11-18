@@ -46,7 +46,9 @@
             link('institucional', 'pages/institucional.html', 'Institucional') + link('denuncias', 'pages/denuncias.html', 'Denuncie / Envie uma Pauta', 'nav-highlight') +
             '</ul><div class="d-flex flex-column flex-xxl-row align-items-xxl-center gap-2">' +
             '<form class="search-box" action="' + R + 'pages/noticias.html" method="get" role="search"><input type="search" name="q" placeholder="Buscar no JB..." aria-label="Buscar notícias"><button type="submit">Buscar</button></form>' +
-            '<button type="button" class="btn btn-outline-dark btn-sm text-nowrap" id="themeToggle" aria-label="Alternar tema claro/escuro">' + (Theme.get() === 'dark' ? 'Claro' : 'Escuro') + '</button>' +
+            '<button type="button" class="theme-toggle" id="themeToggle" aria-label="Alternar entre tema claro e escuro" title="Alternar tema">' +
+            '<svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>' +
+            '<svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="currentColor" stroke="none"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg></button>' +
             userArea() + '</div></div></div></nav></header>' +
             '<div class="offcanvas offcanvas-start" tabindex="-1" id="topicsDrawer" aria-labelledby="topicsLabel"><div class="offcanvas-header border-bottom"><h5 class="offcanvas-title" id="topicsLabel">Editorias</h5>' +
             '<button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button></div><div class="offcanvas-body"><ul class="topics-list">' + topics + '<li><a href="' + R + 'pages/central.html"><strong>Minha Central</strong></a></li></ul></div></div>';
@@ -97,7 +99,7 @@
     document.getElementById('site-top').innerHTML = ticker() + header();
     document.getElementById('site-bottom').innerHTML = footer() + cookieUI();
     initCookies();
-    document.getElementById('themeToggle').addEventListener('click', e => { e.currentTarget.textContent = Theme.toggle() === 'dark' ? 'Claro' : 'Escuro'; });
+    document.getElementById('themeToggle').addEventListener('click', () => Theme.toggle());
     document.getElementById('newsletterForm').addEventListener('submit', e => {
         e.preventDefault();
         const msg = document.getElementById('nlMsg');

@@ -293,3 +293,24 @@ a.category-tag:hover { color: var(--carmine-dark); text-decoration: underline; }
     .main-layout { padding: 0; }
     a { color: #000; }
 }
+
+/* Botão de tema (ícone lua/sol) — mesma altura da busca e do botão de usuário */
+.theme-toggle {
+    position: relative; width: 36px; height: 36px; flex-shrink: 0; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid var(--coffee); border-radius: 50%; background: transparent; color: var(--coffee); cursor: pointer;
+    transition: background-color .2s, color .2s, transform .35s;
+}
+.theme-toggle:hover { background-color: var(--coffee); color: var(--champagne); transform: rotate(20deg); }
+.theme-toggle:active { transform: rotate(180deg) scale(.9); }
+.theme-toggle:focus-visible { outline: 3px solid rgba(199, 11, 46, .45); outline-offset: 2px; }
+.theme-toggle svg { position: absolute; transition: opacity .3s, transform .45s; }
+.theme-toggle .icon-sun { opacity: 0; transform: rotate(-90deg) scale(.4); }
+:root[data-bs-theme="dark"] .theme-toggle .icon-moon { opacity: 0; transform: rotate(90deg) scale(.4); }
+:root[data-bs-theme="dark"] .theme-toggle .icon-sun { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .theme-toggle, .theme-toggle svg { transition: none; } }
+
+/* Alinha a altura de busca, tema e usuário no cabeçalho */
+.site-header .btn-user { min-height: 36px; display: inline-flex; align-items: center; }
+.site-header .search-box { min-height: 36px; }
+.search-box input { width: 130px; }
