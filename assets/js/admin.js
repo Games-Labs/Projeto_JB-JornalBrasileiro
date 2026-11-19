@@ -1,14 +1,37 @@
 /* Painel Administrativo — matérias (fluxo editorial, agendamento, tipos de conteúdo, ao vivo,
-   fontes, cronologia, gráfico, correções e versões), autores, audiência, denúncias e moderação.
-   Esconder o painel aqui é só interface: quem impede um não-editor de ler denúncias ou
-   gravar notícias são as políticas RLS do Supabase. */
+   fontes, cronologia, gráfico, correções e versões), autores, audiência, denúncias, moderação
+   e cargos da redação. O que cada cargo vê depende de JB.Auth (admin, coordenador, jornalista).
+   Esconder partes do painel aqui é só interface: quem impede um jornalista de publicar, ou um
+   leitor de ler denúncias, são as políticas RLS e set_member_role no Supabase. */
 JB.authReady.then(function () {
     'use strict';
-    const { News, Reports, Authors, Versions, CATEGORIES, KINDS, VERDICTS, IMAGES, STATUS, STATUS_FLOW, util } = JB;
+    const { News, Reports, Authors, Versions, Auth, Members, CATEGORIES, KINDS, VERDICTS, IMAGES, STATUS, STATUS_FLOW, util } = JB;
     const { esc } = util;
     const $ = id => document.getElementById(id);
 
-    if (!JB.Auth.isAdmin()) { $('admin-loading').hidden = true; $('gate').hidden = false; return; }
+    if (!Auth.isStaff()) {
+        $('admin-loading').hidden = true; $('gate').hidden = false;
+        // Da equipe, mas a conta ainda não está liberada nesta sessão (idade ou verificação em duas etapas)
+        if (util.isStaffRole(Auth.realRole())) {
+            const st = Auth.mfaState();
+            $('gate').innerHTML = '<h1 class="h3">Falta um passo</h1><p>' + esc(!Auth.ageOk() ? 'Confirme sua idade para liberar a conta.'
+                : st === 'challenge' ? 'Digite o código do app autenticador para usar o painel.'
+                : 'A equipe da redação só usa o painel com a verificação em duas etapas ativada. Ative agora com um app autenticador (leva um minuto).') +
+                '</p><a class="btn btn-primary" href="seguranca.html?next=admin.html">Continuar</a>';
+        }
+        return;
+    }
+    const me = Auth.current();
+    const editor = Auth.isEditor();                     // coordenador ou admin
+    const allowedStatuses = Auth.allowedStatuses();     // jornalista: rascunho, revisão, aprovada
+    const defaultStatus = editor ? 'publicada' : 'rascunho';
+    document.querySelectorAll('[data-editor-only]').forEach(el => { el.hidden = !editor; });
+    const ROLE_NOTES = {
+        admin: 'Acesso total à redação. Coordenadores e jornalistas são definidos na aba “Equipe e cargos”.',
+        coordenador: 'Você publica, arquiva e corrige matérias, modera comentários, lê denúncias e coloca ou tira jornalistas na aba “Equipe e cargos”.',
+        jornalista: 'Você cria e edita as suas matérias até “Aprovada”; quem publica é um coordenador. As matérias dos colegas aparecem só para leitura.'
+    };
+    $('role-note').innerHTML = util.sealHTML(me.role) + ' Você entrou como <strong>' + esc(util.roleLabel(me.role)) + '</strong>. ' + esc(ROLE_NOTES[me.role] || '');
 
     const form = $('news-form');
     const tbody = $('news-rows');
@@ -21,6 +44,9 @@ JB.authReady.then(function () {
     const nowIso = () => new Date().toISOString();
     const hm = iso => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
+    field('status').innerHTML = allowedStatuses.map(s => '<option value="' + s + '">' + esc(STATUS[s]) + '</option>').join('');
+    $('feat-wrap').hidden = !editor;            // manchete da capa: só quem publica
+    $('news-mine').checked = !editor;           // jornalista começa vendo as próprias matérias
     field('category').innerHTML = opts(CATEGORIES, c => c.label);
     field('kind').innerHTML = opts(KINDS);
     field('verdict').innerHTML += opts(VERDICTS, v => v.label);
@@ -34,20 +60,57 @@ JB.authReady.then(function () {
         return o;
     }).filter(o => o[a] || o[b]);
     const formatLines = (list, a, b) => (list || []).map(o => (o[a] || '') + (o[b] ? ' | ' + o[b] : '')).join('\n');
-    // Aceita "14000", "14.000", "8,6" e "8.6"
+    // Aceita "14000", "14.000", "8,6", "8.6", "R$ 2,1", "15%" e "74 contratos"
     const toNumber = v => {
-        let s = String(v).trim().replace(/\s/g, '');
-        if (!s) return NaN;
+        const m = String(v).replace(/R\$/gi, '').match(/-?\d[\d.,]*/);
+        if (!m) return NaN;
+        let s = m[0].replace(/[.,]$/, '');
         if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
         else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '');
         return Number(s);
     };
-    function readChart() {
-        const items = parseLines(field('chartItems').value, 'label', 'value').slice(0, 12)
-            .map(o => ({ label: o.label.slice(0, 80), value: toNumber(o.value) })).filter(o => o.label && isFinite(o.value));
-        if (!items.length) return null;
-        return { title: field('chartTitle').value.trim(), unit: field('chartUnit').value.trim(), source: field('chartSource').value.trim(), items };
+    /* ---------- Gráfico de barras ---------- */
+    // Uma barra por linha. Separador: "|" (o indicado), tab, ";", ":" ou "=" — ou só um espaço
+    // antes do número no fim ("Sudeste 74"). Antes, linhas fora do formato "rótulo | número" eram
+    // descartadas sem aviso e a matéria era salva sem gráfico.
+    const CHART_MAX = 12;
+    function parseChartLine(line) {
+        let label, value;
+        const sep = ['|', '\t', ';', '=', ':'].find(s => line.includes(s));
+        if (sep) { const i = line.lastIndexOf(sep); label = line.slice(0, i); value = line.slice(i + 1); }
+        else { const m = line.match(/^(.*?)\s+((?:R\$\s*)?-?\d[\d.,]*\s*%?\D*)$/i); if (!m) return null; label = m[1]; value = m[2]; }
+        label = label.trim().replace(/[\s|;:=–—-]+$/, '').slice(0, 80);
+        value = toNumber(value);
+        return label && isFinite(value) ? { label, value } : null;
     }
+    // { chart, bad: [linhas inválidas], extra: barras além do limite, touched: algum campo preenchido }
+    function chartState() {
+        const lines = field('chartItems').value.split('\n').map(l => l.trim()).filter(Boolean);
+        const items = [], bad = [];
+        lines.forEach((l, i) => { const it = parseChartLine(l); if (it) items.push(it); else bad.push(i + 1); });
+        const meta = { title: field('chartTitle').value.trim(), unit: field('chartUnit').value.trim(), source: field('chartSource').value.trim() };
+        return {
+            chart: items.length ? Object.assign(meta, { items: items.slice(0, CHART_MAX) }) : null,
+            bad, extra: Math.max(0, items.length - CHART_MAX), touched: !!(lines.length || meta.title || meta.unit || meta.source)
+        };
+    }
+    // Problema que impede salvar o gráfico como foi digitado ('' = nenhum)
+    function chartProblem(st) {
+        if (st.bad.length) return 'Gráfico: a(s) linha(s) ' + st.bad.join(', ') + ' não têm um número. Use “rótulo | número”, por exemplo “Sudeste | 74”.';
+        if (st.extra) return 'Gráfico: no máximo ' + CHART_MAX + ' barras (há ' + (CHART_MAX + st.extra) + ').';
+        if (st.touched && !st.chart) return 'Gráfico: preencha os dados (uma barra por linha, “rótulo | número”) ou apague o título, a unidade e a fonte.';
+        return '';
+    }
+    function renderChartPreview() {
+        const st = chartState(), problem = chartProblem(st);
+        const status = $('chart-status');
+        status.textContent = problem || (st.chart ? st.chart.items.length + ' barra(s). Prévia:' : '');
+        status.className = 'form-text' + (problem ? ' text-danger fw-semibold' : '');
+        $('chart-preview').innerHTML = st.chart ? util.barChartHTML(st.chart) : '';
+        field('chartItems').classList.toggle('is-invalid', !!st.bad.length || !!st.extra);
+    }
+    ['chartTitle', 'chartUnit', 'chartSource', 'chartItems'].forEach(n => field(n).addEventListener('input', renderChartPreview));
+    const readChart = () => chartState().chart;
     function readSources() {
         return parseLines(field('sources').value, 'label', 'url').map(s => {
             if (!s.url && /^https?:\/\//i.test(s.label)) return { label: s.label, url: s.label };   // linha só com o link
@@ -159,38 +222,44 @@ JB.authReady.then(function () {
         if (util.isScheduled(n)) return '<span class="badge status-badge bg-info text-dark" title="Publica em ' + esc(util.fmtDate(n.date)) + '">Agendada · ' + esc(hm(n.date)) + '</span>';
         return '<span class="badge status-badge ' + (util.isPublished(n) ? 'bg-success' : 'bg-secondary') + '">' + esc(STATUS[n.status || 'publicada']) + '</span>';
     }
+    const nextOf = n => { const i = STATUS_FLOW.indexOf(n.status || 'publicada'); return i >= 0 && i < STATUS_FLOW.length - 1 ? STATUS_FLOW[i + 1] : ''; };
+    // Próximo passo do fluxo permitido para quem está logado (jornalista para em "Aprovada")
+    const canAdvance = n => { const nx = nextOf(n); return !!nx && Auth.canEditNews(n) && allowedStatuses.includes(nx); };
+    const canSeeVersions = n => editor || Auth.isOwnNews(n);
     function renderNews() {
         const all = News.everything();
-        const q = $('news-q').value.trim().toLowerCase(), st = $('news-status').value, kd = $('news-kind').value;
-        const list = all.filter(n => (!q || (n.title + ' ' + n.author).toLowerCase().includes(q)) && (!st || statusOf(n) === st) && (!kd || (n.kind || 'noticia') === kd));
-        const nextOf = n => { const i = STATUS_FLOW.indexOf(n.status || 'publicada'); return i >= 0 && i < STATUS_FLOW.length - 1 ? STATUS_FLOW[i + 1] : ''; };
+        const q = $('news-q').value.trim().toLowerCase(), st = $('news-status').value, kd = $('news-kind').value, mine = $('news-mine').checked;
+        const list = all.filter(n => (!q || (n.title + ' ' + n.author).toLowerCase().includes(q)) && (!st || statusOf(n) === st) && (!kd || (n.kind || 'noticia') === kd) && (!mine || Auth.isOwnNews(n)));
         tbody.innerHTML = list.map(n =>
             '<tr><td><img class="admin-thumb" src="' + esc(util.imgSrc(n)) + '" alt="" loading="lazy"></td>' +
-            '<td><a href="' + esc(util.articleUrl(n)) + '">' + esc(n.title) + '</a>' + (n.featured ? ' <span class="badge bg-primary">Manchete</span>' : '') +
+            '<td><a href="' + esc(util.articleUrl(n)) + '">' + esc(n.title) + '</a>' + (n.featured ? ' <span class="badge bg-primary">Manchete</span>' : '') + (Auth.isOwnNews(n) ? ' <span class="badge mine-badge">Sua</span>' : '') +
             '<div class="small opacity-75">' + esc(KINDS[n.kind] || KINDS.noticia) + (n.kind === 'aovivo' && n.live ? ' · ao vivo' : '') + ' · ' + esc(n.author) + (util.wasUpdated(n) ? ' · atualizada ' + esc(hm(n.updated_at)) : '') + '</div></td>' +
             '<td>' + esc(util.catLabel(n.category)) + '</td>' +
             '<td>' + statusBadge(n) + '</td>' +
             '<td class="text-nowrap">' + new Date(n.date).toLocaleDateString('pt-BR') + '</td>' +
-            '<td><div class="d-flex flex-wrap gap-1">' + (nextOf(n) ? '<button class="btn btn-sm btn-primary" data-adv="' + esc(n.id) + '" title="Mover para: ' + esc(STATUS[nextOf(n)]) + '">→ ' + esc(STATUS[nextOf(n)]) + '</button>' : '') +
-            '<button class="btn btn-sm btn-outline-dark" data-edit="' + esc(n.id) + '">Editar</button>' +
-            '<button class="btn btn-sm btn-outline-dark" data-hist="' + esc(n.id) + '">Versões</button>' +
-            '<button class="btn btn-sm btn-outline-primary" data-del="' + esc(n.id) + '">Excluir</button></div></td></tr>').join('') ||
+            '<td><div class="d-flex flex-wrap gap-1">' + (canAdvance(n) ? '<button class="btn btn-sm btn-primary" data-adv="' + esc(n.id) + '" title="Mover para: ' + esc(STATUS[nextOf(n)]) + '">→ ' + esc(STATUS[nextOf(n)]) + '</button>' : '') +
+            (Auth.canEditNews(n) ? '<button class="btn btn-sm btn-outline-dark" data-edit="' + esc(n.id) + '">Editar</button>'
+                : '<a class="btn btn-sm btn-outline-dark" href="' + esc(util.articleUrl(n)) + '" title="Somente leitura">Ver</a>') +
+            (canSeeVersions(n) ? '<button class="btn btn-sm btn-outline-dark" data-hist="' + esc(n.id) + '">Versões</button>' : '') +
+            (editor ? '<button class="btn btn-sm btn-outline-primary" data-del="' + esc(n.id) + '">Excluir</button>' : '') + '</div></td></tr>').join('') ||
             '<tr><td colspan="6" class="text-center text-muted">' + (all.length ? 'Nenhuma matéria neste filtro.' : 'Nenhuma notícia cadastrada.') + '</td></tr>';
         $('news-count').textContent = all.length;
         renderStats();
         if (loaded.audience) renderAudience();
     }
-    ['news-q', 'news-status', 'news-kind'].forEach(id => $(id).addEventListener('input', renderNews));
+    ['news-q', 'news-status', 'news-kind', 'news-mine'].forEach(id => $(id).addEventListener('input', renderNews));
 
     const loaded = { comments: false, reports: false, newsletter: false, audience: false };
     function renderStats() {
         const list = News.everything();
         const v = (key, n) => loaded[key] ? n : '…';
+        const producing = n => ['rascunho', 'revisao', 'aprovada'].includes(n.status);
         const cards = [
-            ['Publicadas', list.filter(util.isPublished).length], ['Em produção', list.filter(n => ['rascunho', 'revisao', 'aprovada'].includes(n.status)).length],
-            ['Agendadas', list.filter(util.isScheduled).length], ['Ao vivo', list.filter(n => n.kind === 'aovivo' && n.live && util.isPublished(n)).length],
-            ['Denúncias', v('reports', Reports.all().length)], ['Comentários', v('comments', JB.Comments.flat().length)], ['Leituras', JB.Views.total()], ['Newsletter', v('newsletter', JB.Newsletter.count())]
-        ];
+            ['Publicadas', list.filter(util.isPublished).length], ['Em produção', list.filter(producing).length],
+            ['Agendadas', list.filter(util.isScheduled).length], ['Ao vivo', list.filter(n => n.kind === 'aovivo' && n.live && util.isPublished(n)).length]
+        ].concat(editor
+            ? [['Denúncias', v('reports', Reports.all().length)], ['Comentários', v('comments', JB.Comments.flat().length)], ['Leituras', JB.Views.total()], ['Newsletter', v('newsletter', JB.Newsletter.count())]]
+            : [['Minhas em produção', list.filter(n => producing(n) && Auth.isOwnNews(n)).length], ['Aguardando publicação', list.filter(n => n.status === 'aprovada' && Auth.isOwnNews(n)).length], ['Leituras', JB.Views.total()]]);
         $('stats').innerHTML = cards.map(c => '<div class="col-6 col-md-3 col-xl"><div class="stat-card"><strong>' + c[1] + '</strong><span>' + c[0] + '</span></div></div>').join('');
     }
 
@@ -200,8 +269,10 @@ JB.authReady.then(function () {
     let editingDate = null;
     function resetForm() {
         form.reset(); field('newsId').value = ''; setImage(''); formTitle.textContent = 'Nova notícia'; form.classList.remove('was-validated');
+        field('status').value = defaultStatus;
+        if (!editor) field('author').value = me.name;   // jornalista assina com o próprio nome (pode trocar)
         formUpdates = []; formCorrections = []; editingDate = null; renderUpdates(); renderCorrections(); syncKind();
-        $('extras').open = false; $('preview-link').hidden = true;
+        $('extras').open = false; $('preview-link').hidden = true; renderChartPreview();
     }
     function fillForm(n) {
         field('newsId').value = n.id; field('title').value = n.title; field('subtitle').value = n.subtitle; field('category').value = n.category; field('author').value = n.author;
@@ -211,7 +282,9 @@ JB.authReady.then(function () {
         field('sources').value = formatLines(n.sources, 'label', 'url'); field('timeline').value = formatLines(n.timeline, 'when', 'text'); field('people').value = formatLines(n.people, 'name', 'role');
         const c = n.chart || {};
         field('chartTitle').value = c.title || ''; field('chartUnit').value = c.unit || ''; field('chartSource').value = c.source || '';
-        field('chartItems').value = (c.items || []).map(i => i.label + ' | ' + i.value).join('\n');
+        // decimal com vírgula: "1.234" voltaria como mil duzentos e trinta e quatro
+        field('chartItems').value = (c.items || []).map(i => i.label + ' | ' + String(i.value).replace('.', ',')).join('\n');
+        renderChartPreview();
         $('extras').open = !!((n.sources || []).length || (n.timeline || []).length || (n.people || []).length || n.chart);
         formUpdates = (n.updates || []).slice(); formCorrections = (n.corrections || []).slice(); renderUpdates(); renderCorrections();
         field('correction').value = '';
@@ -224,6 +297,11 @@ JB.authReady.then(function () {
         e.preventDefault();
         if (uploading) return;
         if (!form.checkValidity()) { form.classList.add('was-validated'); return; }
+        const chartIssue = chartProblem(chartState());
+        if (chartIssue) { $('extras').open = true; renderChartPreview(); note(chartIssue, 'danger'); field('chartItems').focus(); return; }
+        const current = field('newsId').value ? News.get(field('newsId').value) : null;
+        if (current && !Auth.canEditNews(current)) { note('Você não pode editar esta matéria (só as suas, até “Aprovada”).', 'danger'); return; }
+        if (!allowedStatuses.includes(field('status').value)) { note('Seu cargo não permite esse status. Jornalistas levam a matéria até “Aprovada”; quem publica é um coordenador.', 'danger'); return; }
         const kind = field('kind').value;
         const pub = field('pubdate').value;
         const correction = field('correction').value.trim();
@@ -241,7 +319,8 @@ JB.authReady.then(function () {
             const chosen = new Date(pub).toISOString();
             if (!item.id || toLocalInput(editingDate) !== pub) item.date = chosen;
         } else if (!item.id || item.status === 'publicada') item.date = nowIso();
-        if (item.featured) News.everything().filter(n => n.featured && n.id !== item.id).forEach(n => News.save({ id: n.id, featured: false })); // apenas uma manchete
+        if (!editor) delete item.featured;   // manchete é decisão de quem publica
+        else if (item.featured) News.everything().filter(n => n.featured && n.id !== item.id).forEach(n => News.save({ id: n.id, featured: false })); // apenas uma manchete
         const editing = !!item.id;
         saveBtn.disabled = true;
         News.save(item);
@@ -253,7 +332,8 @@ JB.authReady.then(function () {
             renderNews(); return;
         }
         const saved = News.get(item.id) || item;
-        note((editing ? 'Notícia atualizada' : 'Notícia salva') + ' — ' + (util.isScheduled(saved) ? 'agendada para ' + util.fmtDate(saved.date) : 'status: ' + STATUS[item.status]) + '.');
+        note((editing ? 'Notícia atualizada' : 'Notícia salva') + ' — ' + (util.isScheduled(saved) ? 'agendada para ' + util.fmtDate(saved.date) : 'status: ' + STATUS[item.status]) + '.' +
+            (!editor && item.status === 'aprovada' ? ' Um coordenador vai revisar e publicar.' : ''));
         resetForm(); renderNews();
     });
     $('cancel-edit').addEventListener('click', resetForm);
@@ -262,6 +342,7 @@ JB.authReady.then(function () {
         const ed = e.target.closest('[data-edit]'), del = e.target.closest('[data-del]'), adv = e.target.closest('[data-adv]'), hist = e.target.closest('[data-hist]');
         if (adv) {
             const n = News.get(adv.dataset.adv);
+            if (!n || !canAdvance(n)) return;
             const next = STATUS_FLOW[STATUS_FLOW.indexOf(n.status || 'publicada') + 1];
             const patch = { id: n.id, status: next };
             // Ao publicar: vale a data agendada (se for futura); senão, publica agora.
@@ -269,9 +350,9 @@ JB.authReady.then(function () {
             News.save(patch); renderNews();
             if (await JB.flush()) { const s = News.get(n.id); note('“' + n.title + '” movida para: ' + (s && util.isScheduled(s) ? 'Publicada (agendada para ' + util.fmtDate(s.date) + ')' : STATUS[next]) + '.'); }
         }
-        if (ed) fillForm(News.get(ed.dataset.edit));
+        if (ed && Auth.canEditNews(News.get(ed.dataset.edit))) fillForm(News.get(ed.dataset.edit));
         if (hist) openVersions(hist.dataset.hist);
-        if (del && confirm('Excluir esta notícia? As versões anteriores também serão apagadas.')) { News.remove(del.dataset.del); renderNews(); if (await JB.flush()) note('Notícia excluída.', 'warning'); }
+        if (del && editor && confirm('Excluir esta notícia? As versões anteriores também serão apagadas.')) { News.remove(del.dataset.del); renderNews(); if (await JB.flush()) note('Notícia excluída.', 'warning'); }
     });
 
     /* ---------- Versões ---------- */
@@ -292,7 +373,7 @@ JB.authReady.then(function () {
             (list.map(v => {
                 const s = v.snapshot || {};
                 return '<div class="panel-box mb-3"><div class="d-flex flex-wrap justify-content-between gap-2"><span class="small">Substituída em <strong>' + esc(util.fmtDate(v.replacedAt)) + '</strong>' + (v.replacedBy ? ' por ' + esc(v.replacedBy) : '') + '</span>' +
-                    '<button class="btn btn-sm btn-outline-dark" data-restore="' + esc(v.id) + '">Restaurar esta versão</button></div>' +
+                    (Auth.canEditNews(n) ? '<button class="btn btn-sm btn-outline-dark" data-restore="' + esc(v.id) + '">Restaurar esta versão</button>' : '') + '</div>' +
                     '<h3 class="h6 mt-2 mb-1">' + esc(s.title) + '</h3><p class="small mb-1">' + esc(s.subtitle) + '</p>' +
                     '<p class="small opacity-75 mb-0">' + esc(KINDS[s.kind] || '') + ' · ' + esc(util.catLabel(s.category)) + ' · ' + esc(s.author) + ' · ' + (s.body || []).length + ' parágrafos</p>' +
                     '<details class="small mt-1"><summary>Ver texto</summary>' + (s.body || []).map(p => '<p class="mb-1">' + esc(p) + '</p>').join('') + '</details></div>';
@@ -422,12 +503,116 @@ JB.authReady.then(function () {
     // Gravação recusada pelo servidor: o cache já foi desfeito, só redesenhar.
     document.addEventListener('jb:sync-error', () => { renderNews(); renderAuthors(); if (loaded.reports) renderReports(); if (loaded.comments) renderComments(); });
 
+    /* ---------- Equipe e cargos (coordenador e admin) ---------- */
+    // As regras valem no banco (set_member_role); a tela só oferece o que o cargo permite.
+    const teamMsg = (t, type) => { const m = $('team-msg'); m.className = 'alert alert-' + (type || 'success'); m.textContent = t; m.hidden = false; };
+    $('team-rules').textContent = Auth.role() === 'admin'
+        ? 'Como administrador, você coloca qualquer conta como leitor, jornalista ou coordenador. Administradores só mudam pelo SQL do Supabase, e ninguém muda o próprio cargo.'
+        : 'Como coordenador, você coloca ou tira jornalistas. Coordenadores são definidos pelo administrador, e ninguém muda o próprio cargo.';
+    function renderTeam() {
+        $('team-rows').innerHTML = Members.list().map(m => {
+            const roles = Auth.assignableRoles(m);
+            const ctl = roles.length
+                ? '<select class="form-select form-select-sm" data-role-for="' + esc(m.id) + '" aria-label="Cargo de ' + esc(m.name) + '">' +
+                  roles.map(r => '<option value="' + r + '"' + (r === m.role ? ' selected' : '') + '>' + esc(util.roleLabel(r)) + '</option>').join('') + '</select>' +
+                  '<button class="btn btn-sm btn-primary" type="button" data-role-save="' + esc(m.id) + '">Salvar</button>'
+                : '<span class="small text-muted">' + (m.id === me.id ? 'Você' : m.role === 'admin' ? 'Só pelo SQL do Supabase' : 'Definido pelo administrador') + '</span>';
+            return '<div class="team-row">' + util.avatarHTML({ name: m.name }, 'avatar-sm') +
+                '<div class="team-who"><a href="' + esc(util.profileUrl(m.id)) + '">' + esc(m.name) + '</a> ' + util.sealHTML(m.role) +
+                '<small class="d-block text-muted text-break">' + esc(m.email || '') + ' · ' + esc(util.roleLabel(m.role)) + '</small></div>' +
+                '<div class="team-ctl">' + ctl + '</div></div>';
+        }).join('') || '<p class="text-muted mb-0">Nenhuma conta encontrada.</p>';
+    }
+    function renderTeamLog() {
+        $('team-log').innerHTML = Members.log().slice(0, 15).map(l => '<li><span><strong>' + esc(l.targetName || 'Conta removida') + '</strong>: ' + esc(util.roleLabel(l.oldRole)) + ' → ' + esc(util.roleLabel(l.newRole)) +
+            '<small class="d-block opacity-75">' + esc(util.fmtDate(l.date)) + (l.byName ? ' · por ' + esc(l.byName) : '') + '</small></span></li>').join('') ||
+            '<li class="text-muted">Nenhuma mudança ainda.</li>';
+    }
+    async function loadTeam(q) {
+        $('team-rows').innerHTML = util.loadingHTML('Carregando contas…');
+        const [ok] = await Promise.all([Members.load(q), Members.loadLog().then(renderTeamLog)]);
+        if (ok) renderTeam(); else $('team-rows').innerHTML = util.errorHTML('Não foi possível carregar as contas agora.');
+    }
+    $('team-search').addEventListener('submit', e => { e.preventDefault(); $('team-msg').hidden = true; loadTeam(e.target.elements.q.value); });
+    $('team-rows').addEventListener('click', async e => {
+        const b = e.target.closest('[data-role-save]'); if (!b) return;
+        const m = Members.list().find(x => x.id === b.dataset.roleSave); if (!m) return;
+        const sel = $('team-rows').querySelector('[data-role-for="' + CSS.escape(m.id) + '"]');
+        const role = sel.value;
+        if (role === m.role) { teamMsg(m.name + ' já é ' + util.roleLabel(role).toLowerCase() + '.', 'secondary'); return; }
+        if (!confirm('Mudar o cargo de ' + m.name + ' de ' + util.roleLabel(m.role) + ' para ' + util.roleLabel(role) + '?')) { sel.value = m.role; return; }
+        b.disabled = sel.disabled = true;
+        const r = await Members.setRole(m.id, role);
+        if (r.ok) { teamMsg(m.name + ' agora é ' + util.roleLabel(role).toLowerCase() + '.'); await Members.loadLog(); renderTeamLog(); }
+        else teamMsg(r.error, 'danger');
+        renderTeam();
+    });
+    let teamLoaded = false;
+    document.querySelector('[data-bs-target="#tab-team"]').addEventListener('shown.bs.tab', () => { if (!teamLoaded) { teamLoaded = true; loadTeam(''); } });
+
+    /* ---------- Segurança: proteções, MFA da equipe e auditoria (coordenador/admin) ---------- */
+    const ACTIONS = {
+        'news.create': 'criou a matéria', 'news.status': 'mudou o status de', 'news.edit': 'editou', 'news.delete': 'excluiu a matéria', 'news.featured': 'pôs na manchete',
+        'comment.moderate': 'apagou um comentário em', 'report.delete': 'apagou a denúncia', 'author.create': 'cadastrou o autor', 'author.edit': 'editou o autor', 'author.delete': 'excluiu o autor',
+        'role.change': 'mudou o cargo de', 'account.login': 'entrou na conta', 'account.mfa.enabled': 'ativou a verificação em duas etapas', 'account.mfa.disabled': 'removeu um app autenticador',
+        'account.mfa.verified': 'confirmou o código do app autenticador', 'account.password.changed': 'trocou a senha', 'account.age_confirmed': 'confirmou a idade',
+        'account.underage_deleted': 'teve a conta apagada (menor de ' + JB.MIN_AGE + ' anos)', 'account.deleted': 'excluiu a própria conta'
+    };
+    function auditDetail(a) {
+        const d = a.details || {};
+        if (a.action === 'news.status') return (STATUS[d.from] || d.from) + ' → ' + (STATUS[d.to] || d.to);
+        if (a.action === 'role.change') return util.roleLabel(d.from) + ' → ' + util.roleLabel(d.to);
+        if (a.action === 'comment.moderate') return 'comentário de ' + (d.autor || '?');
+        if (a.action === 'account.login' || a.action === 'account.mfa.verified') return d.aal === 'aal2' ? 'com verificação em duas etapas' : 'só com a senha';
+        return '';
+    }
+    let auditLast = null;
+    async function loadAudit(more) {
+        if (!more) { auditLast = null; $('audit-rows').innerHTML = util.loadingHTML('Carregando auditoria…'); }
+        const rows = await JB.Security.audit({ filter: $('audit-filter').value, before: more && auditLast ? auditLast.at : null, limit: 50 });
+        if (rows === null) { $('audit-rows').innerHTML = JB.mode === 'local' ? '<p class="text-muted small">A auditoria só existe com o Supabase.</p>' : failed('a auditoria'); $('audit-more').hidden = true; return; }
+        const html = rows.map(a => '<div class="audit-row"><span class="audit-when">' + esc(hm(a.at)) + '</span><div><strong>' + esc(a.actor_name || 'Conta removida') + '</strong>' +
+            (a.actor_role && util.isStaffRole(a.actor_role) ? ' <small class="opacity-75">(' + esc(util.roleLabel(a.actor_role)) + ')</small>' : '') + ' ' + esc(ACTIONS[a.action] || a.action) +
+            (a.target_label ? ' <em>' + esc(a.target_label) + '</em>' : '') + (auditDetail(a) ? '<div class="small opacity-75">' + esc(auditDetail(a)) + '</div>' : '') + '</div></div>').join('');
+        if (more) $('audit-rows').insertAdjacentHTML('beforeend', html); else $('audit-rows').innerHTML = html || '<p class="text-muted small">Nenhum registro ainda.</p>';
+        if (rows.length) auditLast = rows[rows.length - 1];
+        $('audit-more').hidden = rows.length < 50;
+    }
+    async function loadSecurity() {
+        const check = (state, title, text) => '<li class="sec-' + state + '"><span class="sec-dot" aria-hidden="true"></span><div><strong>' + esc(title) + '</strong> <span class="visually-hidden">(' + (state === 'ok' ? 'ok' : state === 'warn' ? 'atenção' : 'problema') + ')</span><div class="small">' + text + '</div></div></li>';
+        $('sec-checks').innerHTML = util.loadingHTML('Verificando…'); $('sec-staff').innerHTML = util.loadingHTML();
+        if (JB.mode === 'local') { $('sec-checks').innerHTML = '<li class="small text-muted">No modo de demonstração local não há servidor para verificar.</li>'; $('sec-staff').innerHTML = ''; return; }
+        const [ov, cap, google] = await Promise.all([JB.Security.overview(), JB.Security.captchaEnforced(), JB.Security.googleEnabled()]);
+        const staff = (ov && ov.staff) || [];
+        const noMfa = staff.filter(s => !s.mfa);
+        $('sec-checks').innerHTML = [
+            JB.Captcha.enabled && cap === 'on' ? check('ok', 'CAPTCHA (Turnstile)', 'Login, cadastro, recuperação e troca de senha exigem a verificação anti-robô.')
+                : JB.Captcha.enabled ? check('warn', 'CAPTCHA (Turnstile)', cap === null ? 'Não foi possível consultar o Supabase agora.' : 'O site já mostra o desafio, mas o Supabase ainda não exige: ligue em Authentication &gt; Attack Protection &gt; CAPTCHA (Turnstile + chave secreta).')
+                : check('bad', 'CAPTCHA (Turnstile)', 'Sem TURNSTILE_SITE_KEY em assets/js/config.js.'),
+            check(noMfa.length ? 'bad' : 'ok', 'Verificação em duas etapas da equipe', noMfa.length ? esc(noMfa.length + ' pessoa(s) da equipe ainda sem MFA (sem acesso ao painel até ativar).') : 'Toda a equipe tem MFA ativo.'),
+            check('ok', 'Idade mínima (' + JB.MIN_AGE + ' anos)', ov ? esc((ov.age_pending || 0) + ' conta(s) ainda sem idade confirmada (não gravam nada até confirmar).') : 'Conferida pelo banco no cadastro e no 1º acesso pelo Google.'),
+            check('ok', 'Senhas', 'O site pede ' + JB.PASSWORD_MIN + '+ caracteres com minúscula, maiúscula, número e símbolo. Mantenha o mesmo no Supabase (Authentication &gt; Sign In / Providers &gt; Email).'),
+            check(google ? 'ok' : 'warn', 'Login com o Google', google ? 'Ativo no Supabase.' : 'Desligado: configure em Authentication &gt; Sign In / Providers &gt; Google (veja docs/DEPLOY.md). O botão só aparece quando estiver ligado.'),
+            check('ok', 'Limites contra abuso', 'Senha errada: espera crescente no site + limite por IP do Supabase. Comentários, denúncias e newsletter têm limite por minuto no banco.'),
+            ov ? check('ok', 'Contas', esc(ov.accounts + ' conta(s); ' + ov.with_mfa + ' com MFA; ' + ov.audit_24h + ' registro(s) de auditoria nas últimas 24 h.')) : ''
+        ].join('');
+        $('sec-staff').innerHTML = ov === null ? failed('a lista da equipe') : staff.map(s => '<div class="d-flex justify-content-between gap-2 border-bottom py-1 small"><span>' + esc(s.name) + ' <span class="opacity-75">(' + esc(util.roleLabel(s.role)) + ')</span></span>' +
+            '<span>' + (s.mfa ? '<span class="badge bg-success">MFA ativo</span>' : '<span class="badge bg-danger">Sem MFA</span>') + (s.age_ok ? '' : ' <span class="badge bg-secondary">idade pendente</span>') + '</span></div>').join('') || '<p class="small text-muted mb-0">Sem equipe cadastrada.</p>';
+    }
+    let securityLoaded = false;
+    document.querySelector('[data-bs-target="#tab-security"]').addEventListener('shown.bs.tab', () => { if (!securityLoaded) { securityLoaded = true; loadSecurity(); loadAudit(); } });
+    $('sec-recheck').addEventListener('click', loadSecurity);
+    $('audit-filter').addEventListener('change', () => loadAudit());
+    $('audit-more').addEventListener('click', () => loadAudit(true));
+
     /* ---------- Carga: notícias (JB.ready) + dados exclusivos do painel, em paralelo ---------- */
-    $('report-rows').innerHTML = util.loadingHTML('Carregando denúncias…');
-    $('comment-rows').innerHTML = util.loadingHTML('Carregando comentários…');
     const failed = t => util.errorHTML('Não foi possível carregar ' + t + ' agora.');
-    Reports.load().then(ok => { loaded.reports = ok; if (ok) renderReports(); else $('report-rows').innerHTML = failed('as denúncias'); });
-    JB.Newsletter.load().then(ok => { loaded.newsletter = ok; renderStats(); });
+    if (editor) {   // denúncias, newsletter e moderação: só coordenador/admin (o RLS faz o mesmo)
+        $('report-rows').innerHTML = util.loadingHTML('Carregando denúncias…');
+        $('comment-rows').innerHTML = util.loadingHTML('Carregando comentários…');
+        Reports.load().then(ok => { loaded.reports = ok; if (ok) renderReports(); else $('report-rows').innerHTML = failed('as denúncias'); });
+        JB.Newsletter.load().then(ok => { loaded.newsletter = ok; renderStats(); });
+    }
 
     JB.ready.then(() => {
         $('admin-loading').hidden = true;
@@ -435,6 +620,6 @@ JB.authReady.then(function () {
         $('panel').hidden = false;
         resetForm(); resetAuthor();
         renderNews(); renderAuthors();
-        JB.Comments.load().then(ok => { loaded.comments = ok; if (ok) renderComments(); else $('comment-rows').innerHTML = failed('os comentários'); });
+        if (editor) JB.Comments.load().then(ok => { loaded.comments = ok; if (ok) renderComments(); else $('comment-rows').innerHTML = failed('os comentários'); });
     });
 });

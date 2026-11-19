@@ -46,7 +46,9 @@
             '<ul class="dropdown-menu dropdown-menu-end">' +
             '<li><a class="dropdown-item" href="' + R + 'pages/central.html">Minha Central</a></li>' +
             '<li><a class="dropdown-item" href="' + R + 'pages/perfil.html">Minhas Informações</a></li>' +
-            (u.role === 'admin' ? '<li><a class="dropdown-item" href="' + R + 'pages/admin.html">Painel Administrativo</a></li>' : '') +
+            '<li><a class="dropdown-item" href="' + esc(util.profileUrl(u.id)) + '">Meu perfil público</a></li>' +
+            (JB.mode === 'supabase' ? '<li><a class="dropdown-item" href="' + R + 'pages/seguranca.html">Segurança da conta</a></li>' : '') +
+            (util.isStaffRole(u.role) ? '<li><a class="dropdown-item" href="' + R + 'pages/admin.html">Painel Administrativo</a></li>' : '') +
             '<li><hr class="dropdown-divider"></li><li><button class="dropdown-item" id="jb-logout">Sair</button></li></ul></div>';
     }
 
@@ -174,9 +176,28 @@
     // Botões "Tentar de novo" dos estados de erro (util.errorHTML)
     document.addEventListener('click', e => { if (e.target.closest('[data-jb-reload]')) location.reload(); });
 
+    /* ---------- Conta ainda não liberada (idade ou verificação em duas etapas) ---------- */
+    // Aviso no topo de todas as páginas até a pessoa concluir o passo em seguranca.html.
+    function accountNotice() {
+        const u = Auth.current();
+        if (!u || Auth.accountOk() || page === 'seguranca' || !main) return;
+        const st = Auth.mfaState();
+        const text = !Auth.ageOk() ? 'Confirme sua idade para comentar, salvar favoritos e editar o perfil.'
+            : st === 'challenge' ? 'Digite o código do app autenticador para terminar de entrar na sua conta.'
+            : 'A equipe do JB precisa ativar a verificação em duas etapas para usar o painel e as funções da redação.';
+        const here = (location.pathname.split('/').pop() || '');
+        const nx = /^[\w-]+\.html$/.test(here) && here !== 'index.html' ? '?next=' + encodeURIComponent(here) : '';
+        const box = document.createElement('div');
+        box.className = 'alert alert-warning account-notice d-flex flex-wrap align-items-center justify-content-between gap-2';
+        box.setAttribute('role', 'status');
+        box.innerHTML = '<span>' + esc(text) + '</span><a class="btn btn-sm btn-dark" href="' + R + 'pages/seguranca.html' + nx + '">Continuar</a>';
+        main.prepend(box);
+    }
+
     /* ---------- Partes que dependem de dados ---------- */
     JB.authReady.then(() => {
         document.getElementById('userArea').innerHTML = userArea();
+        accountNotice();
         const out = document.getElementById('jb-logout');
         if (out) out.addEventListener('click', async () => { out.disabled = true; await Auth.logout(); location.href = R + 'index.html'; });
     });

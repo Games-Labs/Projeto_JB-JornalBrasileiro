@@ -13,7 +13,7 @@
 (function () {
     'use strict';
 
-    const KEYS = { news: 'jb_news', users: 'jb_users', session: 'jb_session', reports: 'jb_reports', cookies: 'jb_cookies', views: 'jb_views', favs: 'jb_favs', history: 'jb_history', comments: 'jb_comments', newsletter: 'jb_newsletter', theme: 'jb_theme', authors: 'jb_authors', versions: 'jb_versions', a11y: 'jb_a11y', seed: 'jb_seed' };
+    const KEYS = { news: 'jb_news', users: 'jb_users', session: 'jb_session', reports: 'jb_reports', cookies: 'jb_cookies', views: 'jb_views', favs: 'jb_favs', history: 'jb_history', comments: 'jb_comments', newsletter: 'jb_newsletter', theme: 'jb_theme', authors: 'jb_authors', versions: 'jb_versions', a11y: 'jb_a11y', seed: 'jb_seed', roleLog: 'jb_role_log' };
 
     // Fallback em memória caso o localStorage esteja bloqueado
     const memory = {};
@@ -29,7 +29,30 @@
     // carregado: se ele faltar, o site mostra erro de conexão em vez de cair em dados locais falsos.
     const cfg = window.JB_CONFIG || {};
     const remote = /^https:\/\//.test(cfg.SUPABASE_URL || '') && !!cfg.SUPABASE_ANON_KEY && !/COLE_AQUI/.test(String(cfg.SUPABASE_URL) + String(cfg.SUPABASE_ANON_KEY));
-    const PASSWORD_MIN = 6;   // igual ao mínimo do Supabase Auth (Authentication > Policies)
+    // Política de senha: a mesma configurada no Supabase Auth (Authentication > Sign In / Providers >
+    // Email): mínimo de 8 caracteres com minúscula, maiúscula, número e símbolo. Quem impõe é o Supabase.
+    const PASSWORD_MIN = 8;
+    const PASSWORD_RULES = [
+        [p => p.length >= PASSWORD_MIN, 'ao menos ' + PASSWORD_MIN + ' caracteres'],
+        [p => /[a-z]/.test(p), 'uma letra minúscula'],
+        [p => /[A-Z]/.test(p), 'uma letra maiúscula'],
+        [p => /[0-9]/.test(p), 'um número'],
+        [p => /[!@#$%^&*()_+\-=\[\]{};'\\:"|<>?,.\/`~]/.test(p), 'um símbolo (! @ # $ % & * …)']
+    ];
+    // Regras que a senha ainda não cumpre (lista vazia = senha aceita)
+    const passwordIssues = p => PASSWORD_RULES.filter(r => !r[0](String(p || ''))).map(r => r[1]);
+    // Idade mínima para ter conta (o banco confere de novo: supabase/08_seguranca.sql, min_age())
+    const MIN_AGE = 16;
+    // Idade completa em anos a partir de "AAAA-MM-DD" (NaN se a data for inválida ou futura)
+    function ageFrom(iso) {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
+        if (!m) return NaN;
+        const b = new Date(+m[1], +m[2] - 1, +m[3]), now = new Date();
+        if (isNaN(b) || b.getMonth() !== +m[2] - 1 || b > now || +m[1] < 1900) return NaN;
+        let age = now.getFullYear() - b.getFullYear();
+        if (now.getMonth() < b.getMonth() || (now.getMonth() === b.getMonth() && now.getDate() < b.getDate())) age--;
+        return age;
+    }
     const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
     const CATEGORIES = {
@@ -61,6 +84,17 @@
     // Fluxo editorial: rascunho → em revisão → aprovada → publicada → arquivada
     const STATUS = { rascunho: 'Rascunho', revisao: 'Em revisão', aprovada: 'Aprovada', publicada: 'Publicada', arquivada: 'Arquivada' };
     const STATUS_FLOW = ['rascunho', 'revisao', 'aprovada', 'publicada', 'arquivada'];
+    // Hierarquia da redação. Aqui é só interface: quem impõe as regras é o banco
+    // (RLS + set_member_role em supabase/07_hierarquia.sql).
+    //   admin       tudo (dado só pelo SQL Editor do Supabase)
+    //   coordenador publica, arquiva, exclui; denúncias, comentários, autores; coloca/tira jornalistas
+    //   jornalista  cria e edita só as próprias matérias, até "Aprovada"
+    //   leitor      conta comum
+    const ROLES = { admin: 'Administrador', coordenador: 'Coordenador', jornalista: 'Jornalista', leitor: 'Leitor' };
+    const STAFF_ROLES = ['admin', 'coordenador', 'jornalista'];
+    const EDITOR_ROLES = ['admin', 'coordenador'];
+    const JOURNALIST_STATUSES = ['rascunho', 'revisao', 'aprovada'];
+    const roleRank = r => { const i = STAFF_ROLES.indexOf(r); return i < 0 ? 9 : i; };
     // Agendamento: "publicada" com data no futuro só aparece quando a data chega.
     const isScheduled = n => (!n.status || n.status === 'publicada') && !!n.date && new Date(n.date) > Date.now();
     const isPublished = n => (!n.status || n.status === 'publicada') && !isScheduled(n);   // dados antigos (sem status) contam como publicados
@@ -278,7 +312,11 @@
                 }
                 if (change) item.updated_at = new Date().toISOString();
                 list[i] = Object.assign(list[i], item);
-            } else { item.id = uid(); item.date = item.date || new Date().toISOString(); item.updated_at = null; list.push(item); }
+            } else {
+                const me = Auth.current();
+                item.id = uid(); item.date = item.date || new Date().toISOString(); item.updated_at = null; item.created_by = me ? me.id : null;
+                list.push(item);
+            }
             write(KEYS.news, list);
             return item;
         },
@@ -327,11 +365,12 @@
         users() { return read(KEYS.users, []); },
         current() { const id = read(KEYS.session, null); return id ? Auth.users().find(u => u.id === id) || null : null; },
         isAdmin() { const u = Auth.current(); return !!u && u.role === 'admin'; },
-        register({ name, email, password }) {
+        register({ name, email, password, birthDate }) {
             email = email.trim().toLowerCase();
             const users = Auth.users();
+            if (!(ageFrom(birthDate) >= MIN_AGE)) return { ok: false, error: 'O JB aceita cadastros a partir de ' + MIN_AGE + ' anos.' };
             if (users.some(u => u.email === email)) return { ok: false, error: 'Já existe uma conta com este e-mail.' };
-            const user = { id: uid(), name: name.trim(), email, pass: hash(email + 'i' + password), role: 'leitor', bio: '', city: '', interests: [], created: new Date().toISOString() };
+            const user = { id: uid(), name: name.trim(), email, pass: hash(email + 'i' + password), role: 'leitor', bio: '', city: '', interests: [], created: new Date().toISOString(), ageVerified: new Date().toISOString() };
             users.push(user); write(KEYS.users, users); write(KEYS.session, user.id);
             return { ok: true, user };
         },
@@ -366,7 +405,86 @@
         async requestPasswordReset() { return { ok: false, error: 'A recuperação de senha por e-mail só funciona com o Supabase configurado.' }; },
         async verifyRecoveryCode() { return { ok: false, error: 'A recuperação de senha por e-mail só funciona com o Supabase configurado.' }; },
         async recoveryState() { return 'unsupported'; },
-        async updatePassword() { return { ok: false, error: 'A recuperação de senha por e-mail só funciona com o Supabase configurado.' }; }
+        async updatePassword() { return { ok: false, error: 'A recuperação de senha por e-mail só funciona com o Supabase configurado.' }; },
+        // Segurança da conta. No modo local (login simulado) não há MFA, Google nem confirmação de
+        // idade no servidor: a conta já nasce liberada. supabase-backend.js troca tudo isto.
+        ageOk() { return !!Auth.current(); },
+        mfaState() { return Auth.current() ? 'ok' : null; },          // 'ok' | 'challenge' | 'enroll' | null
+        accountOk() { return Auth.ageOk() && Auth.mfaState() === 'ok'; },
+        async googleAvailable() { return false; },
+        async loginWithGoogle() { return { ok: false, error: 'O login com o Google só funciona com o Supabase configurado.' }; },
+        async confirmAge() { return { ok: true }; },
+        async mfaFactors() { return []; },
+        async mfaEnroll() { return { ok: false, error: 'A verificação em duas etapas só funciona com o Supabase configurado.' }; },
+        async mfaVerify() { return { ok: false, error: 'A verificação em duas etapas só funciona com o Supabase configurado.' }; },
+        async mfaRemove() { return { ok: false, error: 'A verificação em duas etapas só funciona com o Supabase configurado.' }; },
+        logEvent() { }
+    };
+
+    // Permissões derivadas do cargo (usam Auth.current(), então valem também no modo Supabase,
+    // onde supabase-backend.js troca só current()/isAdmin()). Só decidem o que a tela mostra.
+    Object.assign(Auth, {
+        // Cargo no perfil (o que aparece no selo, no perfil e no menu)
+        realRole() { const u = Auth.current(); return u ? (u.role || 'leitor') : null; },
+        // Cargo que vale nesta sessão: null enquanto a conta não está liberada (idade não confirmada
+        // ou verificação em duas etapas pendente), igual a my_role() no banco.
+        role() { return Auth.accountOk() ? Auth.realRole() : null; },
+        isStaff() { return STAFF_ROLES.includes(Auth.role()); },
+        isEditor() { return EDITOR_ROLES.includes(Auth.role()); },
+        // Status que o usuário pode dar a uma matéria (jornalista: só até "Aprovada")
+        allowedStatuses() { return Auth.isEditor() ? STATUS_FLOW.slice() : Auth.isStaff() ? JOURNALIST_STATUSES.slice() : []; },
+        isOwnNews(n) { const u = Auth.current(); return !!u && !!n && n.created_by === u.id; },
+        canEditNews(n) {
+            if (!n) return false;
+            if (Auth.isEditor()) return true;
+            return Auth.role() === 'jornalista' && Auth.isOwnNews(n) && JOURNALIST_STATUSES.includes(n.status || 'publicada');
+        },
+        // Cargos que o usuário logado pode dar a `target` ({id, role}); [] = não pode mexer.
+        assignableRoles(target) {
+            const me = Auth.current(), r = Auth.role();
+            if (!me || !target || target.id === me.id || target.role === 'admin') return [];
+            if (r === 'admin') return ['leitor', 'jornalista', 'coordenador'];
+            if (r === 'coordenador' && ['leitor', 'jornalista'].includes(target.role || 'leitor')) return ['leitor', 'jornalista'];
+            return [];
+        }
+    });
+
+    /* ---------- Membros: cargos (painel) e perfis públicos ---------- */
+    // Perfil público: nunca inclui e-mail, cidade nem interesses.
+    const publicOf = u => ({ id: u.id, name: u.name, role: u.role || 'leitor', bio: u.bio || '', avatar: u.avatar || '', created: u.created });
+    let memberList = [];
+    const Members = {
+        // Painel (coordenador/admin): busca contas por nome ou e-mail
+        load(q) {
+            if (!Auth.isEditor()) { memberList = []; return Promise.resolve(true); }
+            q = String(q || '').trim().toLowerCase();
+            memberList = Auth.users().filter(u => !q || (u.name + ' ' + u.email).toLowerCase().includes(q))
+                .map(u => ({ id: u.id, name: u.name, email: u.email, role: u.role || 'leitor', created: u.created }))
+                .sort((a, b) => roleRank(a.role) - roleRank(b.role) || byName(a, b));
+            return Promise.resolve(true);
+        },
+        list() { return memberList.slice(); },
+        // Mesmas regras de set_member_role no banco
+        setRole(id, role) {
+            const users = Auth.users(), t = users.find(u => u.id === id), me = Auth.current();
+            if (!t) return Promise.resolve({ ok: false, error: 'Conta não encontrada.' });
+            if (!Auth.assignableRoles(t).includes(role)) return Promise.resolve({ ok: false, error: 'Você não tem permissão para essa mudança de cargo.' });
+            const old = t.role || 'leitor';
+            if (old === role) return Promise.resolve({ ok: true });
+            t.role = role; write(KEYS.users, users);
+            const m = memberList.find(x => x.id === id); if (m) m.role = role;
+            write(KEYS.roleLog, [{ targetId: id, targetName: t.name, oldRole: old, newRole: role, byName: me ? me.name : '', date: new Date().toISOString() }].concat(read(KEYS.roleLog, [])).slice(0, 50));
+            return Promise.resolve({ ok: true });
+        },
+        loadLog() { return Promise.resolve(true); },
+        log() { return Auth.isEditor() ? read(KEYS.roleLog, []) : []; },
+        // Equipe da redação (selo do JB), pública
+        loadStaff() { return Promise.resolve(true); },
+        staff() { return Auth.users().filter(u => STAFF_ROLES.includes(u.role)).map(publicOf).sort((a, b) => roleRank(a.role) - roleRank(b.role) || byName(a, b)); },
+        staffById(id) { return Members.staff().find(p => p.id === id) || null; },
+        staffByName(name) { return Members.staff().find(p => p.name === name) || null; },
+        // Perfil público de qualquer conta: objeto, null (não existe) ou undefined (falha de conexão)
+        profile(id) { const u = Auth.users().find(x => x.id === id); return Promise.resolve(u ? publicOf(u) : null); }
     };
 
     /* ---------- Denúncias / pautas ---------- */
@@ -404,7 +522,13 @@
     };
     const Comments = {
         forNews(id) { return (read(KEYS.comments, {})[id] || []).slice().sort((a, b) => new Date(b.date) - new Date(a.date)); },
-        add(id, c) { const all = read(KEYS.comments, {}); (all[id] = all[id] || []).push({ id: uid(), name: c.name, text: c.text, date: new Date().toISOString() }); write(KEYS.comments, all); },
+        add(id, c) {
+            const all = read(KEYS.comments, {}), me = Auth.current();   // logado: sempre no nome da conta
+            (all[id] = all[id] || []).push({ id: uid(), userId: me ? me.id : null, name: me ? me.name : c.name, text: c.text, date: new Date().toISOString() });
+            write(KEYS.comments, all);
+        },
+        // Comentários de uma conta (perfil público), só em matérias publicadas
+        byUser(userId) { return Promise.resolve(Comments.flat().filter(c => c.userId === userId && News.all().some(n => n.id === c.newsId)).slice(0, 30)); },
         remove(newsId, cid) { const all = read(KEYS.comments, {}); all[newsId] = (all[newsId] || []).filter(c => c.id !== cid); write(KEYS.comments, all); },
         flat() { const all = read(KEYS.comments, {}); return Object.keys(all).flatMap(id => all[id].map(c => Object.assign({ newsId: id }, c))).sort((a, b) => new Date(b.date) - new Date(a.date)); },
         load() { return Promise.resolve(true); }   // no Supabase baixa só os comentários da matéria aberta
@@ -452,7 +576,13 @@
     /* ---------- Utilitários ---------- */
     const root = () => document.body.dataset.root || '';
     const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-    const imgSrc = n => { const src = n.image || FALLBACK_IMG[n.category] || ''; return /^(https?:|data:)/.test(src) ? src : root() + src; };
+    // Só https://, data URL de imagem (legado) ou caminho local; qualquer outra coisa vira a imagem padrão.
+    const safeImg = src => /^https:\/\//i.test(src) || /^data:image\/(jpeg|png|webp|gif);base64,/i.test(src) || /^assets\/img\/[\w.-]+$/.test(src);
+    const imgSrc = n => {
+        let src = String(n.image || '');
+        if (!safeImg(src)) src = FALLBACK_IMG[n.category] || '';
+        return /^(https:|data:)/i.test(src) ? src : root() + src;
+    };
     function timeAgo(iso) {
         const m = Math.max(1, Math.round((Date.now() - new Date(iso)) / 60000));
         if (m < 60) return 'Há ' + m + ' min';
@@ -466,10 +596,19 @@
 
     // Avatar do usuário: foto (data URL) ou inicial do nome sobre fundo carmim
     const avatarHTML = (u, cls) => '<span class="avatar ' + (cls || '') + '" data-avatar>' +
-        (u.avatar ? '<img src="' + esc(u.avatar) + '" alt="">' : esc((u.name || '?').trim().charAt(0).toUpperCase())) + '</span>';
+        (u.avatar && safeImg(String(u.avatar)) ? '<img src="' + esc(u.avatar) + '" alt="">' : esc((u.name || '?').trim().charAt(0).toUpperCase())) + '</span>';
 
     const kindLabel = k => KINDS[k] || KINDS.noticia;
     const authorUrl = name => root() + 'pages/autor.html?nome=' + encodeURIComponent(name || '');
+    // Cargos e selo do JB (só para a equipe da redação)
+    const roleLabel = r => ROLES[r] || ROLES.leitor;
+    const isStaffRole = r => STAFF_ROLES.includes(r);
+    const sealHTML = role => {
+        if (!isStaffRole(role)) return '';
+        const t = esc(roleLabel(role) + ' do Jornal Brasileiro');
+        return '<span class="jb-seal" title="' + t + '"><svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true" focusable="false"><path d="M6.4 11.6 2.8 8l1.1-1.1 2.5 2.5 5.7-5.7L13.2 4.8z" fill="currentColor"/></svg><span aria-hidden="true">JB</span><span class="visually-hidden">' + t + '</span></span>';
+    };
+    const profileUrl = id => root() + 'pages/perfil-publico.html?id=' + encodeURIComponent(id || '');
     const OPINION_KINDS = ['opiniao', 'analise', 'editorial'];
     // Só links http(s) viram <a>; qualquer outra coisa (javascript:, data:) é ignorada.
     const safeUrl = u => (/^https?:\/\//i.test(String(u || '').trim()) ? String(u).trim() : '');
@@ -524,10 +663,16 @@
     // Gravações: no modo local são síncronas; `flush()` devolve se a última leva foi salva de fato.
     const flush = () => Promise.resolve(storageOk);
 
+    // CAPTCHA (Cloudflare Turnstile): só existe no modo Supabase (supabase-backend.js). Aqui não faz nada.
+    const Captcha = { enabled: false, mount() { return { token: () => Promise.resolve(''), reset() { } }; } };
+    // Central de Segurança do painel: só no modo Supabase.
+    const Security = { overview: () => Promise.resolve(null), audit: () => Promise.resolve(null) };
+
     if (!remote) seed();   // no modo Supabase os dados vêm do servidor
     window.JB = {
-        remote, mode: 'local', ready: Promise.resolve(), authReady: Promise.resolve(), loadError: null, flush, storageOk: () => storageOk, PASSWORD_MIN, KEYS,
-        CATEGORIES, KINDS, VERDICTS, OPINION_KINDS, VERSIONED, IMAGES, STATUS, STATUS_FLOW, News, Authors, Versions, Auth, Reports, Cookies, Views, Favs, History, Comments, Newsletter, Theme, A11y, Media,
-        util: { isPublished, isScheduled, withDefaults, changeKind, wasUpdated, avatarHTML, readingTime, root, esc, imgSrc, timeAgo, fmtDate, articleUrl, authorUrl, catLabel, catUrl, kindLabel, safeUrl, verdictBadge, liveBadge, badgesHTML, newsCard, barChartHTML, loadingHTML, errorHTML }
+        remote, mode: 'local', ready: Promise.resolve(), authReady: Promise.resolve(), loadError: null, flush, storageOk: () => storageOk, PASSWORD_MIN, MIN_AGE, KEYS, Captcha, Security,
+        CATEGORIES, KINDS, VERDICTS, OPINION_KINDS, VERSIONED, IMAGES, STATUS, STATUS_FLOW, ROLES, STAFF_ROLES, JOURNALIST_STATUSES,
+        News, Authors, Versions, Auth, Members, Reports, Cookies, Views, Favs, History, Comments, Newsletter, Theme, A11y, Media,
+        util: { isPublished, isScheduled, withDefaults, changeKind, wasUpdated, avatarHTML, readingTime, root, esc, imgSrc, timeAgo, fmtDate, articleUrl, authorUrl, profileUrl, roleLabel, isStaffRole, sealHTML, catLabel, catUrl, kindLabel, safeUrl, verdictBadge, liveBadge, badgesHTML, newsCard, barChartHTML, loadingHTML, errorHTML, passwordIssues, ageFrom }
     };
 })();

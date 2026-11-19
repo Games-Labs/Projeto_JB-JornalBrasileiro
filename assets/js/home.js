@@ -35,7 +35,7 @@ JB.ready.then(function () {
             '<img class="lead-img" fetchpriority="high" src="' + esc(util.imgSrc(lead)) + '" alt="' + esc(lead.title) + '">' +
             '<div class="meta-info">Por <a href="' + esc(util.authorUrl(lead.author)) + '"><strong>' + esc(lead.author) + '</strong></a> • ' + util.timeAgo(lead.date) + '</div>';
     } else {
-        leadEl.innerHTML = '<p>Nenhuma notícia publicada no momento.</p>' + (JB.Auth.isAdmin() ? '<p><a href="pages/admin.html">Cadastrar notícia no Painel Administrativo</a></p>' : '');
+        leadEl.innerHTML = '<p>Nenhuma notícia publicada no momento.</p>' + (JB.Auth.isStaff() ? '<p><a href="pages/admin.html">Cadastrar notícia no Painel Administrativo</a></p>' : '');
     }
 
     /* 2. Últimas publicações (feed cronológico) */

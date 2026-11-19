@@ -4,7 +4,7 @@
    perfil do autor, modo leitura, favoritar, compartilhar, imprimir, histórico e comentários. */
 JB.ready.then(function () {
     'use strict';
-    const { News, Favs, History, Comments, Auth, Authors, util } = JB;
+    const { News, Favs, History, Comments, Auth, Authors, Members, util } = JB;
     const { esc } = util;
     const box = document.getElementById('article');
     if (JB.loadError) { box.innerHTML = util.errorHTML(); return; }
@@ -12,8 +12,8 @@ JB.ready.then(function () {
     let n = News.get(id);
     const preview = n && !util.isPublished(n);
 
-    // Matéria inexistente, ou ainda não publicada e o visitante não é editor
-    if (!n || (preview && !Auth.isAdmin())) {
+    // Matéria inexistente, ou ainda não publicada e o visitante não é da redação
+    if (!n || (preview && !Auth.isStaff())) {
         box.innerHTML = '<div class="alert alert-warning">Matéria não encontrada. <a href="noticias.html">Ver todas as notícias</a>.</div>';
         return;
     }
@@ -92,7 +92,10 @@ JB.ready.then(function () {
             (a.bio ? '<p class="small mb-0 mt-1">' + esc(a.bio) + '</p>' : '') + '</div></aside>';
     }
     function meta() {
-        return '<p class="meta-info">Por <a href="' + esc(util.authorUrl(n.author)) + '"><strong>' + esc(n.author) + '</strong></a> • Publicado em ' + esc(util.fmtDate(n.date)) +
+        // Assinatura de alguém da redação com conta no portal: selo do JB + link para o perfil
+        const staff = Members.staffByName(n.author);
+        const seal = staff ? ' <a href="' + esc(util.profileUrl(staff.id)) + '" class="text-decoration-none">' + util.sealHTML(staff.role) + '</a>' : '';
+        return '<p class="meta-info">Por <a href="' + esc(util.authorUrl(n.author)) + '"><strong>' + esc(n.author) + '</strong></a>' + seal + ' • Publicado em ' + esc(util.fmtDate(n.date)) +
             (util.wasUpdated(n) ? ' • <span class="updated-at">Atualizado em ' + esc(util.fmtDate(n.updated_at)) + '</span>' : '') +
             ' • ' + util.readingTime(n) + ' min de leitura • ' + JB.Views.count(n.id) + ' leituras</p>';
     }
@@ -173,7 +176,13 @@ JB.ready.then(function () {
     const renderComments = () => {
         const cs = Comments.forNews(n.id);
         document.getElementById('comment-count').textContent = cs.length;
-        list.innerHTML = cs.map(c => '<div class="comment"><strong>' + esc(c.name) + '</strong> <small>• ' + esc(util.fmtDate(c.date)) + '</small><p class="mb-0 mt-1" style="white-space:pre-wrap">' + esc(c.text) + '</p></div>').join('') ||
+        // Comentário de conta: nome leva ao perfil público; equipe da redação ganha o selo do JB
+        const who = c => {
+            if (!c.userId) return '<strong>' + esc(c.name) + '</strong>';
+            const s = Members.staffById(c.userId);
+            return '<a class="comment-author" href="' + esc(util.profileUrl(c.userId)) + '"><strong>' + esc(c.name) + '</strong></a>' + (s ? ' ' + util.sealHTML(s.role) : '');
+        };
+        list.innerHTML = cs.map(c => '<div class="comment">' + who(c) + ' <small>• ' + esc(util.fmtDate(c.date)) + '</small><p class="mb-0 mt-1" style="white-space:pre-wrap">' + esc(c.text) + '</p></div>').join('') ||
             '<p class="text-muted">Seja o primeiro a comentar.</p>';
     };
     const form = document.getElementById('comment-form');
@@ -181,6 +190,11 @@ JB.ready.then(function () {
     if (me) {   // logado: o comentário sai sempre com o nome da conta
         form.elements.name.value = me.name; form.elements.name.readOnly = true;
         document.getElementById('c-name-help').hidden = false;
+        // Conta ainda não liberada (idade ou verificação em duas etapas): o banco recusaria o comentário
+        if (!Auth.accountOk()) {
+            form.querySelectorAll('input, textarea, button').forEach(el => { el.disabled = true; });
+            form.insertAdjacentHTML('afterbegin', '<p class="alert alert-warning small">Para comentar, conclua a <a href="seguranca.html?next=noticia.html">verificação da sua conta</a>.</p>');
+        }
     }
     form.addEventListener('submit', e => {
         e.preventDefault();
@@ -191,7 +205,14 @@ JB.ready.then(function () {
     });
     document.getElementById('comments-wrap').hidden = false;
     list.innerHTML = util.loadingHTML('Carregando comentários…');
-    Comments.load(n.id).then(ok => { if (ok) renderComments(); else list.innerHTML = util.errorHTML('Não foi possível carregar os comentários agora.'); });
+    let commentsOk = false;
+    Comments.load(n.id).then(ok => { commentsOk = ok; if (ok) renderComments(); else list.innerHTML = util.errorHTML('Não foi possível carregar os comentários agora.'); });
+    // Selos da equipe (assinatura e comentários): chegam depois, sem atrasar a leitura
+    Members.loadStaff().then(ok => {
+        if (!ok) return;
+        const m = document.getElementById('article-meta'); if (m) m.innerHTML = meta();
+        if (commentsOk) renderComments();
+    });
 
     // Se o servidor recusar uma gravação, o cache é desfeito: redesenha o que pode ter mudado.
     document.addEventListener('jb:sync-error', () => { paintFav(); renderComments(); });

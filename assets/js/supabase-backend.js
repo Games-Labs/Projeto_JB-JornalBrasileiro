@@ -19,23 +19,23 @@
     if (!JB.remote) return;
 
     const cfg = window.JB_CONFIG;
-    const { News, Auth, Reports, Views, Favs, Comments, Newsletter, Media, Authors, Versions } = JB;
+    const { News, Auth, Reports, Views, Favs, Comments, Newsletter, Media, Authors, Versions, Members } = JB;
     const isPublished = JB.util.isPublished;
     const guestFavs = { all: Favs.all, has: Favs.has, toggle: Favs.toggle, ids: Favs.ids, clear: Favs.clear };
     const BUCKET = 'news-images';
-    const NEWS_COLS = 'id,category,title,subtitle,image,author,body,status,featured,date,kind,verdict,live,sources,corrections,updates,timeline,people,chart,updated_at';
+    const NEWS_COLS = 'id,category,title,subtitle,image,author,body,status,featured,date,kind,verdict,live,sources,corrections,updates,timeline,people,chart,updated_at,created_by';
     const AUTHOR_COLS = 'id,name,role,bio,avatar,columnist,created_at';
     const TIMEOUT_MS = 15000, UPLOAD_TIMEOUT_MS = 60000;
 
     // Dados que vieram de versões antigas do modo local não valem mais aqui (e alguns são
     // pessoais: contas com hash fraco, sessão, denúncias). Apaga do navegador.
-    ['news', 'users', 'session', 'reports', 'views', 'comments', 'newsletter', 'authors', 'versions', 'seed'].forEach(k => { try { localStorage.removeItem(JB.KEYS[k]); } catch (e) { } });
+    ['news', 'users', 'session', 'reports', 'views', 'comments', 'newsletter', 'authors', 'versions', 'seed', 'roleLog'].forEach(k => { try { localStorage.removeItem(JB.KEYS[k]); } catch (e) { } });
 
     // Parâmetros de retorno do e-mail de recuperação: lidos antes de o supabase-js limpá-los da URL.
     const urlAuth = (() => {
         const h = new URLSearchParams(location.hash.replace(/^#/, '')), q = new URLSearchParams(location.search);
         const pick = k => h.get(k) || q.get(k) || '';
-        return { type: pick('type'), error: pick('error'), errorCode: pick('error_code') };
+        return { type: pick('type'), error: pick('error'), errorCode: pick('error_code'), errorText: pick('error_description') };
     })();
 
     // Nenhuma requisição fica pendurada para sempre: sem resposta em 15 s (60 s para upload), aborta.
@@ -64,7 +64,7 @@
     });
 
     // Cache em memória do que o usuário atual pode ver
-    const C = { me: null, news: [], authors: [], versions: {}, comments: [], commentsLoaded: {}, reports: [], views: {}, favs: [], newsletter: 0 };
+    const C = { aal: {}, me: null, news: [], authors: [], versions: {}, comments: [], commentsLoaded: {}, reports: [], views: {}, favs: [], newsletter: 0, members: [], roleLog: [], staff: [], staffLoaded: null };
     const byDateDesc = (a, b) => new Date(b.date) - new Date(a.date);
     const nowIso = () => new Date().toISOString();
     const uuid = () => (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
@@ -118,20 +118,49 @@
         if (m.includes('already registered')) return 'Já existe uma conta com este e-mail.';
         if (code === 'over_email_send_rate_limit' || m.includes('rate limit') || m.includes('too many') || (e && e.status === 429)) return 'Muitas tentativas. Aguarde alguns minutos e tente de novo.';
         if (code === 'same_password' || m.includes('different from the old')) return 'A nova senha precisa ser diferente da anterior.';
-        if (code === 'weak_password' || m.includes('password')) return 'Senha fraca ou inválida: use ao menos ' + JB.PASSWORD_MIN + ' caracteres.';
+        if (code === 'captcha_failed' || m.includes('captcha')) return 'Não conseguimos confirmar que você não é um robô. Aguarde a verificação da página (ou recarregue) e tente de novo.';
+        if (code === 'insufficient_aal') return 'Digite o código do app autenticador para continuar.';
+        if (code === 'weak_password' || m.includes('password')) return 'Senha fraca: use ao menos ' + JB.PASSWORD_MIN + ' caracteres, com letra minúscula, maiúscula, número e símbolo.';
+        if (m.includes('database error saving new user')) return 'Não foi possível criar a conta. Confira a data de nascimento: o JB aceita cadastros a partir de ' + JB.MIN_AGE + ' anos.';
         if (e && (e.name === 'AuthRetryableFetchError' || e.status === 0 || e.name === 'AbortError')) return 'Falha de conexão. Verifique sua internet e tente novamente.';
         console.error(e); return 'Não foi possível concluir. Tente novamente.';
     };
 
+    const mfaError = e => {
+        const m = (e && e.message || '').toLowerCase(), code = (e && e.code) || '';
+        if (code === 'mfa_verification_failed' || m.includes('invalid totp') || m.includes('invalid code')) return 'Código incorreto ou vencido. Confira o app autenticador e digite o código atual.';
+        if (code === 'too_many_enrolled_mfa_factors') return 'Esta conta já tem o máximo de aparelhos cadastrados. Remova um antes de adicionar outro.';
+        if (code === 'insufficient_aal') return 'Confirme primeiro o código do app autenticador que já está ativo.';
+        if (code === 'mfa_totp_enroll_not_enabled' || code === 'mfa_totp_verify_not_enabled' || m.includes('not enabled')) return 'A verificação em duas etapas não está ligada no Supabase (Authentication > Multi-Factor).';
+        return authError(e);
+    };
+    // O Supabase devolve o QR code como SVG cru ("data:image/svg+xml;utf-8,<svg…"): codifica para usar em <img>
+    const qrSrc = q => {
+        const m = /^data:image\/svg\+xml;(?:charset=)?utf-?8,([\s\S]*)$/i.exec(q || '');
+        if (m) return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(m[1].charAt(0) === '%' ? decodeURIComponent(m[1]) : m[1]);
+        return /^data:image\/(png|svg\+xml)/i.test(q || '') ? q : '';
+    };
+    let googleCheck = null;
+
     /* ---------- Carga inicial (em paralelo) ---------- */
-    const toUser = (p, u) => ({ id: p.id, name: p.name, email: u.email, role: p.role, bio: p.bio, city: p.city, interests: p.interests || [], avatar: p.avatar || '', created: p.created_at });
+    const toUser = (p, u) => ({ id: p.id, name: p.name, email: u.email, role: p.role, bio: p.bio, city: p.city, interests: p.interests || [], avatar: p.avatar || '', created: p.created_at, ageVerified: p.age_verified_at || null });
     const toAuthor = a => ({ id: a.id, name: a.name, role: a.role, bio: a.bio, avatar: a.avatar || '', columnist: !!a.columnist, created: a.created_at });
 
     async function loadMe(user) {
         C.me = null;
         if (!user) return;
-        const p = await get(() => sb.from('profiles').select('id,name,role,bio,city,interests,avatar,created_at').eq('id', user.id).maybeSingle(), null);
+        const p = await get(() => sb.from('profiles').select('id,name,role,bio,city,interests,avatar,created_at,age_verified_at').eq('id', user.id).maybeSingle(), null);
         if (p) C.me = toUser(p, user);
+    }
+    // Nível da sessão (aal1 = só senha/Google; aal2 = passou pelo app autenticador) e se a conta tem
+    // MFA ativo (nextLevel aal2). Lido do token, sem ir ao servidor.
+    async function refreshAal() {
+        C.aal = {};
+        if (!sb) return;
+        try {
+            const { data } = await sb.auth.mfa.getAuthenticatorAssuranceLevel();
+            if (data) C.aal = { current: data.currentLevel, next: data.nextLevel };
+        } catch (e) { console.error(e); }
     }
     async function loadFavs(user) {
         const favs = user ? await get(() => sb.from('favorites').select('news_id').order('created_at', { ascending: false }), []) : [];
@@ -139,7 +168,7 @@
     }
 
     const session = sb ? sb.auth.getSession().then(r => (r.data && r.data.session) || null, e => { console.error(e); return null; }) : Promise.resolve(null);
-    const authReady = session.then(s => loadMe(s && s.user));
+    const authReady = session.then(s => Promise.all([loadMe(s && s.user), refreshAal()]));
     const dataReady = Promise.all([
         get(() => sb.from('news').select(NEWS_COLS).order('date', { ascending: false }), [], true).then(rows => { C.news = rows.map(JB.util.withDefaults); }),
         get(() => sb.from('authors').select(AUTHOR_COLS).order('name'), []).then(rows => { C.authors = rows.map(toAuthor); }),
@@ -164,12 +193,13 @@
                 Object.assign(C.news[i], item);
                 if (change) C.news[i].updated_at = nowIso();   // o gatilho do banco faz o mesmo
                 if (change === 'version') delete C.versions[item.id];   // a lista de versões será baixada de novo
-                const patch = Object.assign({}, item); delete patch.id;
+                const patch = Object.assign({}, item); delete patch.id; delete patch.created_by;
                 run(() => sb.from('news').update(patch).eq('id', item.id), 'salvar a notícia', () => { const j = C.news.findIndex(x => x.id === item.id); if (j >= 0) C.news[j] = before; })
                     .then(ok => { if (ok && 'image' in item && before.image !== item.image) removeImage(before.image); });
                 return C.news[i];
             }
             item.id = uuid(); item.date = item.date || nowIso();
+            item.created_by = C.me ? C.me.id : null;   // o gatilho news_set_creator garante o mesmo no banco
             C.news.push(JB.util.withDefaults(Object.assign({}, item)));
             run(() => sb.from('news').insert(item), 'salvar a notícia', () => { C.news = C.news.filter(x => x.id !== item.id); });
             return item;
@@ -222,10 +252,10 @@
         load() { return dataReady.then(() => true, () => false); }   // já vêm na carga inicial
     });
 
-    /* ---------- Versões das matérias (só o editor lê; quem grava é o gatilho do banco) ---------- */
+    /* ---------- Versões das matérias (equipe lê; quem grava é o gatilho do banco) ---------- */
     Object.assign(Versions, {
         async load(newsId) {
-            if (!Auth.isAdmin()) return true;
+            if (!Auth.isStaff()) return true;
             if (C.versions[newsId]) return true;
             const rows = await get(() => sb.from('news_versions').select('id,replaced_at,replaced_by,snapshot').eq('news_id', newsId).order('replaced_at', { ascending: false }).limit(20), null);
             if (!rows) return false;
@@ -242,7 +272,7 @@
             const ext = (blob.type.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
             const path = new Date().getFullYear() + '/' + uuid() + '.' + ext;
             const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType: blob.type, cacheControl: '31536000', upsert: false });
-            if (error) { console.error(error); throw new Error('Não foi possível enviar a imagem. Verifique sua conexão e se você está logado como editor.'); }
+            if (error) { console.error(error); throw new Error('Não foi possível enviar a imagem. Verifique sua conexão e se você está logado com uma conta da redação.'); }
             return sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
         }
     });
@@ -273,6 +303,11 @@
         },
         forNews(id) { return C.comments.filter(c => c.newsId === id).sort(byDateDesc); },
         flat() { return C.comments.slice().sort(byDateDesc); },
+        // Comentários de uma conta (perfil público). O RLS só devolve os de matérias publicadas.
+        async byUser(userId) {
+            const rows = await get(() => sb.from('comments').select('id,news_id,user_id,name,text,date').eq('user_id', userId).order('date', { ascending: false }).limit(30), null);
+            return rows ? rows.map(toComment) : null;
+        },
         add(id, c) {
             // Logado: o banco grava o nome e a autoria da própria conta (gatilho comments_set_author).
             const row = { id: uuid(), news_id: id, user_id: C.me ? C.me.id : null, name: C.me ? C.me.name : c.name, text: c.text };
@@ -286,10 +321,10 @@
         }
     });
 
-    /* ---------- Denúncias (qualquer um envia; só o editor lê) ---------- */
+    /* ---------- Denúncias (qualquer um envia; só coordenador/admin lê) ---------- */
     Object.assign(Reports, {
         async load() {
-            if (!Auth.isAdmin()) return true;
+            if (!Auth.isEditor()) return true;
             const rows = await get(() => sb.from('reports').select('id,subject,story,anonymous,name,email,attachment,date').order('date', { ascending: false }), null);
             if (rows) C.reports = rows;
             return !!rows;
@@ -297,7 +332,7 @@
         all() { return C.reports.slice().sort(byDateDesc); },
         add(r) {
             const row = { id: uuid(), subject: r.subject, story: r.story, anonymous: !!r.anonymous, name: r.name || '', email: r.email || '', attachment: r.attachment || null };
-            if (Auth.isAdmin()) C.reports.push(Object.assign({ date: nowIso() }, row));
+            if (Auth.isEditor()) C.reports.push(Object.assign({ date: nowIso() }, row));
             run(() => sb.from('reports').insert(row), 'enviar a denúncia', () => { C.reports = C.reports.filter(x => x.id !== row.id); });
             return row;
         },
@@ -307,7 +342,7 @@
     /* ---------- Newsletter (assíncrona: true = inscrito/já inscrito, null = erro) ---------- */
     Object.assign(Newsletter, {
         async load() {
-            if (!Auth.isAdmin() || !sb) return true;
+            if (!Auth.isEditor() || !sb) return true;
             try { const { count, error } = await sb.from('newsletter').select('email', { count: 'exact', head: true }); if (error) throw error; C.newsletter = count || 0; return true; } catch (e) { console.error(e); return false; }
         },
         count() { return C.newsletter; },
@@ -320,6 +355,66 @@
                 if (!error || error.code === '23505') { if (!error) C.newsletter++; return true; }
                 console.error(error); return null;
             } catch (e) { console.error(e); return null; }
+        }
+    });
+
+    /* ---------- Membros: cargos (painel), equipe com selo e perfis públicos ---------- */
+    // As regras da hierarquia ficam no banco (set_member_role / list_members); aqui só chamamos.
+    const toPublic = p => ({ id: p.id, name: p.name, role: p.role, bio: p.bio || '', avatar: p.avatar || '', created: p.created_at });
+    const roleError = e => {
+        const m = (e && e.message) || '';
+        if (e && (e.name === 'AuthRetryableFetchError' || e.name === 'AbortError' || /fetch|network/i.test(m))) return 'Falha de conexão. Verifique sua internet e tente novamente.';
+        if (/sem permissão/i.test(m)) return 'Você não tem permissão para essa mudança de cargo.';
+        if (/próprio cargo|administradores|coordenadores só|cargo inválido|não encontrada/i.test(m)) return m.charAt(0).toUpperCase() + m.slice(1) + '.';
+        return 'Não foi possível mudar o cargo agora. Tente novamente.';
+    };
+    Object.assign(Members, {
+        async load(q) {
+            if (!Auth.isEditor()) { C.members = []; return true; }
+            const rows = await get(() => sb.rpc('list_members', { p_query: String(q || '').trim() }), null);
+            if (!rows) return false;
+            C.members = rows.map(m => ({ id: m.id, name: m.name, email: m.email, role: m.role, created: m.created_at }));
+            return true;
+        },
+        list() { return C.members.slice(); },
+        async setRole(id, role) {
+            if (!sb) return { ok: false, error: 'Sem conexão com o servidor.' };
+            try {
+                const { error } = await sb.rpc('set_member_role', { p_id: id, p_role: role });
+                if (error) { console.error(error); return { ok: false, error: roleError(error) }; }
+            } catch (e) { console.error(e); return { ok: false, error: roleError(e) }; }
+            const m = C.members.find(x => x.id === id); if (m) m.role = role;
+            C.staffLoaded = null;   // a lista da equipe mudou
+            return { ok: true };
+        },
+        async loadLog() {
+            if (!Auth.isEditor()) { C.roleLog = []; return true; }
+            const rows = await get(() => sb.from('role_changes').select('target_id,target_name,old_role,new_role,changed_by_name,changed_at').order('changed_at', { ascending: false }).limit(50), null);
+            if (!rows) return false;
+            C.roleLog = rows.map(r => ({ targetId: r.target_id, targetName: r.target_name, oldRole: r.old_role, newRole: r.new_role, byName: r.changed_by_name, date: r.changed_at }));
+            return true;
+        },
+        log() { return C.roleLog.slice(); },
+        // Equipe com selo (pública). Baixada uma vez por página, só onde é usada.
+        loadStaff() {
+            if (!C.staffLoaded) C.staffLoaded = get(() => sb.rpc('staff_profiles'), null).then(rows => {
+                if (!rows) { C.staffLoaded = null; return false; }
+                C.staff = rows.map(toPublic); return true;
+            });
+            return C.staffLoaded;
+        },
+        staff() { return C.staff.slice(); },
+        staffById(id) { return C.staff.find(p => p.id === id) || null; },
+        staffByName(name) { return C.staff.find(p => p.name === name) || null; },
+        // Perfil público: objeto, null (não existe) ou undefined (falha de conexão)
+        async profile(id) {
+            if (!sb) return undefined;
+            if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id || ''))) return null;
+            try {
+                const { data, error } = await sb.rpc('public_profile', { p_id: id });
+                if (error) throw error;
+                return data && data[0] ? toPublic(data[0]) : null;
+            } catch (e) { console.error(e); return undefined; }
         }
     });
 
@@ -353,25 +448,107 @@
         users() { return C.me ? [C.me] : []; },
         current() { return C.me; },
         isAdmin() { return !!C.me && C.me.role === 'admin'; },
-        async register({ name, email, password }) {
+        async register({ name, email, password, birthDate, captchaToken }) {
             if (!sb) return { ok: false, error: 'Sem conexão com o servidor.' };
             email = email.trim().toLowerCase();
-            const { data, error } = await sb.auth.signUp({ email, password, options: { data: { name: name.trim() }, emailRedirectTo: pageUrl('login.html') } });
+            // birth_date é conferida e descartada pelo banco (check_signup_age): só fica a data da confirmação
+            const { data, error } = await sb.auth.signUp({ email, password, options: { data: { name: name.trim(), birth_date: birthDate }, emailRedirectTo: pageUrl('login.html'), captchaToken: captchaToken || undefined } });
             if (error) return { ok: false, error: authError(error) };
             if (data.user && data.user.identities && data.user.identities.length === 0) return { ok: false, error: 'Já existe uma conta com este e-mail.' };
             if (!data.session) return { ok: true, pending: true };      // confirmação por e-mail ativada no Supabase
-            await loadMe(data.session.user);
+            await Promise.all([loadMe(data.session.user), refreshAal()]);
             return { ok: true, user: C.me };
         },
-        async login(email, password) {
+        async login(email, password, captchaToken) {
             if (!sb) return { ok: false, error: 'Sem conexão com o servidor.' };
-            const { data, error } = await sb.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+            const { data, error } = await sb.auth.signInWithPassword({ email: email.trim().toLowerCase(), password, options: { captchaToken: captchaToken || undefined } });
             if (error) return { ok: false, error: authError(error) };
-            await loadMe(data.user);
+            await Promise.all([loadMe(data.user), refreshAal()]);
             if (!C.me) return { ok: false, error: 'Perfil não encontrado para esta conta.' };
-            await mergeGuestFavs().catch(e => console.error(e));
+            Auth.logEvent('login');
+            if (Auth.accountOk()) await mergeGuestFavs().catch(e => console.error(e));
             return { ok: true, user: C.me };
         },
+        // Termina o login que voltou do Google (ou uma sessão já aberta): favoritos do visitante etc.
+        async finishLogin() {
+            if (!C.me) return false;
+            if (Auth.accountOk()) await mergeGuestFavs().catch(e => console.error(e));
+            return true;
+        },
+        // Login com o Google: só aparece se o provedor estiver ligado no Supabase (Authentication >
+        // Sign In / Providers > Google). Volta para login.html, que termina o fluxo.
+        googleAvailable() {
+            if (!googleCheck) googleCheck = fetchWithTimeout(cfg.SUPABASE_URL.replace(/\/$/, '') + '/auth/v1/settings', { headers: { apikey: cfg.SUPABASE_ANON_KEY } })
+                .then(r => r.ok ? r.json() : null).then(s => !!(s && s.external && s.external.google)).catch(() => false);
+            return googleCheck;
+        },
+        async loginWithGoogle(next) {
+            if (!sb) return { ok: false, error: 'Sem conexão com o servidor.' };
+            const { error } = await sb.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: pageUrl('login.html') + (next ? '?next=' + encodeURIComponent(next) : ''), queryParams: { prompt: 'select_account' } } });
+            return error ? { ok: false, error: authError(error) } : { ok: true };
+        },
+        // Erro devolvido pelo provedor na volta do login social (ex.: a pessoa cancelou)
+        oauthError() { return urlAuth.error && urlAuth.type !== 'recovery' ? (urlAuth.errorText || urlAuth.error) : ''; },
+
+        /* ----- Conta liberada: idade confirmada + verificação em duas etapas ----- */
+        ageOk() { return !!(C.me && C.me.ageVerified); },
+        // 'ok' | 'challenge' (tem MFA, falta digitar o código) | 'enroll' (equipe sem MFA) | null
+        mfaState() {
+            if (!C.me) return null;
+            if (C.aal.current === 'aal2') return 'ok';
+            if (C.aal.next === 'aal2') return 'challenge';
+            return JB.util.isStaffRole(C.me.role) ? 'enroll' : 'ok';
+        },
+        accountOk() { return Auth.ageOk() && Auth.mfaState() === 'ok'; },
+        hasMfa() { return C.aal.next === 'aal2'; },
+        async confirmAge(birthDate) {
+            if (!C.me) return { ok: false, error: 'Entre na sua conta.' };
+            const age = JB.util.ageFrom(birthDate);
+            if (isNaN(age)) return { ok: false, error: 'Informe uma data de nascimento válida.' };
+            const { data, error } = await sb.rpc('confirm_age', { p_birth: birthDate });
+            if (error) { console.error(error); return { ok: false, error: 'Não foi possível confirmar agora. Tente novamente.' }; }
+            if (data === 'underage') { await sb.auth.signOut({ scope: 'local' }).catch(() => { }); C.me = null; return { ok: false, underage: true }; }
+            C.me.ageVerified = new Date().toISOString();
+            return { ok: true };
+        },
+        async mfaFactors() {
+            const { data, error } = await sb.auth.mfa.listFactors();
+            if (error) { console.error(error); return null; }
+            return (data.all || []).filter(f => f.status === 'verified').map(f => ({ id: f.id, name: f.friendly_name || 'App autenticador', type: f.factor_type, created: f.created_at }));
+        },
+        // Começa a ativação: devolve o QR code e a chave para o app autenticador
+        async mfaEnroll() {
+            if (!C.me) return { ok: false, error: 'Entre na sua conta.' };
+            const list = await sb.auth.mfa.listFactors();
+            for (const f of ((list.data && list.data.all) || []).filter(f => f.status !== 'verified')) await sb.auth.mfa.unenroll({ factorId: f.id }).catch(() => { });   // tentativas abandonadas
+            const { data, error } = await sb.auth.mfa.enroll({ factorType: 'totp', friendlyName: 'JB ' + new Date().toLocaleString('pt-BR') });
+            if (error) return { ok: false, error: mfaError(error) };
+            return { ok: true, id: data.id, qr: qrSrc(data.totp.qr_code), secret: data.totp.secret, uri: data.totp.uri };
+        },
+        // Confere o código de 6 dígitos (ativação ou login). factorId: o da ativação ou o primeiro ativo.
+        async mfaVerify(code, factorId) {
+            code = String(code || '').replace(/\s+/g, '');
+            if (!/^\d{6}$/.test(code)) return { ok: false, error: 'Digite os 6 números que aparecem no app autenticador.' };
+            const enrolling = !!factorId;
+            if (!factorId) { const fs = await Auth.mfaFactors(); factorId = fs && fs[0] && fs[0].id; }
+            if (!factorId) return { ok: false, error: 'Nenhum app autenticador ativo nesta conta.' };
+            const { error } = await sb.auth.mfa.challengeAndVerify({ factorId, code });
+            if (error) return { ok: false, error: mfaError(error) };
+            await refreshAal();
+            Auth.logEvent(enrolling ? 'mfa.enabled' : 'mfa.verified');
+            await mergeGuestFavs().catch(e => console.error(e));
+            return { ok: true };
+        },
+        async mfaRemove(factorId) {
+            const { error } = await sb.auth.mfa.unenroll({ factorId });
+            if (error) return { ok: false, error: mfaError(error) };
+            Auth.logEvent('mfa.disabled');
+            await sb.auth.refreshSession().catch(() => { });
+            await refreshAal();
+            return { ok: true };
+        },
+        // Registro de eventos da própria conta na auditoria (não bloqueia nada se falhar)
+        logEvent(action) { if (sb && C.me) sb.rpc('log_account_event', { p_action: action }).then(r => { if (r.error) console.warn(r.error); }, () => { }); },
         async logout() { if (sb) await sb.auth.signOut().catch(e => console.error(e)); C.me = null; C.favs = []; },
         update(patch) {
             if (!C.me) return null;
@@ -381,15 +558,24 @@
             run(() => sb.from('profiles').update(row).eq('id', C.me.id), 'salvar o perfil', () => { if (C.me) Object.assign(C.me, before); });
             return C.me;
         },
-        async changePassword(current, next) {
-            if (!C.me || !sb) return false;
-            const check = await sb.auth.signInWithPassword({ email: C.me.email, password: current });   // confere a senha atual
-            if (check.error) return false;
+        // Confere a senha atual (novo login, com CAPTCHA). Quem tem MFA digita o código de novo,
+        // porque o Supabase só troca a senha de uma conta com MFA numa sessão aal2.
+        async changePassword(current, next, captchaToken, mfaCode) {
+            if (!C.me || !sb) return { ok: false, error: 'Entre na sua conta.' };
+            const hadMfa = Auth.hasMfa();
+            if (hadMfa && !/^\d{6}$/.test(String(mfaCode || '').replace(/\s+/g, ''))) return { ok: false, mfa: true, error: 'Digite o código do app autenticador.' };
+            const check = await sb.auth.signInWithPassword({ email: C.me.email, password: current, options: { captchaToken: captchaToken || undefined } });
+            if (check.error) return { ok: false, error: /invalid login/i.test(check.error.message || '') ? 'Senha atual incorreta.' : authError(check.error) };
+            await refreshAal();
+            if (hadMfa) { const v = await Auth.mfaVerify(mfaCode); if (!v.ok) return { ok: false, mfa: true, error: v.error }; }
             const { error } = await sb.auth.updateUser({ password: next });
-            return !error;
+            if (error) return { ok: false, error: authError(error) };
+            Auth.logEvent('password.changed');
+            return { ok: true };
         },
         async deleteAccount() {
             if (!C.me) return;
+            if (Auth.hasMfa() && C.aal.current !== 'aal2') { notify('Confirme a verificação em duas etapas antes de excluir a conta.'); return; }
             const ok = await run(() => sb.rpc('delete_my_account'), 'excluir a conta');
             if (!ok) return;
             await sb.auth.signOut({ scope: 'local' }); C.me = null;
@@ -397,12 +583,12 @@
 
         /* ----- Recuperação de senha (fluxo oficial do Supabase Auth) ----- */
         // Sempre responde igual, exista ou não a conta: só falha de rede/limite são informados.
-        async requestPasswordReset(email) {
+        async requestPasswordReset(email, captchaToken) {
             if (!sb) return { ok: false, error: 'Sem conexão com o servidor.' };
             try {
-                const { error } = await sb.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo: pageUrl('redefinir-senha.html') });
+                const { error } = await sb.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo: pageUrl('redefinir-senha.html'), captchaToken: captchaToken || undefined });
                 if (!error) return { ok: true };
-                if (error.status === 429 || error.code === 'over_email_send_rate_limit') return { ok: false, error: authError(error) };
+                if (error.status === 429 || error.code === 'over_email_send_rate_limit' || error.code === 'captcha_failed') return { ok: false, error: authError(error) };
                 if (error.name === 'AuthRetryableFetchError' || !error.status) return { ok: false, error: 'Falha de conexão. Verifique sua internet e tente novamente.' };
                 console.warn('Recuperação de senha: o servidor recusou o pedido (status ' + error.status + '). Veja Authentication > Logs no painel do Supabase.');
                 return { ok: true };
@@ -419,6 +605,7 @@
                 const { data, error } = await sb.auth.verifyOtp({ email: email.trim().toLowerCase(), token, type: 'recovery' });
                 if (!error && data && data.session) {
                     recoveryUser = data.session.user.id; ss.set(recoveryUser);   // além do evento, para não depender da ordem
+                    await refreshAal();
                     return { ok: true };
                 }
                 if (error && (error.status === 429 || /rate limit|too many/i.test(error.message || ''))) return { ok: false, error: authError(error) };
@@ -437,8 +624,15 @@
             if (user && (recoveryUser === user.id || ss.get() === user.id)) return 'ready';
             return urlAuth.error ? 'expired' : 'invalid';   // ex.: error_code=otp_expired no retorno do e-mail
         },
-        async updatePassword(next) {
+        // Conta com MFA: o Supabase só grava a senha nova depois do código do app (sessão aal2).
+        async updatePassword(next, mfaCode) {
             if ((await Auth.recoveryState()) !== 'ready') return { ok: false, expired: true, error: 'Sua sessão de recuperação expirou ou é inválida. Peça um novo link.' };
+            await refreshAal();
+            if (C.aal.next === 'aal2' && C.aal.current !== 'aal2') {
+                if (!mfaCode) return { ok: false, mfa: true, error: 'Esta conta usa verificação em duas etapas: digite o código do app autenticador.' };
+                const v = await Auth.mfaVerify(mfaCode);
+                if (!v.ok) return { ok: false, mfa: true, error: v.error };
+            }
             const { error } = await sb.auth.updateUser({ password: next });
             if (error) {
                 if (error.status === 401 || error.status === 403 || /session/i.test(error.message || '')) return { ok: false, expired: true, error: 'Sua sessão de recuperação expirou. Peça um novo link.' };
@@ -451,6 +645,70 @@
             return { ok: true };
         }
     });
+
+    /* ---------- CAPTCHA (Cloudflare Turnstile) ---------- */
+    // Protege login, cadastro, recuperação e troca de senha contra robôs. Quem confere o token é o
+    // Supabase (Authentication > Attack Protection > CAPTCHA, com a chave secreta do Turnstile).
+    // A chave do site (pública) fica em config.js. Sem ela, nada é carregado.
+    const SITE_KEY = cfg.TURNSTILE_SITE_KEY || '';
+    let tsLoading = null;
+    const loadTurnstile = () => tsLoading || (tsLoading = new Promise((resolve, reject) => {
+        if (window.turnstile) return resolve(window.turnstile);
+        const s = document.createElement('script');
+        s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+        s.async = true;
+        s.onload = () => window.turnstile ? resolve(window.turnstile) : reject(new Error('turnstile'));
+        s.onerror = () => { tsLoading = null; reject(new Error('turnstile')); };
+        document.head.appendChild(s);
+    }));
+    JB.Captcha = {
+        enabled: !!SITE_KEY,
+        // Coloca o desafio em `el`. token(): espera o token (até 15 s; '' se não vier). reset(): pede outro
+        // (cada token vale uma vez só; chame depois de cada envio).
+        mount(el) {
+            const st = { id: null, token: '', waiters: [] };
+            const settle = t => { st.waiters.splice(0).forEach(w => w(t)); };
+            if (!SITE_KEY || !el) return { token: () => Promise.resolve(''), reset() { } };
+            el.hidden = false;
+            loadTurnstile().then(ts => {
+                st.id = ts.render(el, {
+                    sitekey: SITE_KEY, language: 'pt-br', size: 'flexible', action: el.dataset.action || undefined,
+                    theme: document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'dark' : 'light',
+                    callback: t => { st.token = t; settle(t); },
+                    'expired-callback': () => { st.token = ''; },
+                    'error-callback': () => { st.token = ''; settle(''); }
+                });
+            }).catch(e => { console.warn('CAPTCHA indisponível', e); el.textContent = 'Não foi possível carregar a verificação anti-robô. Recarregue a página se o envio falhar.'; el.className = 'form-text text-danger'; settle(''); });
+            return {
+                token(ms) {
+                    if (st.token) return Promise.resolve(st.token);
+                    return new Promise(resolve => { const t = setTimeout(() => resolve(''), ms || 15000); st.waiters.push(v => { clearTimeout(t); resolve(v); }); });
+                },
+                reset() { st.token = ''; if (st.id !== null && window.turnstile) { try { window.turnstile.reset(st.id); } catch (e) { } } }
+            };
+        }
+    };
+
+    /* ---------- Central de Segurança (painel: coordenador e admin) ---------- */
+    JB.Security = {
+        overview: () => get(() => sb.rpc('security_overview'), null),
+        // Auditoria, da mais recente para a mais antiga. filter: prefixo da ação ('news', 'account'…)
+        audit: ({ filter, before, limit } = {}) => get(() => {
+            let q = sb.from('audit_log').select('id,at,actor_id,actor_name,actor_role,action,target_type,target_id,target_label,details').order('at', { ascending: false }).limit(limit || 100);
+            if (filter) q = q.like('action', filter + '.%');
+            if (before) q = q.lt('at', before);
+            return q;
+        }, null),
+        // O Supabase exige CAPTCHA? Tenta um login falso sem token: 'on' | 'off' | null (sem resposta)
+        async captchaEnforced() {
+            try {
+                const r = await fetchWithTimeout(cfg.SUPABASE_URL.replace(/\/$/, '') + '/auth/v1/token?grant_type=password', { method: 'POST', headers: { apikey: cfg.SUPABASE_ANON_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'verificacao-captcha@invalid.example', password: 'x' }) });
+                const b = await r.json().catch(() => ({}));
+                return (b.error_code || b.code) === 'captcha_failed' || /captcha/i.test(b.msg || b.message || '') ? 'on' : 'off';
+            } catch (e) { return null; }
+        },
+        googleEnabled: () => Auth.googleAvailable()
+    };
 
     JB.storageOk = () => true;
     JB.mode = 'supabase';

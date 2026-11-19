@@ -23,7 +23,7 @@
         <div id="profile-loading" class="jb-loading" role="status"><span class="jb-spinner" aria-hidden="true"></span>Carregando seu perfil…</div>
         <div id="profile-content" hidden>
             <h1 class="page-title">Minhas Informações</h1>
-            <p class="page-lead"><span class="badge bg-dark" id="role-badge"></span> Membro desde <span id="since"></span> · <a id="admin-link" href="admin.html" hidden>Abrir Painel Administrativo</a></p>
+            <p class="page-lead"><span class="badge bg-dark" id="role-badge"></span><span id="role-seal"></span> Membro desde <span id="since"></span> · <a id="public-link" href="perfil-publico.html">Ver meu perfil público</a> · <a id="admin-link" href="admin.html" hidden>Abrir Painel Administrativo</a></p>
             <div class="row g-4">
                 <div class="col-lg-7">
                     <form id="profile-form" class="panel-box">
@@ -34,14 +34,15 @@
                                 <label class="btn btn-outline-dark btn-sm mb-1" for="avatar-file">Alterar foto</label>
                                 <input type="file" id="avatar-file" accept="image/*" hidden>
                                 <button type="button" class="btn btn-link btn-sm text-decoration-none" id="avatar-remove">Remover</button>
-                                <div class="form-text mt-0">A foto é recortada em quadrado (256 px) e salva no seu perfil; só você a vê.</div>
+                                <div class="form-text mt-0">A foto é recortada em quadrado (256 px) e aparece no seu perfil público, junto com o nome e o “Sobre você”.</div>
                             </div>
                         </div>
                         <div class="alert alert-success" id="profile-msg" role="status" hidden></div>
                         <div class="mb-3"><label class="form-label" for="p-name">Nome</label><input class="form-control" id="p-name" name="name" required></div>
                         <div class="mb-3"><label class="form-label" for="p-email">E-mail</label><input class="form-control" id="p-email" name="email" readonly></div>
                         <div class="mb-3"><label class="form-label" for="p-city">Cidade</label><input class="form-control" id="p-city" name="city"></div>
-                        <div class="mb-3"><label class="form-label" for="p-bio">Sobre você</label><textarea class="form-control" id="p-bio" name="bio" rows="3"></textarea></div>
+                        <div class="mb-3"><label class="form-label" for="p-bio">Sobre você</label><textarea class="form-control" id="p-bio" name="bio" rows="3" maxlength="1000" aria-describedby="p-bio-help"></textarea>
+                            <div class="form-text" id="p-bio-help">Público: nome, foto e este texto aparecem no seu perfil e nos seus comentários. E-mail, cidade e interesses ficam só com você.</div></div>
                         <div class="mb-3"><span class="form-label d-block">Editorias de interesse</span><div id="interests"></div></div>
                         <button class="btn btn-primary" type="submit">Salvar perfil</button>
                     </form>
@@ -51,11 +52,18 @@
                         <h2 class="h5 mb-3">Alterar senha</h2>
                         <div class="alert alert-success" id="pass-msg" role="status" hidden></div>
                         <div class="mb-3"><label class="form-label" for="p-cur">Senha atual</label><input type="password" class="form-control" id="p-cur" name="current" autocomplete="current-password" required></div>
-                        <div class="mb-3"><label class="form-label" for="p-new">Nova senha (mín. 6 caracteres)</label><input type="password" class="form-control" id="p-new" name="next" autocomplete="new-password" minlength="6" required></div>
+                        <div class="mb-3"><label class="form-label" for="p-new">Nova senha</label><input type="password" class="form-control" id="p-new" name="next" autocomplete="new-password" minlength="8" required aria-describedby="p-pw-help"><div class="form-text" id="p-pw-help">Mínimo de 8 caracteres, com letra minúscula, maiúscula, número e símbolo.</div><ul class="pw-rules" data-pw-rules="next" aria-live="polite"></ul></div>
                         <div class="mb-3"><label class="form-label" for="p-confirm">Confirmar nova senha</label><input type="password" class="form-control" id="p-confirm" name="confirm" autocomplete="new-password" required></div>
+                        <div class="mb-3" data-mfa-field hidden><label class="form-label" for="p-mfa">Código do app autenticador</label><input type="text" class="form-control code-input" id="p-mfa" name="mfa" inputmode="numeric" autocomplete="one-time-code" maxlength="6"></div>
+                        <div class="jb-captcha mb-3" data-captcha data-action="password" hidden></div>
                         <p class="small mb-3"><a href="recuperar-senha.html">Esqueceu a senha atual?</a></p>
                         <button class="btn btn-dark" type="submit">Alterar senha</button>
                     </form>
+                    <div class="panel-box mb-4">
+                        <h2 class="h5 mb-2">Segurança da conta</h2>
+                        <p class="small mb-2" id="mfa-status">Verificação em duas etapas: …</p>
+                        <a class="btn btn-outline-dark btn-sm" href="seguranca.html">Gerenciar verificação em duas etapas</a>
+                    </div>
                     <div class="panel-box d-flex flex-wrap gap-2">
                         <button class="btn btn-outline-dark" id="logout" type="button">Sair</button>
                         <button class="btn btn-outline-primary" id="delete-account" type="button">Excluir minha conta</button>

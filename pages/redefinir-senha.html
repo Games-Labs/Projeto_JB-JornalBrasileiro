@@ -29,8 +29,9 @@
                 <p class="small mb-3">Escolha uma senha nova para a sua conta. Depois de salvar, todas as sessões abertas serão encerradas e você entra com a senha nova.</p>
                 <div class="alert alert-danger" id="form-error" role="alert" hidden></div>
                 <form id="reset-form" method="post" novalidate>
-                    <div class="mb-3"><label class="form-label" for="password">Nova senha (mín. 6 caracteres)</label><input type="password" class="form-control" id="password" name="password" autocomplete="new-password" minlength="6" required></div>
+                    <div class="mb-3"><label class="form-label" for="password">Nova senha</label><input type="password" class="form-control" id="password" name="password" autocomplete="new-password" minlength="8" required aria-describedby="pw-help"><div class="form-text" id="pw-help">Mínimo de 8 caracteres, com letra minúscula, maiúscula, número e símbolo.</div><ul class="pw-rules" data-pw-rules="password" aria-live="polite"></ul></div>
                     <div class="mb-3"><label class="form-label" for="confirm">Confirmar nova senha</label><input type="password" class="form-control" id="confirm" name="confirm" autocomplete="new-password" required></div>
+                    <div class="mb-3" data-mfa-field hidden><label class="form-label" for="reset-mfa">Código do app autenticador</label><input type="text" class="form-control code-input" id="reset-mfa" name="mfa" inputmode="numeric" autocomplete="one-time-code" maxlength="6"><div class="form-text">Sua conta usa verificação em duas etapas: digite os 6 números do app.</div></div>
                     <button class="btn btn-primary w-100" type="submit">Salvar nova senha</button>
                 </form>
             </div>

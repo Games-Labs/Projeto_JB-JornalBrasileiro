@@ -24,22 +24,25 @@
         <div id="admin-error"></div>
         <div id="gate" class="auth-card text-center" hidden>
             <h1 class="h3">Área restrita</h1>
-            <p>O Painel Administrativo é exclusivo para editores. Entre com uma conta de administrador.</p>
-            <a class="btn btn-primary" href="login.html?next=admin.html">Entrar como editor</a>
+            <p>O Painel Administrativo é exclusivo para a equipe da redação (jornalistas, coordenadores e administradores).</p>
+            <a class="btn btn-primary" href="login.html?next=admin.html">Entrar com uma conta da redação</a>
         </div>
 
         <div id="panel" hidden>
             <h1 class="page-title">Painel Administrativo</h1>
             <p class="page-lead">Gerencie as matérias, a equipe, as denúncias, os comentários e acompanhe a audiência do portal.</p>
+            <div class="role-note mb-3" id="role-note"></div>
             <div class="alert" id="admin-msg" role="status" hidden></div>
             <div class="row g-3 mb-4" id="stats"></div>
 
             <ul class="nav nav-tabs mb-4 admin-tabs" role="tablist">
                 <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-news" type="button" role="tab">Notícias (<span id="news-count">0</span>)</button></li>
-                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-authors" type="button" role="tab">Autores (<span id="authors-count">0</span>)</button></li>
+                <li class="nav-item" data-editor-only hidden><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-authors" type="button" role="tab">Autores (<span id="authors-count">0</span>)</button></li>
                 <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-audience" type="button" role="tab">Audiência</button></li>
-                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-reports" type="button" role="tab">Denúncias (<span id="reports-count">0</span>)</button></li>
-                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-comments" type="button" role="tab">Comentários (<span id="comments-count">0</span>)</button></li>
+                <li class="nav-item" data-editor-only hidden><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-reports" type="button" role="tab">Denúncias (<span id="reports-count">0</span>)</button></li>
+                <li class="nav-item" data-editor-only hidden><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-comments" type="button" role="tab">Comentários (<span id="comments-count">0</span>)</button></li>
+                <li class="nav-item" data-editor-only hidden><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-team" type="button" role="tab">Equipe e cargos</button></li>
+                <li class="nav-item" data-editor-only hidden><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-security" type="button" role="tab">Segurança</button></li>
             </ul>
 
             <div class="tab-content">
@@ -110,8 +113,10 @@
                                             <div class="col-sm-6"><input class="form-control form-control-sm" name="chartUnit" maxlength="40" placeholder="Unidade (ex.: contratos)" aria-label="Unidade"></div>
                                             <div class="col-sm-6"><input class="form-control form-control-sm" name="chartSource" maxlength="200" placeholder="Fonte dos dados" aria-label="Fonte dos dados"></div>
                                         </div>
-                                        <textarea class="form-control form-control-sm mb-1" id="f-chart" name="chartItems" rows="3" placeholder="Sudeste | 74" aria-label="Dados do gráfico"></textarea>
-                                        <div class="form-text">Uma barra por linha: <code>rótulo | número</code> (até 12).</div>
+                                        <textarea class="form-control form-control-sm mb-1" id="f-chart" name="chartItems" rows="4" placeholder="Sudeste | 74&#10;Nordeste | 61" aria-label="Dados do gráfico" aria-describedby="chart-help chart-status"></textarea>
+                                        <div class="form-text" id="chart-help">Uma barra por linha: <code>rótulo | número</code> (até 12). Também vale <code>Sudeste: 74</code>, <code>Sudeste 74</code>, <code>15%</code> ou <code>R$ 2,1</code>. O gráfico só aparece na matéria com pelo menos uma linha de dados.</div>
+                                        <div class="form-text" id="chart-status" role="status"></div>
+                                        <div id="chart-preview"></div>
                                     </div>
                                 </details>
 
@@ -122,7 +127,7 @@
                                     <input class="form-control form-control-sm" id="f-correction" name="correction" maxlength="500" placeholder="Ex.: O valor do contrato é R$ 2,1 milhões, e não R$ 21 milhões.">
                                     <div class="form-text">Fica registrada no fim da matéria com a data de hoje (política de correções).</div>
                                 </div>
-                                <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="f-feat" name="featured"><label class="form-check-label" for="f-feat">Manchete da capa</label></div>
+                                <div class="form-check mb-3" id="feat-wrap"><input class="form-check-input" type="checkbox" id="f-feat" name="featured"><label class="form-check-label" for="f-feat">Manchete da capa</label></div>
                                 <button class="btn btn-primary" type="submit">Salvar notícia</button>
                                 <button class="btn btn-outline-dark" type="button" id="cancel-edit">Limpar</button>
                                 <a class="btn btn-link" id="preview-link" href="#" hidden>Pré-visualizar</a>
@@ -133,6 +138,7 @@
                                 <input type="search" class="form-control form-control-sm admin-filter" id="news-q" placeholder="Filtrar por título ou autor" aria-label="Filtrar por título ou autor">
                                 <select class="form-select form-select-sm admin-filter" id="news-status" aria-label="Filtrar por status"><option value="">Todos os status</option></select>
                                 <select class="form-select form-select-sm admin-filter" id="news-kind" aria-label="Filtrar por tipo"><option value="">Todos os tipos</option></select>
+                                <div class="form-check form-switch align-self-center mb-0"><input class="form-check-input" type="checkbox" id="news-mine"><label class="form-check-label small" for="news-mine">Só as minhas</label></div>
                             </div>
                             <div class="table-responsive panel-box">
                                 <table class="table align-middle mb-0">
@@ -181,6 +187,68 @@
 
                 <div class="tab-pane fade" id="tab-reports" role="tabpanel"><div id="report-rows"></div></div>
                 <div class="tab-pane fade" id="tab-comments" role="tabpanel"><div id="comment-rows"></div></div>
+
+                <div class="tab-pane fade" id="tab-team" role="tabpanel">
+                    <div class="row g-4">
+                        <div class="col-lg-8">
+                            <div class="panel-box">
+                                <h2 class="h5 mb-2">Cargos da redação</h2>
+                                <p class="small mb-3" id="team-rules"></p>
+                                <form id="team-search" class="d-flex gap-2 mb-3" role="search" method="post">
+                                    <input type="search" class="form-control" name="q" maxlength="120" placeholder="Buscar por nome ou e-mail" aria-label="Buscar conta por nome ou e-mail">
+                                    <button class="btn btn-primary" type="submit">Buscar</button>
+                                </form>
+                                <div class="alert" id="team-msg" role="status" hidden></div>
+                                <div id="team-rows"></div>
+                            </div>
+                        </div>
+                        <div class="col-lg-4">
+                            <div class="panel-box mb-3">
+                                <h2 class="h6 fw-bold">Hierarquia</h2>
+                                <ol class="role-ladder small mb-0">
+                                    <li><strong>Administrador</strong> — tudo. Só é dado pelo SQL do Supabase.</li>
+                                    <li><strong>Coordenador</strong> — publica, arquiva, corrige e exclui matérias; denúncias, comentários e autores; coloca e tira jornalistas.</li>
+                                    <li><strong>Jornalista</strong> — cria e edita as próprias matérias até “Aprovada”; quem publica é o coordenador.</li>
+                                    <li><strong>Leitor</strong> — conta comum do portal.</li>
+                                </ol>
+                            </div>
+                            <div class="panel-box">
+                                <h2 class="h6 fw-bold">Últimas mudanças de cargo</h2>
+                                <ul class="admin-list small mb-0" id="team-log"></ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="tab-security" role="tabpanel">
+                    <div class="row g-4">
+                        <div class="col-lg-5">
+                            <div class="panel-box mb-3">
+                                <div class="d-flex justify-content-between align-items-center gap-2 mb-2"><h2 class="h5 mb-0">Proteções</h2><button type="button" class="btn btn-sm btn-outline-dark" id="sec-recheck">Verificar de novo</button></div>
+                                <ul class="security-checks" id="sec-checks"></ul>
+                            </div>
+                            <div class="panel-box">
+                                <h2 class="h5 mb-2">Equipe: verificação em duas etapas</h2>
+                                <p class="small text-muted mb-2">Obrigatória para jornalistas, coordenadores e administradores: sem ela o banco recusa qualquer ação da redação.</p>
+                                <div id="sec-staff"></div>
+                            </div>
+                        </div>
+                        <div class="col-lg-7">
+                            <div class="panel-box">
+                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                                    <h2 class="h5 mb-0">Auditoria</h2>
+                                    <select class="form-select form-select-sm w-auto" id="audit-filter" aria-label="Filtrar a auditoria">
+                                        <option value="">Tudo</option><option value="news">Matérias</option><option value="account">Contas e logins</option>
+                                        <option value="role">Cargos</option><option value="comment">Moderação</option><option value="report">Denúncias</option><option value="author">Autores</option>
+                                    </select>
+                                </div>
+                                <p class="small text-muted">Gravada pelo próprio banco de dados (gatilhos): ninguém consegue editar ou apagar um registro pelo site.</p>
+                                <div id="audit-rows"></div>
+                                <button type="button" class="btn btn-sm btn-outline-dark mt-2" id="audit-more" hidden>Carregar mais</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 

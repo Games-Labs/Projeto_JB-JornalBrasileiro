@@ -93,14 +93,18 @@
                     <h2 class="section-title">Termos de Uso</h2>
                     <p>Este é um protótipo educacional. O conteúdo é fictício e não deve ser tomado como informação real. Contas, comentários e denúncias são gravados no banco de dados do portal, hospedado no Supabase. Não envie informações reais, sigilosas ou de terceiros.</p>
                     <p>Comentários são públicos e podem ser removidos pela equipe editorial.</p>
+                    <p><strong>Idade mínima:</strong> é preciso ter <strong>16 anos ou mais</strong> para criar uma conta. Qualquer pessoa pode ler as notícias sem conta.</p>
                 </section>
 
                 <section id="privacidade" class="mb-5">
                     <h2 class="section-title">Política de Privacidade (LGPD)</h2>
                     <p>Em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018), informamos que:</p>
                     <ul>
-                        <li><strong>No servidor (Supabase):</strong> conta (e-mail e senha, gerenciados pelo Supabase Auth, que guarda a senha apenas como hash), perfil (nome, cidade, bio, interesses e foto), favoritos de quem tem conta, comentários, denúncias e inscrições na newsletter. Regras de acesso no banco de dados garantem que cada pessoa só veja e altere o que é seu; denúncias e a lista da newsletter só são visíveis para a equipe editorial.</li>
+                        <li><strong>No servidor (Supabase):</strong> conta (e-mail e senha, gerenciados pelo Supabase Auth, que guarda a senha apenas como hash), perfil (nome, cidade, bio, interesses e foto), favoritos de quem tem conta, comentários, denúncias e inscrições na newsletter. Regras de acesso no banco de dados garantem que cada pessoa só veja e altere o que é seu; denúncias e a lista da newsletter só são visíveis para a coordenação editorial.</li>
+                        <li><strong>Perfil público:</strong> nome, foto, “Sobre você”, cargo e data de entrada aparecem na sua página de perfil e ao lado dos seus comentários. E-mail, cidade e interesses nunca são públicos. Contas da equipe da redação exibem o selo do JB.</li>
                         <li><strong>Só no seu navegador:</strong> a sessão de login, o tema claro/escuro, suas escolhas de cookies, o histórico de leitura e os favoritos de quem navega sem conta. Apagar os dados do site no navegador remove essas informações.</li>
+                        <li><strong>Data de nascimento:</strong> usada só para conferir a idade mínima de 16 anos no cadastro (ou no primeiro acesso pelo Google). Ela não é guardada: fica registrado apenas que a idade foi confirmada.</li>
+                        <li><strong>Segurança:</strong> as páginas de login, cadastro e recuperação de senha usam o Cloudflare Turnstile (verificação anti-robô, que analisa sinais do navegador sem rastrear para publicidade). Quem entra com o Google compartilha com o JB só nome e e-mail. A verificação em duas etapas guarda no Supabase apenas a chave do seu app autenticador. Ações da redação e eventos de conta (login, troca de senha, ativação da verificação em duas etapas) ficam num registro de auditoria visível só para a coordenação, sem e-mail nem endereço IP.</li>
                         <li>A contagem de leituras de cada matéria é anônima: não guarda quem leu.</li>
                         <li>Não usamos ferramentas de publicidade nem de rastreamento de terceiros; a opção de métricas de audiência é demonstrativa. As fontes tipográficas são carregadas do Google Fonts.</li>
                         <li>Você pode alterar suas preferências a qualquer momento em <button type="button" class="btn btn-link p-0 align-baseline" data-open-cookies>Preferências de Cookies</button>.</li>

@@ -17,11 +17,25 @@ JB.authReady.then(function () {
         document.getElementById('interests').innerHTML = Object.keys(JB.CATEGORIES).map(k =>
             '<div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" id="i-' + k + '" value="' + k + '"' + ((u.interests || []).includes(k) ? ' checked' : '') + '>' +
             '<label class="form-check-label" for="i-' + k + '">' + JB.util.esc(JB.CATEGORIES[k].label) + '</label></div>').join('');
-        document.getElementById('role-badge').textContent = u.role === 'admin' ? 'Administrador / Editor' : 'Leitor cadastrado';
+        document.getElementById('role-badge').textContent = JB.util.isStaffRole(u.role) ? JB.util.roleLabel(u.role) + ' do JB' : 'Leitor cadastrado';
+        document.getElementById('role-seal').innerHTML = JB.util.sealHTML(u.role);
         document.getElementById('since').textContent = new Date(u.created).toLocaleDateString('pt-BR');
-        document.getElementById('admin-link').hidden = u.role !== 'admin';
+        document.getElementById('admin-link').hidden = !JB.util.isStaffRole(u.role);
+        document.getElementById('public-link').href = JB.util.profileUrl(u.id);
     }
     fill(me);
+
+    /* ---------- Segurança: status do MFA e campo do código na troca de senha ---------- */
+    const mfaOn = JB.mode === 'supabase' && JB.Auth.hasMfa && JB.Auth.hasMfa();
+    document.getElementById('mfa-status').innerHTML = JB.mode !== 'supabase' ? 'Verificação em duas etapas: indisponível no modo de demonstração local.'
+        : 'Verificação em duas etapas: <strong>' + (mfaOn ? 'ativa' : 'desativada') + '</strong>.' + (JB.util.isStaffRole(me.role) && !mfaOn ? ' <span class="text-danger">Obrigatória para a equipe.</span>' : '');
+    document.querySelector('#pass-form [data-mfa-field]').hidden = !mfaOn;
+    const passCaptcha = JB.Captcha.mount(document.querySelector('#pass-form [data-captcha]'));
+    const pwRules = document.querySelector('#pass-form [data-pw-rules]');
+    document.getElementById('p-new').addEventListener('input', e => {
+        const missing = JB.util.passwordIssues(e.target.value);
+        pwRules.innerHTML = e.target.value ? JB.util.passwordIssues('').map(r => '<li class="' + (missing.includes(r) ? 'todo' : 'done') + '">' + JB.util.esc(r) + '</li>').join('') : '';
+    });
 
     /* ---------- Foto de perfil ---------- */
     const renderAvatar = () => {
@@ -58,13 +72,18 @@ JB.authReady.then(function () {
     document.getElementById('pass-form').addEventListener('submit', async e => {
         e.preventDefault();
         const p = e.target.elements, btn = e.target.querySelector('button[type=submit]');
-        if (p.next.value.length < JB.PASSWORD_MIN) return toast('pass-msg', 'A nova senha precisa ter ao menos ' + JB.PASSWORD_MIN + ' caracteres.', 'danger');
+        const missing = JB.util.passwordIssues(p.next.value);
+        if (missing.length) return toast('pass-msg', 'A nova senha precisa ter ' + missing.join(', ') + '.', 'danger');
         if (p.next.value !== p.confirm.value) return toast('pass-msg', 'A confirmação não confere com a nova senha.', 'danger');
         btn.disabled = true;
-        const ok = await JB.Auth.changePassword(p.current.value, p.next.value);
+        const token = await passCaptcha.token();
+        const r = await JB.Auth.changePassword(p.current.value, p.next.value, token, p.mfa.value.trim());
+        passCaptcha.reset();
         btn.disabled = false;
-        if (!ok) return toast('pass-msg', 'Senha atual incorreta ou nova senha inválida.', 'danger');
-        e.target.reset(); toast('pass-msg', 'Senha alterada.');
+        // modo local devolve true/false; Supabase devolve { ok, error, mfa }
+        const ok = r === true || !!(r && r.ok);
+        if (!ok) { if (r && r.mfa) document.querySelector('#pass-form [data-mfa-field]').hidden = false; return toast('pass-msg', (r && r.error) || 'Senha atual incorreta ou nova senha inválida.', 'danger'); }
+        e.target.reset(); pwRules.innerHTML = ''; toast('pass-msg', 'Senha alterada.');
     });
 
     document.getElementById('logout').addEventListener('click', async () => { await JB.Auth.logout(); location.href = '../index.html'; });

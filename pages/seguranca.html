@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
+    <title>Segurança da conta — Jornal Brasileiro (JB)</title>
+    <link rel="icon" href="../assets/favicon/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon/favicon-16x16.png">
+    <link rel="apple-touch-icon" href="../assets/favicon/apple-touch-icon.png">
+    <link rel="manifest" href="../assets/favicon/site.webmanifest">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Merriweather:ital,wght@0,700;0,900;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/vendor/bootstrap/bootstrap.min.css">
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <script>try{var d=document.documentElement,s=localStorage;if(s.getItem('jb_theme')==='dark')d.setAttribute('data-bs-theme','dark');var a=JSON.parse(s.getItem('jb_a11y')||'{}')||{};if(a.font>0&&a.font<4)d.setAttribute('data-font',String(a.font|0));if(a.contrast)d.setAttribute('data-contrast','high')}catch(e){}</script>
+</head>
+<body data-root="../" data-page="seguranca">
+    <div id="site-top"></div>
+    <main class="container main-layout">
+        <div id="sec-loading" class="jb-loading" role="status"><span class="jb-spinner" aria-hidden="true"></span>Carregando…</div>
+
+        <div id="sec-guest" class="auth-card text-center" hidden>
+            <h1 class="h4">Segurança da conta</h1>
+            <p>Entre na sua conta para confirmar a idade e configurar a verificação em duas etapas.</p>
+            <a class="btn btn-primary" href="login.html?next=seguranca.html">Entrar</a>
+        </div>
+
+        <div id="sec-content" hidden>
+            <h1 class="page-title">Segurança da conta</h1>
+            <p class="page-lead" id="sec-lead"></p>
+            <div class="alert" id="sec-msg" role="status" hidden></div>
+
+            <div class="row g-4">
+                <div class="col-lg-7">
+                    <section class="panel-box mb-4" id="age-box" aria-labelledby="age-title" hidden>
+                        <h2 class="h5" id="age-title">Confirme sua idade</h2>
+                        <p class="small">O Jornal Brasileiro aceita contas a partir de <strong>16 anos</strong>. Quem entra com o Google (ou tinha conta antes desta regra) confirma uma vez. A data só é conferida: não fica guardada. Se ela indicar menos de 16 anos, a conta é apagada na hora.</p>
+                        <form id="age-form" method="post" novalidate>
+                            <div class="mb-3"><label class="form-label" for="age-birth">Data de nascimento</label><input type="date" class="form-control" id="age-birth" name="birth" min="1900-01-01" required></div>
+                            <button class="btn btn-primary" type="submit">Confirmar idade</button>
+                        </form>
+                    </section>
+
+                    <section class="panel-box mb-4" id="mfa-challenge" aria-labelledby="challenge-title" hidden>
+                        <h2 class="h5" id="challenge-title">Digite o código do app autenticador</h2>
+                        <p class="small">Sua conta usa verificação em duas etapas. Abra o app autenticador (Google Authenticator, Microsoft Authenticator, Authy…) e digite os 6 números do JB.</p>
+                        <form id="challenge-form" method="post" novalidate>
+                            <div class="mb-3"><label class="form-label" for="challenge-code">Código de 6 dígitos</label><input type="text" class="form-control code-input" id="challenge-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required></div>
+                            <button class="btn btn-primary" type="submit">Verificar</button>
+                            <button class="btn btn-link" type="button" id="challenge-logout">Sair desta conta</button>
+                        </form>
+                        <p class="small text-muted mt-3 mb-0">Perdeu o aparelho? Peça a um administrador do JB para remover o fator pelo painel do Supabase; depois ative de novo.</p>
+                    </section>
+
+                    <section class="panel-box mb-4" id="mfa-box" aria-labelledby="mfa-title" hidden>
+                        <h2 class="h5" id="mfa-title">Verificação em duas etapas</h2>
+                        <p class="small" id="mfa-intro"></p>
+                        <ul class="admin-list" id="mfa-factors"></ul>
+                        <button class="btn btn-primary" type="button" id="mfa-start">Ativar com um app autenticador</button>
+                        <div id="mfa-enroll" class="mt-3" hidden>
+                            <ol class="small ps-3">
+                                <li>Instale um app autenticador no celular (Google Authenticator, Microsoft Authenticator, Authy…).</li>
+                                <li>No app, adicione uma conta lendo o QR code abaixo (ou digite a chave).</li>
+                                <li>Digite os 6 números que o app mostrar para o JB.</li>
+                            </ol>
+                            <img id="mfa-qr" class="mfa-qr" width="200" height="200" alt="QR code para adicionar o JB no app autenticador">
+                            <p class="small mb-3">Não consegue ler o QR code? Digite a chave <code id="mfa-secret" class="mfa-secret"></code> no app, ou <a id="mfa-uri" href="#">abra direto no app</a> (no celular).</p>
+                            <form id="enroll-form" method="post" novalidate>
+                                <div class="mb-3"><label class="form-label" for="enroll-code">Código de 6 dígitos</label><input type="text" class="form-control code-input" id="enroll-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required></div>
+                                <button class="btn btn-primary" type="submit">Confirmar e ativar</button>
+                                <button class="btn btn-link" type="button" id="enroll-cancel">Cancelar</button>
+                            </form>
+                        </div>
+                    </section>
+                    <p id="sec-next" hidden><a class="btn btn-primary" id="next-link" href="perfil.html">Continuar</a></p>
+                </div>
+                <aside class="col-lg-5">
+                    <div class="panel-box">
+                        <h2 class="h6">Como o JB protege sua conta</h2>
+                        <ul class="small mb-0 ps-3">
+                            <li>Login, cadastro e recuperação de senha têm verificação anti-robô (CAPTCHA).</li>
+                            <li>Senhas com no mínimo 8 caracteres, letra minúscula, maiúscula, número e símbolo.</li>
+                            <li>Tentativas seguidas com senha errada são bloqueadas por um tempo.</li>
+                            <li>A equipe da redação (jornalistas, coordenadores e administradores) só usa o painel com a verificação em duas etapas.</li>
+                            <li>Para leitores ela é opcional, mas recomendada: mesmo quem descobrir sua senha não entra sem o seu celular.</li>
+                        </ul>
+                    </div>
+                </aside>
+            </div>
+        </div>
+    </main>
+    <div id="site-bottom"></div>
+    <script src="../assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="../assets/vendor/supabase/supabase.js"></script>
+    <script src="../assets/js/config.js"></script>
+    <script src="../assets/js/storage.js"></script>
+    <script src="../assets/js/supabase-backend.js"></script>
+    <script src="../assets/js/layout.js"></script>
+    <script src="../assets/js/seguranca.js"></script>
+</body>
+</html>
