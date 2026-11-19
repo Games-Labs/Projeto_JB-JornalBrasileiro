@@ -33,17 +33,31 @@ O **Cloudflare Pages** só serve os arquivos estáticos.
 
 ### Recuperação de senha ("Esqueci minha senha")
 
-O fluxo usa só o Supabase Auth: `resetPasswordForEmail()` envia o e-mail, o link abre `pages/redefinir-senha.html` com uma sessão de recuperação e `updateUser()` grava a senha nova. Depois disso o site encerra todas as sessões da conta (inclusive em outros aparelhos). Configure no painel:
+O fluxo usa só o Supabase Auth: `resetPasswordForEmail()` envia um e-mail com **código de verificação** e **link**. O leitor escolhe:
+
+- **Código:** digita o código em `pages/recuperar-senha.html`; o Supabase o confere (`verifyOtp` com `type: 'recovery'`) e abre uma sessão de recuperação na própria página. Não depende das Redirect URLs, então funciona também em teste local.
+- **Link:** abre `pages/redefinir-senha.html` com a sessão de recuperação (precisa das URLs do passo 7).
+
+Nos dois casos `updateUser()` grava a senha nova e o site encerra todas as sessões da conta (inclusive em outros aparelhos). Código errado, vencido, já usado ou de e-mail sem conta recebe a mesma resposta. Configure no painel:
 
 1. **URLs** — passo 7 acima.
-2. **SMTP próprio (necessário para usuários reais)** — **Authentication → Emails → SMTP Settings**. O servidor de e-mail padrão do Supabase só entrega para e-mails da **equipe do projeto** e tem limite de poucos e-mails por hora: sem SMTP próprio, leitores comuns **não recebem** o link (nem o de confirmação de cadastro). Serviços com plano gratuito: Resend, Brevo, SendGrid; ou o SMTP de uma conta de e-mail. Depois de configurar, ajuste **Authentication → Rate Limits → emails por hora**.
-3. **Modelo do e-mail** (opcional) — **Authentication → Emails → Templates → Reset Password**: pode traduzir o texto, mas mantenha o link `{{ .ConfirmationURL }}`.
-4. **Validade do link** — **Authentication → Sign In / Providers → Email → Email OTP Expiration** (padrão 3600 s). Link vencido ou já usado mostra a tela "Link expirado ou já utilizado" com o botão para pedir outro.
+2. **SMTP próprio (necessário para usuários reais)** — **Authentication → Emails → SMTP Settings**. O servidor de e-mail padrão do Supabase só entrega para e-mails da **equipe do projeto** e tem limite de poucos e-mails por hora: sem SMTP próprio, leitores comuns **não recebem** o código nem o link (nem o de confirmação de cadastro). Serviços com plano gratuito: Resend, Brevo, SendGrid; ou o SMTP de uma conta de e-mail. Depois de configurar, ajuste **Authentication → Rate Limits → emails por hora**.
+3. **Modelo do e-mail (obrigatório para o código)** — **Authentication → Emails → Templates → Reset Password**. O modelo padrão só tem o link; inclua `{{ .Token }}` para o código aparecer. Assunto sugerido: `Recuperação de senha — Jornal Brasileiro`. Corpo sugerido:
+
+   ```html
+   <h2>Recuperação de senha</h2>
+   <p>Recebemos um pedido para criar uma nova senha na sua conta do Jornal Brasileiro.</p>
+   <p>Seu código de verificação:</p>
+   <p style="font-size:28px;font-weight:700;letter-spacing:6px">{{ .Token }}</p>
+   <p>Digite o código na página "Esqueci minha senha" ou, se preferir, <a href="{{ .ConfirmationURL }}">clique aqui para criar a nova senha</a>.</p>
+   <p>O código e o link valem por tempo limitado e só podem ser usados uma vez. Se você não pediu, ignore este e-mail: sua senha continua a mesma.</p>
+   ```
+4. **Validade e tamanho do código** — **Authentication → Sign In / Providers → Email → Email OTP Expiration** (padrão 3600 s) e **Email OTP Length** (6 a 10 dígitos; o site aceita qualquer um). Link vencido ou já usado mostra a tela "Link expirado ou já utilizado"; código vencido mostra o aviso na própria página. O Supabase também limita as tentativas de verificação por IP (**Authentication → Rate Limits**).
 5. **Senhas** — **Authentication → Sign In / Providers → Email** (tamanho mínimo e caracteres exigidos): o site exige no mínimo 6 caracteres, igual ao padrão do Supabase; a documentação do Supabase recomenda 8 ou mais. Se aumentar no painel, atualize `PASSWORD_MIN` em `assets/js/storage.js` e os textos "mín. 6 caracteres" das páginas. No plano Pro, ative também **Leaked password protection**.
 
 Por segurança, a tela "Esqueci minha senha" responde sempre a mesma coisa, exista ou não a conta. Se um e-mail não chegar, veja **Authentication → Logs** no painel (é lá que aparecem erros de SMTP).
 
-**Teste completo:** cadastre uma conta com um e-mail seu → **Entrar → Esqueci minha senha** → abra o link do e-mail → defina a nova senha → entre com ela (a antiga deve falhar).
+**Teste completo:** cadastre uma conta com um e-mail seu → **Entrar → Esqueci minha senha** → digite o código do e-mail e a nova senha (ou abra o link) → entre com ela (a antiga deve falhar).
 
 ### Criar o primeiro administrador/editor
 

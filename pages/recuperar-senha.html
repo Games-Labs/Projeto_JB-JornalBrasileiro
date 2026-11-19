@@ -23,24 +23,40 @@
         <div class="auth-card">
             <div id="forgot-step">
                 <h1 class="h3 mb-2">Esqueci minha senha</h1>
-                <p class="small mb-3">Informe o e-mail da sua conta. Enviaremos um link para você criar uma nova senha.</p>
-                <div class="alert alert-danger" id="form-error" role="alert" hidden></div>
+                <p class="small mb-3">Informe o e-mail da sua conta. Enviaremos um código de verificação e um link para você criar uma nova senha.</p>
                 <form id="forgot-form" method="post" novalidate>
                     <div class="mb-3"><label class="form-label" for="email">E-mail</label><input type="email" class="form-control" id="email" name="email" autocomplete="email" maxlength="200" required></div>
-                    <button class="btn btn-primary w-100" type="submit">Enviar link de recuperação</button>
+                    <button class="btn btn-primary w-100" type="submit">Enviar código de recuperação</button>
                 </form>
+                <p class="mt-3 mb-0 text-center small"><button type="button" class="btn btn-link btn-sm p-0 align-baseline" id="have-code">Já tenho um código de verificação</button></p>
             </div>
-            <div id="forgot-sent" role="status" hidden>
+
+            <div id="forgot-sent" hidden>
                 <h1 class="h3 mb-2">Verifique seu e-mail</h1>
-                <p>Se existir uma conta cadastrada com <strong id="sent-email"></strong>, você receberá em instantes um e-mail com o link para redefinir a senha.</p>
-                <ul class="small mb-3">
-                    <li>O link vale por tempo limitado e só pode ser usado uma vez.</li>
+                <p id="sent-msg" role="status">Se existir uma conta cadastrada com <strong id="sent-email"></strong>, você receberá em instantes um e-mail com um <strong>código de verificação</strong> e um link. Use o que preferir: digite o código abaixo ou abra o link.</p>
+                <p id="nosent-msg" class="small" hidden>Digite o e-mail da conta, o código que chegou no e-mail de recuperação e a nova senha.</p>
+                <form id="code-form" method="post" novalidate>
+                    <div class="mb-3"><label class="form-label" for="code-email">E-mail da conta</label><input type="email" class="form-control" id="code-email" name="email" autocomplete="email" maxlength="200" required></div>
+                    <div class="mb-3"><label class="form-label" for="code">Código de verificação</label><input type="text" class="form-control code-input" id="code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="12" required aria-describedby="code-help"><div class="form-text" id="code-help">Só números, como aparece no e-mail. Vale por tempo limitado e uma única vez.</div></div>
+                    <div class="mb-3"><label class="form-label" for="new-password">Nova senha (mín. 6 caracteres)</label><input type="password" class="form-control" id="new-password" name="password" autocomplete="new-password" minlength="6" required></div>
+                    <div class="mb-3"><label class="form-label" for="new-confirm">Confirmar nova senha</label><input type="password" class="form-control" id="new-confirm" name="confirm" autocomplete="new-password" required></div>
+                    <button class="btn btn-primary w-100" type="submit">Verificar código e salvar senha</button>
+                </form>
+                <ul class="small mt-3 mb-3">
                     <li>Não chegou? Confira a caixa de spam ou peça de novo daqui a alguns minutos.</li>
-                    <li>Abra o link neste mesmo endereço do site (não é preciso estar no mesmo navegador).</li>
+                    <li>O link do e-mail também funciona: abra-o neste mesmo endereço do site.</li>
                 </ul>
-                <a class="btn btn-outline-dark w-100" href="login.html">Voltar para o login</a>
+                <button type="button" class="btn btn-outline-dark w-100" id="resend">Pedir um novo código</button>
             </div>
-            <p class="mt-3 mb-0 text-center small">Lembrou a senha? <a href="login.html">Entrar</a></p>
+
+            <div id="forgot-done" role="status" hidden>
+                <h1 class="h3 mb-2">Senha alterada!</h1>
+                <p>O Supabase confirmou o código e a sua senha foi redefinida. Por segurança, encerramos as sessões abertas: entre novamente com a nova senha.</p>
+                <a class="btn btn-primary w-100" href="login.html?senha=alterada">Entrar</a>
+            </div>
+
+            <div class="alert alert-danger mt-3 mb-0" id="form-error" role="alert" hidden></div>
+            <p class="mt-3 mb-0 text-center small" id="login-hint">Lembrou a senha? <a href="login.html">Entrar</a></p>
         </div>
     </main>
     <div id="site-bottom"></div>

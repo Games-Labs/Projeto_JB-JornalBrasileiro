@@ -187,6 +187,7 @@ a.category-tag:hover { color: var(--carmine-dark); text-decoration: underline; }
 .security-notes { margin-top: 15px; list-style: none; padding: 0; font-size: .9rem; font-weight: 600; }
 .form-label { font-weight: 600; font-size: .9rem; }
 .auth-card { max-width: 480px; margin: 0 auto; background: var(--khaki-light); border: 2px solid var(--coffee); border-radius: 4px; padding: 30px; }
+.auth-card .code-input { letter-spacing: .3em; font-variant-numeric: tabular-nums; font-weight: 600; }
 .panel-box { background: rgba(255,255,255,.35); border: 1px solid var(--khaki); border-radius: 4px; padding: 20px; }
 .table { --bs-table-bg: transparent; --bs-table-color: var(--coffee); --bs-table-border-color: var(--khaki); }
 .admin-thumb { width: 64px; min-width: 64px; max-width: none; height: 40px; object-fit: cover; border: 1px solid var(--khaki); }

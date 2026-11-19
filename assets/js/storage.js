@@ -364,6 +364,7 @@
         },
         // Recuperação de senha exige envio de e-mail: só existe no modo Supabase.
         async requestPasswordReset() { return { ok: false, error: 'A recuperação de senha por e-mail só funciona com o Supabase configurado.' }; },
+        async verifyRecoveryCode() { return { ok: false, error: 'A recuperação de senha por e-mail só funciona com o Supabase configurado.' }; },
         async recoveryState() { return 'unsupported'; },
         async updatePassword() { return { ok: false, error: 'A recuperação de senha por e-mail só funciona com o Supabase configurado.' }; }
     };

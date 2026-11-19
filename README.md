@@ -33,7 +33,7 @@ Aplicação **Multi-Page** com front-end estático (**HTML5, CSS3 e JavaScript n
 3. Navegação entre **páginas HTML independentes**.
 4. Filtro de notícias por 12 editorias (Política, Economia, Esportes, Investigação, Tecnologia, Infraestrutura, Brasil, Mundo, Educação, Saúde, Meio Ambiente, Cultura), cada uma com página própria (destaque + descrição), busca por texto e **busca avançada** (autor, tipo de conteúdo, período e editoria).
 5. Formulário de denúncias / envio de pautas com opção de anonimato; só a equipe editorial lê as denúncias.
-6. Cadastro, login e **recuperação de senha por e-mail** (Supabase Auth).
+6. Cadastro, login e **recuperação de senha por e-mail** (Supabase Auth): o leitor digita o **código de verificação** que o Supabase envia e confere, ou abre o link do mesmo e-mail.
 7. Salvamento e edição do perfil.
 8. Área **Minhas Informações** para usuários autenticados.
 9. Painel Administrativo com **CRUD** de notícias, **fluxo editorial** (rascunho → em revisão → aprovada → publicada → arquivada), **agendamento**, **histórico de versões** com restauração, cadastro de **autores**, relatórios de **audiência**, dashboard, caixa de denúncias e moderação de comentários.
@@ -101,7 +101,7 @@ JB/
 │   ├── denuncias.html         # Denuncie / Envie uma Pauta
 │   ├── institucional.html     # Quem somos, políticas editorial e de correções, metodologia, expediente, termos, LGPD
 │   ├── login.html · cadastro.html · perfil.html
-│   ├── recuperar-senha.html   # Pedir o link de recuperação de senha
+│   ├── recuperar-senha.html   # Pedir a recuperação e confirmar o código do e-mail com a nova senha
 │   ├── redefinir-senha.html   # Aberta pelo link do e-mail: define a nova senha
 │   └── admin.html             # Painel Administrativo
 ├── assets/
@@ -129,7 +129,7 @@ JB/
 | **Supabase Auth** | Contas e senhas (o Supabase guarda a senha apenas como hash) |
 | **Supabase Storage** | Imagens enviadas pelo painel (bucket público `news-images`; só editores enviam) |
 | **Navegador — `localStorage`** | Sessão de login (gerenciada pelo supabase-js), `jb_theme` (tema), `jb_a11y` (tamanho do texto e alto contraste), `jb_cookies` (consentimento), `jb_history` (histórico de leitura) e `jb_favs` (favoritos de visitantes, que vão para a conta no login) |
-| **Navegador — `sessionStorage`** | `jb_recovery`: marca temporária de que a aba abriu um link de recuperação de senha (sem senha nem token) |
+| **Navegador — `sessionStorage`** | `jb_recovery`: marca temporária de que a aba confirmou um código ou abriu um link de recuperação de senha (sem senha nem token) |
 
 > Senhas **nunca** são guardadas no navegador. No modo Supabase, dados antigos do modo de demonstração (contas, sessão, denúncias) são apagados do navegador na primeira visita.
 > No **modo de demonstração local** tudo fica no `localStorage` (`jb_news`, `jb_authors`, `jb_versions`, `jb_users`, `jb_session`, `jb_reports`, `jb_comments`, `jb_views`, `jb_newsletter`...), com login **simulado** (hash simples, sem segurança real). Para reiniciar, limpe o armazenamento do site.
@@ -176,7 +176,7 @@ Não foram encontradas falhas de XSS (todo HTML dinâmico passa por `JB.util.esc
 - **Segurança no banco** ([`supabase/04_auditoria_seguranca.sql`](supabase/04_auditoria_seguranca.sql), já incorporado ao `01_schema.sql`): privilégios mínimos por coluna, datas e papéis definidos só pelo banco, comentário de usuário logado sempre no nome da conta, limites de tamanho, RLS otimizado e índices. Permissões testadas para visitante, leitor e administrador.
 - **Segurança no navegador:** cabeçalhos HTTP com CSP, HSTS e proteção contra *clickjacking* (`_headers`); formulários sensíveis nunca enviam dados pela URL; dados legados do modo local são apagados.
 - **Imagens:** envios do painel vão para o **Supabase Storage** (bucket `news-images`, escrita só para editores), e a imagem antiga é apagada ao trocar ou excluir a notícia.
-- **Recuperação de senha:** "Esqueci minha senha" com o fluxo oficial do Supabase Auth (`resetPasswordForEmail` → link por e-mail → `updateUser`). Resposta igual exista ou não a conta, confirmação de senha, telas de link inválido/expirado e de sucesso, e encerramento de todas as sessões após a troca.
+- **Recuperação de senha:** "Esqueci minha senha" com o fluxo oficial do Supabase Auth (`resetPasswordForEmail` → e-mail com código e link → `verifyOtp` do código ou abertura do link → `updateUser`). Resposta igual exista ou não a conta (e para qualquer código recusado), confirmação de senha, telas de link inválido/expirado e de sucesso, e encerramento de todas as sessões após a troca. O código funciona mesmo sem as Redirect URLs configuradas.
 - **Armazenamento local:** cada uso foi avaliado; ficam no navegador apenas tema, preferências de acessibilidade, consentimento de cookies, histórico de leitura e favoritos de visitantes (que passam para a conta no login). Documentação e textos da interface corrigidos.
 - **Celular:** menu do usuário dentro da tela, busca ocupando a largura toda, campos sem zoom automático no iPhone, cabeçalho em uma linha até 320 px e aviso de cookies sem cobrir o conteúdo.
 
@@ -185,11 +185,12 @@ Não foram encontradas falhas de XSS (todo HTML dinâmico passa por `JB.util.esc
 - Não há etapa de build, lint nem suíte de testes no projeto; todos os scripts passaram por verificação de sintaxe (`node --check`).
 - **Testes automatizados com Chrome headless** (servidor local aplicando o `_headers`, com CSP ativa): visitante, leitor, administrador (upload no Storage, fluxo editorial, exclusão, moderação, rollback com a rede cortada), recuperação de senha de ponta a ponta com sessão de recuperação real, modo de demonstração local, rede normal/bloqueada/sem resposta e larguras de 320, 360, 390, 768, 1500 e 1920 px. Todos passando.
 - **Testes de permissão no banco** em transações desfeitas, para visitante, leitor e administrador.
-- Não testado automaticamente: a entrega real do e-mail de recuperação (depende do SMTP configurado no Supabase).
+- **Recuperação por código:** código recusado testado contra o Supabase real; fluxo completo (verificação, senha recusada e nova tentativa sem reenviar o código, troca da senha e encerramento global das sessões) com as respostas do Supabase simuladas no navegador.
+- Não testado automaticamente: a entrega real do e-mail de recuperação e um código real (dependem do SMTP e do modelo de e-mail configurados no Supabase).
 
 ### Pendências e riscos conhecidos
 
-- Configurar **SMTP próprio** e as **Redirect URLs** no Supabase (ver [docs/DEPLOY.md](docs/DEPLOY.md)); sem isso, leitores não recebem o e-mail de recuperação nem o de confirmação.
+- Configurar **SMTP próprio**, as **Redirect URLs** e o **modelo do e-mail "Reset Password" com `{{ .Token }}`** no Supabase (ver [docs/DEPLOY.md](docs/DEPLOY.md)); sem isso, leitores não recebem o e-mail de recuperação nem o de confirmação, e o e-mail não mostra o código.
 - Sem CAPTCHA: comentários anônimos, denúncias, newsletter e contador de leituras podem receber spam.
 - Notícias sem paginação (adequado para dezenas ou poucas centenas de matérias).
 - Proteção contra senhas vazadas (HaveIBeenPwned) só existe no plano Pro do Supabase.

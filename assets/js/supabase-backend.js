@@ -408,6 +408,25 @@
                 return { ok: true };
             } catch (e) { console.error(e); return { ok: false, error: 'Falha de conexão. Verifique sua internet e tente novamente.' }; }
         },
+        // Alternativa ao link: o código numérico do mesmo e-mail ({{ .Token }} no modelo "Reset Password").
+        // O Supabase confere o código (verifyOtp type 'recovery'), abre uma sessão de recuperação e avisa
+        // PASSWORD_RECOVERY, o que libera updatePassword() nesta aba. Não depende das Redirect URLs.
+        async verifyRecoveryCode(email, code) {
+            if (!sb) return { ok: false, error: 'Sem conexão com o servidor.' };
+            const token = String(code || '').replace(/\s+/g, '');
+            if (!/^\d{6,10}$/.test(token)) return { ok: false, error: 'Digite o código numérico que chegou no e-mail.' };
+            try {
+                const { data, error } = await sb.auth.verifyOtp({ email: email.trim().toLowerCase(), token, type: 'recovery' });
+                if (!error && data && data.session) {
+                    recoveryUser = data.session.user.id; ss.set(recoveryUser);   // além do evento, para não depender da ordem
+                    return { ok: true };
+                }
+                if (error && (error.status === 429 || /rate limit|too many/i.test(error.message || ''))) return { ok: false, error: authError(error) };
+                if (error && (error.name === 'AuthRetryableFetchError' || !error.status)) return { ok: false, error: 'Falha de conexão. Verifique sua internet e tente novamente.' };
+                // Código errado, vencido, já usado ou e-mail sem conta: mesma resposta (não revela quem é cadastrado).
+                return { ok: false, invalid: true, error: 'Código inválido ou expirado. Confira o e-mail e o código mais recente, ou peça um novo.' };
+            } catch (e) { console.error(e); return { ok: false, error: 'Falha de conexão. Verifique sua internet e tente novamente.' }; }
+        },
         // 'ready' (pode redefinir) | 'expired' (link vencido) | 'invalid' (sem sessão de recuperação)
         async recoveryState() {
             if (!sb) return 'invalid';

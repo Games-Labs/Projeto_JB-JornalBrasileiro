@@ -1,7 +1,8 @@
 /* Contas: login (#login-form), cadastro (#register-form) e recuperação de senha
-   (#forgot-form em recuperar-senha.html, #reset-form em redefinir-senha.html).
-   A recuperação usa o fluxo oficial do Supabase Auth: resetPasswordForEmail() envia o link,
-   o link abre redefinir-senha.html com uma sessão de recuperação e updateUser() grava a senha. */
+   (#forgot-form e #code-form em recuperar-senha.html, #reset-form em redefinir-senha.html).
+   A recuperação usa o fluxo oficial do Supabase Auth: resetPasswordForEmail() envia um e-mail com
+   código e link. O código é conferido pelo Supabase (verifyOtp type 'recovery') na própria página;
+   o link abre redefinir-senha.html. Os dois criam uma sessão de recuperação e updateUser() grava a senha. */
 // Os formulários recebem o listener na hora (antes da sessão carregar), para nunca serem
 // enviados de forma nativa (o que poria e-mail e senha na URL); cada envio espera JB.authReady.
 (function () {
@@ -63,23 +64,67 @@
         location.href = next || 'perfil.html';
     });
 
-    /* ---------- Recuperação: 1) pedir o link ---------- */
+    /* ---------- Recuperação: 1) pedir o e-mail (código + link) e 1b) confirmar o código ---------- */
     const forgot = document.getElementById('forgot-form');
-    if (forgot) forgot.addEventListener('submit', async e => {
-        e.preventDefault(); hide(); await JB.authReady;
-        const email = forgot.elements.email.value;
-        if (!emailOk(email)) return show('Informe um e-mail válido.');
-        busy(forgot, true, 'Enviando…');
-        const r = await JB.Auth.requestPasswordReset(email);
-        busy(forgot, false);
-        if (!r.ok) return show(r.error);
-        // Mesma resposta exista ou não a conta (não revela quem é cadastrado).
-        document.getElementById('forgot-step').hidden = true;
-        document.getElementById('sent-email').textContent = email.trim();
-        document.getElementById('forgot-sent').hidden = false;
-    });
+    const codeForm = document.getElementById('code-form');
+    if (forgot && codeForm) {
+        const step = id => {
+            ['forgot-step', 'forgot-sent', 'forgot-done'].forEach(s => { document.getElementById(s).hidden = s !== id; });
+            document.getElementById('login-hint').hidden = id === 'forgot-done';
+            hide();
+        };
+        const toCode = (email, sent) => {
+            email = email.trim();
+            codeForm.elements.email.value = email;
+            document.getElementById('sent-email').textContent = email;
+            document.getElementById('sent-msg').hidden = !sent;
+            document.getElementById('nosent-msg').hidden = sent;
+            step('forgot-sent');
+            (emailOk(email) ? codeForm.elements.code : codeForm.elements.email).focus();
+        };
+        // E-mail cujo código o Supabase já aceitou: se só a senha for recusada, não pede o código de novo
+        // (ele é de uso único). A sessão de recuperação fica só nesta aba (jb_recovery).
+        let verifiedFor = '';
 
-    /* ---------- Recuperação: 2) definir a nova senha ---------- */
+        forgot.addEventListener('submit', async e => {
+            e.preventDefault(); hide(); await JB.authReady;
+            const email = forgot.elements.email.value;
+            if (!emailOk(email)) return show('Informe um e-mail válido.');
+            busy(forgot, true, 'Enviando…');
+            const r = await JB.Auth.requestPasswordReset(email);
+            busy(forgot, false);
+            if (!r.ok) return show(r.error);
+            toCode(email, true);   // mesma resposta exista ou não a conta (não revela quem é cadastrado)
+        });
+        document.getElementById('have-code').addEventListener('click', () => toCode(forgot.elements.email.value, false));
+        document.getElementById('resend').addEventListener('click', () => {
+            forgot.elements.email.value = codeForm.elements.email.value;
+            step('forgot-step'); forgot.elements.email.focus();
+        });
+
+        codeForm.addEventListener('submit', async e => {
+            e.preventDefault(); hide(); await JB.authReady;
+            const f = codeForm.elements, email = f.email.value.trim().toLowerCase();
+            if (!emailOk(email)) return show('Informe o e-mail da conta.');
+            const already = verifiedFor === email;
+            if (!already && !/^\d{6,10}$/.test(f.code.value.replace(/\s+/g, ''))) return show('Digite o código numérico que chegou no e-mail.');
+            const err = passwordError(f.password.value, f.confirm.value);
+            if (err) return show(err);
+            busy(codeForm, true, 'Verificando…');
+            if (!already) {
+                const v = await JB.Auth.verifyRecoveryCode(email, f.code.value);
+                if (!v.ok) { busy(codeForm, false); return show(v.error); }
+                verifiedFor = email;
+            }
+            const r = await JB.Auth.updatePassword(f.password.value);
+            busy(codeForm, false);
+            if (r.ok) { codeForm.reset(); verifiedFor = ''; return step('forgot-done'); }
+            if (r.expired) { verifiedFor = ''; return show('A verificação expirou. Peça um novo código.'); }
+            show(r.error);
+        });
+    }
+
+    /* ---------- Recuperação: 2) definir a nova senha (aberta pelo link do e-mail) ---------- */
     const reset = document.getElementById('reset-form');
     if (reset) {
         const states = ['reset-checking', 'reset-step', 'reset-invalid', 'reset-done'];
@@ -88,7 +133,7 @@
             document.getElementById('invalid-title').textContent = expired ? 'Link expirado ou já utilizado' : 'Link de recuperação inválido';
             document.getElementById('invalid-text').textContent = expired
                 ? 'Por segurança, o link de recuperação vale por tempo limitado e só pode ser usado uma vez. Peça um novo link para continuar.'
-                : 'Esta página só funciona a partir do link enviado por e-mail. Abra o link mais recente que você recebeu ou peça um novo.';
+                : 'Esta página só funciona a partir do link enviado por e-mail. Abra o link mais recente que você recebeu, digite o código do e-mail em "Esqueci minha senha" ou peça um novo.';
             state('reset-invalid');
         };
         JB.Auth.recoveryState().then(s => {
