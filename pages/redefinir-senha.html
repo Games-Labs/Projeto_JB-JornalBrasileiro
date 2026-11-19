@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex">
+    <meta name="referrer" content="no-referrer">
+    <title>Redefinir senha — Jornal Brasileiro (JB)</title>
+    <link rel="icon" href="../assets/favicon/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon/favicon-16x16.png">
+    <link rel="apple-touch-icon" href="../assets/favicon/apple-touch-icon.png">
+    <link rel="manifest" href="../assets/favicon/site.webmanifest">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Merriweather:ital,wght@0,700;0,900;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../assets/vendor/bootstrap/bootstrap.min.css">
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <script>try{var d=document.documentElement,s=localStorage;if(s.getItem('jb_theme')==='dark')d.setAttribute('data-bs-theme','dark');var a=JSON.parse(s.getItem('jb_a11y')||'{}')||{};if(a.font>0&&a.font<4)d.setAttribute('data-font',String(a.font|0));if(a.contrast)d.setAttribute('data-contrast','high')}catch(e){}</script>
+</head>
+<body data-root="../" data-page="login">
+    <div id="site-top"></div>
+    <main class="container main-layout">
+        <div class="auth-card">
+            <div id="reset-checking"><div class="jb-loading" role="status"><span class="jb-spinner" aria-hidden="true"></span>Verificando o link de recuperação…</div></div>
+
+            <div id="reset-step" hidden>
+                <h1 class="h3 mb-2">Criar nova senha</h1>
+                <p class="small mb-3">Escolha uma senha nova para a sua conta. Depois de salvar, todas as sessões abertas serão encerradas e você entra com a senha nova.</p>
+                <div class="alert alert-danger" id="form-error" role="alert" hidden></div>
+                <form id="reset-form" method="post" novalidate>
+                    <div class="mb-3"><label class="form-label" for="password">Nova senha (mín. 6 caracteres)</label><input type="password" class="form-control" id="password" name="password" autocomplete="new-password" minlength="6" required></div>
+                    <div class="mb-3"><label class="form-label" for="confirm">Confirmar nova senha</label><input type="password" class="form-control" id="confirm" name="confirm" autocomplete="new-password" required></div>
+                    <button class="btn btn-primary w-100" type="submit">Salvar nova senha</button>
+                </form>
+            </div>
+
+            <div id="reset-invalid" role="alert" hidden>
+                <h1 class="h3 mb-2" id="invalid-title">Link de recuperação inválido</h1>
+                <p id="invalid-text"></p>
+                <a class="btn btn-primary w-100 mb-2" href="recuperar-senha.html">Pedir um novo link</a>
+                <a class="btn btn-outline-dark w-100" href="login.html">Voltar para o login</a>
+            </div>
+
+            <div id="reset-done" role="status" hidden>
+                <h1 class="h3 mb-2">Senha alterada!</h1>
+                <p>Sua senha foi redefinida com sucesso. Por segurança, encerramos as sessões abertas: entre novamente com a nova senha.</p>
+                <a class="btn btn-primary w-100" href="login.html?senha=alterada">Entrar</a>
+            </div>
+        </div>
+    </main>
+    <div id="site-bottom"></div>
+    <script src="../assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="../assets/vendor/supabase/supabase.js"></script>
+    <script src="../assets/js/config.js"></script>
+    <script src="../assets/js/storage.js"></script>
+    <script src="../assets/js/supabase-backend.js"></script>
+    <script src="../assets/js/layout.js"></script>
+    <script src="../assets/js/auth.js"></script>
+</body>
+</html>

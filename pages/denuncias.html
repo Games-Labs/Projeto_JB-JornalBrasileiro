@@ -14,7 +14,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Merriweather:ital,wght@0,700;0,900;1,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../assets/vendor/bootstrap/bootstrap.min.css">
     <link rel="stylesheet" href="../assets/css/style.css">
-    <script>try{if(localStorage.getItem('jb_theme')==='dark')document.documentElement.setAttribute('data-bs-theme','dark')}catch(e){}</script>
+    <script>try{var d=document.documentElement,s=localStorage;if(s.getItem('jb_theme')==='dark')d.setAttribute('data-bs-theme','dark');var a=JSON.parse(s.getItem('jb_a11y')||'{}')||{};if(a.font>0&&a.font<4)d.setAttribute('data-font',String(a.font|0));if(a.contrast)d.setAttribute('data-contrast','high')}catch(e){}</script>
 </head>
 <body data-root="../" data-page="denuncias">
     <div id="site-top"></div>
@@ -30,33 +30,34 @@
                         <li>✔ Metadados de arquivos removidos na triagem</li>
                     </ul>
                     <img src="../assets/img/seguranca-digital.jpg" class="img-fluid rounded border mt-3" alt="Chave sobre fundo de código digital, simbolizando sigilo e segurança" loading="lazy">
-                    <p class="small mt-3 mb-0"><em>Projeto acadêmico: os dados enviados ficam apenas no armazenamento local do seu navegador.</em></p>
+                    <p class="small mt-3 mb-0"><em>Projeto acadêmico: o relato é enviado ao banco de dados do portal e só a equipe editorial (administradores) pode lê-lo. Não envie informações reais ou sensíveis.</em></p>
                 </div>
                 <div class="col-lg-7">
                     <div class="alert alert-success" id="report-ok" role="status" hidden>✔ Denúncia registrada com sucesso. Obrigado por colaborar com o jornalismo de interesse público.</div>
-                    <form id="report-form" novalidate>
+                    <div class="alert alert-danger" id="report-fail" role="alert" hidden>Não foi possível enviar a denúncia agora. Seu texto continua no formulário: verifique a conexão e tente novamente.</div>
+                    <form id="report-form" method="post" novalidate>
                         <div class="mb-3">
                             <label class="form-label" for="assunto">Assunto / Área da Denúncia</label>
-                            <input type="text" class="form-control" id="assunto" name="assunto" placeholder="Ex: Irregularidade em licitação municipal" required>
+                            <input type="text" class="form-control" id="assunto" name="assunto" maxlength="200" placeholder="Ex: Irregularidade em licitação municipal" required>
                             <div class="invalid-feedback">Informe o assunto.</div>
                         </div>
                         <div class="mb-3">
                             <label class="form-label" for="relato">Relato Detalhado</label>
-                            <textarea class="form-control" id="relato" name="relato" rows="5" placeholder="Descreva os fatos, datas e envolvidos..." required minlength="20"></textarea>
+                            <textarea class="form-control" id="relato" name="relato" rows="5" placeholder="Descreva os fatos, datas e envolvidos..." required minlength="20" maxlength="8000"></textarea>
                             <div class="invalid-feedback">Descreva o caso com pelo menos 20 caracteres.</div>
                         </div>
                         <div class="mb-3">
                             <label class="form-label" for="anexo">Anexar Evidências (PDF, Imagens)</label>
                             <input type="file" class="form-control" id="anexo" accept=".pdf,image/*">
-                            <div class="form-text">Somente o nome e o tamanho do arquivo são registrados neste protótipo.</div>
+                            <div class="form-text">Neste protótipo o arquivo não é enviado: apenas o nome e o tamanho são registrados.</div>
                         </div>
                         <div class="form-check mb-3">
                             <input class="form-check-input" type="checkbox" id="anonimo" checked>
                             <label class="form-check-label" for="anonimo">Enviar de forma anônima</label>
                         </div>
                         <div id="contato-wrap" hidden class="row g-3 mb-3">
-                            <div class="col-md-6"><label class="form-label" for="nome">Nome</label><input type="text" class="form-control" id="nome" name="nome"></div>
-                            <div class="col-md-6"><label class="form-label" for="email">E-mail</label><input type="email" class="form-control" id="email" name="email"></div>
+                            <div class="col-md-6"><label class="form-label" for="nome">Nome</label><input type="text" class="form-control" id="nome" name="nome" maxlength="120" autocomplete="name"></div>
+                            <div class="col-md-6"><label class="form-label" for="email">E-mail</label><input type="email" class="form-control" id="email" name="email" maxlength="200" autocomplete="email"><div class="invalid-feedback">Informe um e-mail válido ou deixe em branco.</div></div>
                         </div>
                         <button type="submit" class="btn btn-primary">Enviar Denúncia com Sigilo</button>
                     </form>
@@ -66,7 +67,10 @@
     </main>
     <div id="site-bottom"></div>
     <script src="../assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="../assets/vendor/supabase/supabase.js"></script>
+    <script src="../assets/js/config.js"></script>
     <script src="../assets/js/storage.js"></script>
+    <script src="../assets/js/supabase-backend.js"></script>
     <script src="../assets/js/layout.js"></script>
     <script src="../assets/js/denuncias.js"></script>
 </body>

@@ -1,11 +1,15 @@
 /* Leitura de uma matéria: pages/noticia.html?id=...
-   Favoritar, compartilhar, imprimir, histórico e comentários simulados. */
-(function () {
+   Selos de tipo (opinião, análise, checagem…), cobertura ao vivo com atualização automática,
+   entrevista em perguntas e respostas, gráfico, cronologia, personagens, fontes, correções,
+   perfil do autor, modo leitura, favoritar, compartilhar, imprimir, histórico e comentários. */
+JB.ready.then(function () {
     'use strict';
-    const { News, Favs, History, Comments, Auth, util } = JB;
+    const { News, Favs, History, Comments, Auth, Authors, util } = JB;
     const { esc } = util;
     const box = document.getElementById('article');
-    const n = News.get(new URLSearchParams(location.search).get('id') || '');
+    if (JB.loadError) { box.innerHTML = util.errorHTML(); return; }
+    const id = new URLSearchParams(location.search).get('id') || '';
+    let n = News.get(id);
     const preview = n && !util.isPublished(n);
 
     // Matéria inexistente, ou ainda não publicada e o visitante não é editor
@@ -15,24 +19,106 @@
     }
     if (!preview) { JB.Views.hit(n.id); History.add(n.id); }
     document.title = n.title + ' — Jornal Brasileiro (JB)';
+    const kind = n.kind || 'noticia';
+    const hm = iso => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const dm = iso => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 
-    box.innerHTML =
-        (preview ? '<div class="alert alert-info no-print">Pré-visualização do editor — status: <strong>' + esc(JB.STATUS[n.status] || n.status) + '</strong>. Esta matéria ainda não está pública.</div>' : '') +
+    /* ---------- Blocos ---------- */
+    function previewNote() {
+        if (!preview) return '';
+        const why = util.isScheduled(n) ? 'agendada para <strong>' + esc(util.fmtDate(n.date)) + '</strong>' : 'status: <strong>' + esc(JB.STATUS[n.status] || n.status) + '</strong>';
+        return '<div class="alert alert-info no-print">Pré-visualização do editor — ' + why + '. Esta matéria ainda não está pública.</div>';
+    }
+    function kindNote() {
+        if (kind === 'opiniao') return '<div class="kind-note">Artigo de <strong>opinião</strong>: reflete a visão do autor, não necessariamente a do jornal.</div>';
+        if (kind === 'analise') return '<div class="kind-note"><strong>Análise</strong>: interpretação dos fatos a partir de dados e contexto, assinada por especialista da redação.</div>';
+        if (kind === 'editorial') return '<div class="kind-note"><strong>Editorial</strong>: expressa a posição institucional do Jornal Brasileiro.</div>';
+        return '';
+    }
+    function verdictBox() {
+        const v = JB.VERDICTS[n.verdict];
+        if (kind !== 'checagem' || !v) return '';
+        return '<div class="verdict-box verdict-' + esc(n.verdict) + '"><span class="small text-uppercase fw-bold">Classificação</span>' +
+            '<strong>' + esc(v.label) + '</strong><span>' + esc(v.desc) + ' <a href="verificacao.html#metodo">Como checamos</a></span></div>';
+    }
+    // Entrevista: parágrafos que começam com "P:" / "R:" viram pergunta e resposta
+    function bodyHTML() {
+        return n.body.map(p => {
+            const m = /^\s*([PR])\s*[:\-–—]\s*(.*)$/s.exec(p);
+            if (kind === 'entrevista' && m) return m[1] === 'P' ? '<p class="qa-q"><span class="qa-tag">JB</span>' + esc(m[2]) + '</p>' : '<p class="qa-a">' + esc(m[2]) + '</p>';
+            return '<p>' + esc(p) + '</p>';
+        }).join('');
+    }
+    function liveHTML() {
+        if (kind !== 'aovivo') return '';
+        const ups = (n.updates || []).slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+        const head = n.live
+            ? '<div class="live-head">' + util.liveBadge() + '<span class="small" id="live-status" role="status">Atualizado automaticamente a cada 30 segundos.</span></div>'
+            : '<div class="live-head"><span class="kind-badge">Cobertura encerrada</span></div>';
+        return '<section class="live-feed" aria-labelledby="live-title"><h2 class="section-title" id="live-title">Atualizações (' + ups.length + ')</h2>' + head +
+            '<ol class="live-list">' + ups.map(u => '<li><time datetime="' + esc(u.date) + '"><strong>' + esc(hm(u.date)) + '</strong><small>' + esc(dm(u.date)) + '</small></time>' +
+                '<div><p class="mb-1" style="white-space:pre-wrap">' + esc(u.text) + '</p>' + (u.author ? '<small class="opacity-75">' + esc(u.author) + '</small>' : '') + '</div></li>').join('') +
+            '</ol>' + (ups.length ? '' : '<p class="text-muted">A cobertura vai começar em instantes.</p>') + '</section>';
+    }
+    function timelineHTML() {
+        const t = (n.timeline || []).filter(x => x && x.text);
+        const p = (n.people || []).filter(x => x && x.name);
+        if (!t.length && !p.length) return '';
+        return '<div class="row g-4 my-2">' +
+            (t.length ? '<section class="col-lg-7"><h2 class="section-title">Cronologia</h2><ol class="timeline">' + t.map(x => '<li><strong>' + esc(x.when) + '</strong><span>' + esc(x.text) + '</span></li>').join('') + '</ol></section>' : '') +
+            (p.length ? '<section class="col-lg-5"><h2 class="section-title">Personagens envolvidos</h2><ul class="people-list">' + p.map(x => '<li><strong>' + esc(x.name) + '</strong>' + (x.role ? '<span>' + esc(x.role) + '</span>' : '') + '</li>').join('') + '</ul></section>' : '') +
+            '</div>';
+    }
+    function sourcesHTML() {
+        const s = (n.sources || []).filter(x => x && (x.label || x.url));
+        if (!s.length) return '';
+        return '<section class="article-extra"><h2 class="section-title">Fontes e referências</h2><ul class="sources-list">' + s.map(x => {
+            const url = util.safeUrl(x.url), label = esc(x.label || x.url);
+            return '<li>' + (url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener noreferrer nofollow">' + label + '</a>' : label) + '</li>';
+        }).join('') + '</ul></section>';
+    }
+    function correctionsHTML() {
+        const c = (n.corrections || []).filter(x => x && x.text).sort((a, b) => new Date(b.date) - new Date(a.date));
+        if (!c.length) return '';
+        return '<section class="corrections-box"><h2 class="h6 text-uppercase fw-bold mb-2">Correções</h2><ul class="mb-1">' +
+            c.map(x => '<li><strong>' + esc(util.fmtDate(x.date)) + ':</strong> ' + esc(x.text) + '</li>').join('') + '</ul>' +
+            '<a class="small" href="institucional.html#correcoes">Conheça nossa política de correções</a></section>';
+    }
+    function authorBox() {
+        const a = Authors.get(n.author);
+        if (!a) return '';
+        return '<aside class="author-box">' + util.avatarHTML({ name: a.name, avatar: a.avatar ? util.imgSrc({ image: a.avatar }) : '' }, 'avatar-md') +
+            '<div><a class="fw-bold" href="' + esc(util.authorUrl(a.name)) + '">' + esc(a.name) + '</a>' + (a.role ? '<span class="d-block small opacity-75">' + esc(a.role) + '</span>' : '') +
+            (a.bio ? '<p class="small mb-0 mt-1">' + esc(a.bio) + '</p>' : '') + '</div></aside>';
+    }
+    function meta() {
+        return '<p class="meta-info">Por <a href="' + esc(util.authorUrl(n.author)) + '"><strong>' + esc(n.author) + '</strong></a> • Publicado em ' + esc(util.fmtDate(n.date)) +
+            (util.wasUpdated(n) ? ' • <span class="updated-at">Atualizado em ' + esc(util.fmtDate(n.updated_at)) + '</span>' : '') +
+            ' • ' + util.readingTime(n) + ' min de leitura • ' + JB.Views.count(n.id) + ' leituras</p>';
+    }
+
+    box.innerHTML = previewNote() + util.badgesHTML(n) +
         '<a class="category-tag" href="' + esc(util.catUrl(n.category)) + '">' + esc(util.catLabel(n.category)) + '</a>' +
-        '<h1 class="article-title">' + esc(n.title) + '</h1><p class="lead">' + esc(n.subtitle) + '</p>' +
-        '<p class="meta-info">Por <strong>' + esc(n.author) + '</strong> • ' + esc(util.fmtDate(n.date)) + ' • ' + util.readingTime(n) + ' min de leitura • ' + JB.Views.count(n.id) + ' leituras</p>' +
-        '<div class="d-flex flex-wrap gap-2 mb-3 no-print">' +
+        '<h1 class="article-title">' + esc(n.title) + '</h1><p class="lead">' + esc(n.subtitle) + '</p><div id="article-meta">' + meta() + '</div>' +
+        '<div class="article-tools d-flex flex-wrap gap-2 mb-3 no-print">' +
         '<button type="button" class="btn btn-outline-dark btn-sm" id="btn-fav"></button>' +
         '<button type="button" class="btn btn-outline-dark btn-sm" id="btn-share">Compartilhar</button>' +
         '<button type="button" class="btn btn-outline-dark btn-sm" id="btn-print">Imprimir</button>' +
+        '<button type="button" class="btn btn-outline-dark btn-sm" id="btn-read" aria-pressed="false">Modo leitura</button>' +
+        '<span class="btn-group btn-group-sm" role="group" aria-label="Tamanho do texto"><button type="button" class="btn btn-outline-dark" data-a11y="font-" aria-label="Diminuir o texto">A−</button><button type="button" class="btn btn-outline-dark" data-a11y="font+" aria-label="Aumentar o texto">A+</button></span>' +
         '<span class="small align-self-center" id="share-msg" role="status"></span></div>' +
-        '<img class="lead-img" src="' + esc(util.imgSrc(n)) + '" alt="' + esc(n.title) + '">' +
-        '<div class="article-body">' + n.body.map(p => '<p>' + esc(p) + '</p>').join('') + '</div>' +
-        '<p class="small text-muted">Conteúdo fictício, produzido para fins acadêmicos.</p>';
+        kindNote() + verdictBox() +
+        '<img class="lead-img" fetchpriority="high" src="' + esc(util.imgSrc(n)) + '" alt="' + esc(n.title) + '">' +
+        '<div class="article-body">' + bodyHTML() + '</div>' +
+        '<div id="live-wrap">' + liveHTML() + '</div>' +
+        util.barChartHTML(n.chart) + timelineHTML() + sourcesHTML() + correctionsHTML() + authorBox() +
+        '<p class="small text-muted mt-3">Conteúdo fictício, produzido para fins acadêmicos.</p>' +
+        '<button type="button" class="btn btn-dark reading-exit" id="btn-read-exit">Sair do modo leitura</button>';
+    if (JB.ui) JB.ui.paintA11y();
 
     /* Favoritar */
     const favBtn = document.getElementById('btn-fav');
-    const paintFav = () => { const on = Favs.has(n.id); favBtn.textContent = on ? '★ Salvo nos favoritos' : '☆ Salvar para ler depois'; favBtn.classList.toggle('fav-active', on); };
+    const paintFav = () => { const on = Favs.has(n.id); favBtn.textContent = on ? '★ Salvo nos favoritos' : '☆ Salvar para ler depois'; favBtn.classList.toggle('fav-active', on); favBtn.setAttribute('aria-pressed', on); };
     favBtn.addEventListener('click', () => { Favs.toggle(n.id); paintFav(); });
     paintFav();
 
@@ -43,12 +129,46 @@
             if (navigator.share) await navigator.share({ title: n.title, url: location.href });
             else { await navigator.clipboard.writeText(location.href); msg.textContent = 'Link copiado!'; }
         } catch (e) {
+            if (e && e.name === 'AbortError') return;   // o leitor fechou a janela de compartilhar
             window.prompt('Copie o link da matéria:', location.href);
         }
     });
     document.getElementById('btn-print').addEventListener('click', () => window.print());
 
-    /* Comentários simulados */
+    /* Modo leitura: esconde cabeçalho, rodapé e comentários; texto centralizado e maior */
+    const readBtn = document.getElementById('btn-read');
+    const setReading = on => {
+        document.documentElement.classList.toggle('reading-mode', on);
+        readBtn.setAttribute('aria-pressed', on);
+        if (on) window.scrollTo({ top: box.offsetTop - 10 }); else readBtn.focus();
+    };
+    readBtn.addEventListener('click', () => setReading(!document.documentElement.classList.contains('reading-mode')));
+    document.getElementById('btn-read-exit').addEventListener('click', () => setReading(false));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && document.documentElement.classList.contains('reading-mode')) setReading(false); });
+
+    /* Cobertura ao vivo: relê a matéria a cada 30 s enquanto a aba estiver visível */
+    if (kind === 'aovivo' && n.live && !preview) {
+        let busy = false;
+        setInterval(async () => {
+            if (document.hidden || busy) return;
+            busy = true;
+            const before = (n.updates || []).length;
+            const ok = await News.refresh(n.id);
+            busy = false;
+            const st = document.getElementById('live-status');
+            if (!ok) { if (st) st.textContent = 'Sem conexão no momento; tentaremos de novo em 30 segundos.'; return; }
+            const fresh = News.get(n.id);
+            if (!fresh) return;
+            n = fresh;
+            const added = (n.updates || []).length - before;
+            document.getElementById('live-wrap').innerHTML = liveHTML();
+            document.getElementById('article-meta').innerHTML = meta();
+            const st2 = document.getElementById('live-status');
+            if (st2) st2.textContent = added > 0 ? added + (added === 1 ? ' nova atualização' : ' novas atualizações') + ' às ' + hm(new Date().toISOString()) + '.' : 'Atualizado às ' + hm(new Date().toISOString()) + '.';
+        }, 30000);
+    }
+
+    /* Comentários (moderados pelo editor) */
     const list = document.getElementById('comment-list');
     const renderComments = () => {
         const cs = Comments.forNews(n.id);
@@ -58,7 +178,10 @@
     };
     const form = document.getElementById('comment-form');
     const me = Auth.current();
-    if (me) form.elements.name.value = me.name;
+    if (me) {   // logado: o comentário sai sempre com o nome da conta
+        form.elements.name.value = me.name; form.elements.name.readOnly = true;
+        document.getElementById('c-name-help').hidden = false;
+    }
     form.addEventListener('submit', e => {
         e.preventDefault();
         if (!form.checkValidity()) { form.classList.add('was-validated'); return; }
@@ -67,10 +190,17 @@
         renderComments();
     });
     document.getElementById('comments-wrap').hidden = false;
-    renderComments();
+    list.innerHTML = util.loadingHTML('Carregando comentários…');
+    Comments.load(n.id).then(ok => { if (ok) renderComments(); else list.innerHTML = util.errorHTML('Não foi possível carregar os comentários agora.'); });
 
-    /* Leia também */
-    const more = News.byCategory(n.category).filter(x => x.id !== n.id).slice(0, 3);
+    // Se o servidor recusar uma gravação, o cache é desfeito: redesenha o que pode ter mudado.
+    document.addEventListener('jb:sync-error', () => { paintFav(); renderComments(); });
+
+    /* Leia também: mesma editoria; em opinião/checagem, também o mesmo tipo de conteúdo */
+    const sameKind = kind !== 'noticia' && kind !== 'reportagem' ? News.byKind(kind) : [];
+    const seen = new Set([n.id]);
+    const pool = sameKind.concat(News.byCategory(n.category)).filter(x => !seen.has(x.id) && seen.add(x.id));
+    const more = pool.slice(0, 3);
     document.getElementById('related').innerHTML = more.map(x => '<div class="col-md-4">' + util.newsCard(x) + '</div>').join('');
     document.getElementById('related-wrap').hidden = !more.length;
-})();
+});
