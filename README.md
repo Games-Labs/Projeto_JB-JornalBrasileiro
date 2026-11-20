@@ -18,7 +18,7 @@
 
 ### A) Arquitetura de Execução
 
-Aplicação **Multi-Page** com front-end estático (**HTML5, CSS3 e JavaScript nativo**, Bootstrap 5 para a interface), sem etapa de build, hospedada no **Cloudflare Pages** (uma única *Pages Function* monta a prévia de cada matéria ao compartilhar o link). Os dados ficam no **Supabase**: banco Postgres (notícias, autores, versões das matérias, perfis, comentários, denúncias, favoritos, newsletter e contagem de leituras), **Supabase Auth** (contas, login e recuperação de senha) e **Supabase Storage** (imagens enviadas pelo painel). A segurança é garantida no banco, por **políticas RLS** e privilégios mínimos ([`supabase/01_schema.sql`](supabase/01_schema.sql)); o navegador usa apenas a chave pública (*anon/publishable*).
+Aplicação **Multi-Page** com front-end estático (**HTML5, CSS3 e JavaScript nativo**, Bootstrap 5 para a interface), sem etapa de build, hospedada no **Cloudflare Pages** (*Pages Functions* completam o HTML com a prévia de cada página e matéria ao compartilhar o link, o `sitemap.xml` e o `robots.txt`). Os dados ficam no **Supabase**: banco Postgres (notícias, autores, versões das matérias, perfis, comentários, denúncias, favoritos, newsletter e contagem de leituras), **Supabase Auth** (contas, login e recuperação de senha) e **Supabase Storage** (imagens enviadas pelo painel). A segurança é garantida no banco, por **políticas RLS** e privilégios mínimos ([`supabase/01_schema.sql`](supabase/01_schema.sql)); o navegador usa apenas a chave pública (*anon/publishable*).
 
 **Público-alvo:** leitores em geral, avaliadores do projeto acadêmico e cidadãos interessados em simulações de portais de notícias e jornalismo investigativo.
 
@@ -42,8 +42,10 @@ Aplicação **Multi-Page** com front-end estático (**HTML5, CSS3 e JavaScript n
 12. **Segurança da conta** (`seguranca.html`): **verificação em duas etapas** com app autenticador (obrigatória para a equipe da redação, opcional para leitores) e confirmação de idade; aba **Segurança** no painel com o estado das proteções, a equipe sem MFA e a **auditoria** (gravada pelo banco).
 13. Aviso e painel de consentimento de cookies, com referência à LGPD.
 14. Comentários: quem comentou com uma conta **edita ou exclui o próprio comentário** (fica marcado “editado”); a coordenação continua moderando pelo painel e pela matéria.
-15. **Prévia ao compartilhar**: links de matéria mostram título, resumo e imagem da própria matéria no WhatsApp, X, Facebook e afins (e dados `NewsArticle` para buscadores).
-16. Interface responsiva para celulares e desktops.
+15. **Prévia ao compartilhar e SEO**: links de matéria mostram título, resumo e imagem da própria matéria no WhatsApp, X, Facebook e afins (e dados `NewsArticle` para buscadores); as demais páginas mostram o nome e a descrição da seção. O site tem `sitemap.xml` com todas as matérias publicadas, `robots.txt`, endereço canônico, dados da organização com as redes sociais, página 404 de verdade e `noindex` nas páginas de conta e do painel.
+16. **App instalável (PWA)**: o JB pode ser instalado no celular ou no computador e as matérias já abertas continuam legíveis sem internet (com internet, tudo vem sempre da rede).
+17. Redes sociais do JB (Instagram, TikTok e YouTube) no rodapé.
+18. Interface responsiva para celulares e desktops.
 
 **Seções jornalísticas:**
 
@@ -95,6 +97,8 @@ Na aba **Equipe e cargos** do painel, o administrador coloca qualquer conta como
 ```
 JB/
 ├── index.html                 # Homepage
+├── 404.html                   # Página não encontrada (o Cloudflare a entrega com status 404)
+├── sw.js                      # Service worker do PWA: rede primeiro, cópia só para quando a rede falha
 ├── _headers                   # Cabeçalhos de segurança (CSP, HSTS...) do Cloudflare Pages
 ├── pages/
 │   ├── noticias.html          # Listagem + filtros + busca avançada (?cat= vira a página da editoria)
@@ -116,7 +120,8 @@ JB/
 │   ├── redefinir-senha.html   # Aberta pelo link do e-mail: define a nova senha
 │   ├── seguranca.html         # Segurança da conta: idade, código do app autenticador, ativar/remover MFA
 │   ├── admin.html             # Painel Administrativo (lista de matérias, autores, audiência, moderação, equipe, segurança)
-│   └── editor.html            # Editor de matérias em página inteira (?id= para editar)
+│   ├── editor.html            # Editor de matérias em página inteira (?id= para editar)
+│   └── offline.html           # Aviso de sem conexão (entregue pelo sw.js)
 ├── assets/
 │   ├── css/style.css          # Tema do JB sobre o Bootstrap (paleta, editorias, modo escuro e alto contraste)
 │   ├── fonts/                 # Source Serif 4 e Inter (licença SIL OFL), servidas pelo próprio site
@@ -126,10 +131,14 @@ JB/
 │   │   ├── supabase-backend.js# Dados, login e imagens no Supabase (assume quando config.js está preenchido)
 │   │   ├── layout.js          # Ticker, cabeçalho, rodapé e cookies
 │   │   └── home · news-list · article · arquivo · autor · central · denuncias · auth · perfil · perfil-publico · seguranca · admin · editor .js
-│   ├── favicon/               # Ícones do site (favicon.io)
+│   ├── favicon/               # Ícones do site e site.webmanifest (PWA)
 │   ├── img/                   # Imagens locais e ilustrações SVG
 │   └── vendor/                # Bootstrap 5.3.3 e supabase-js 2.45.4 (cópias locais)
-├── functions/pages/noticia.js # Cloudflare Pages Function: título, resumo e imagem da matéria para a prévia de links
+├── functions/                 # Cloudflare Pages Functions (SEO e prévia de links)
+│   ├── pages/noticia.js       # Título, resumo e imagem da matéria
+│   ├── pages/[[path]].js · index.js # Prévia das demais páginas e da capa (dados da organização)
+│   ├── sitemap.xml.js · robots.txt.js
+│   └── _lib/seo.js            # Peças comuns (não é rota)
 ├── supabase/                  # Schema + RLS, seed, promoção de admin, atualizações (04, 05, 07, 08, 09) e exemplos (06)
 ├── docs/                      # DEPLOY.md e capturas de tela
 ├── LICENSE
@@ -146,6 +155,7 @@ JB/
 | **YouTube** | Só quando o leitor clica para assistir a um vídeo: o player vem de `youtube-nocookie.com`. Antes do clique, a página carrega apenas a imagem de capa do vídeo |
 | **Supabase Storage** | Imagens enviadas pelo painel (bucket público `news-images`; só a redação envia; trocar ou apagar só a coordenação ou quem enviou) |
 | **Navegador — `localStorage`** | Sessão de login (gerenciada pelo supabase-js), `jb_theme` (tema), `jb_a11y` (tamanho do texto e alto contraste), `jb_cookies` (consentimento), `jb_history` (histórico de leitura), `jb_favs` (favoritos de visitantes, que vão para a conta no login) e `jb_drafts` (só para a redação: cópia das matérias que estão sendo escritas no editor, apagada ao salvar; até 10) |
+| **Navegador — Cache Storage (PWA)** | Cópia das páginas, estilos e scripts do site já visitados e da lista **pública** de matérias e autores (só de pedidos feitos sem login), usada apenas quando não há internet. Nada de conta, perfil, rascunho ou painel fica guardado |
 | **Navegador — `sessionStorage`** | `jb_recovery`: marca temporária de que a aba confirmou um código ou abriu um link de recuperação de senha (sem senha nem token); `jb_login_guard`: quantas senhas erradas seguidas nesta aba e até quando esperar |
 
 > Senhas **nunca** são guardadas no navegador. No modo Supabase, dados antigos do modo de demonstração (contas, sessão, denúncias) são apagados do navegador na primeira visita.
@@ -207,6 +217,7 @@ Não foram encontradas falhas de XSS (todo HTML dinâmico passa por `JB.util.esc
 - Não testado automaticamente: a entrega real do e-mail de recuperação e um código real (dependem do SMTP e do modelo de e-mail configurados no Supabase).
 
 - **Editor, vídeo, comentários editáveis, gráficos e nova identidade visual (novembro de 2026):** testes de unidade do texto formatado (escape, links só http/https, intertítulos, listas, entrevistas), do reconhecimento de links do YouTube e dos cinco gráficos (60 checagens); no navegador, modo local com 102 checagens (cores da marca e das editorias, fontes locais sem Google, modo escuro e alto contraste, editor com formatação, colar do Google Docs com script malicioso, vídeo só depois do clique, gráficos, editar/excluir comentário, permissões de jornalista, 320/390/1500 px sem rolagem lateral em todas as páginas) e Supabase real com CSP (16 checagens, inclusive o site novo funcionando com o banco ainda sem a migração 09); a migração 09 rodou antes num ensaio desfeito com 25 checagens de permissão (dona edita só o texto do próprio comentário, outra conta/visitante/conta não liberada não editam, admin não reescreve mas modera, vídeo validado, versionado e auditado) e foi aplicada em produção; a *Pages Function* foi testada no simulador do Cloudflare (`wrangler pages dev`): prévia com dados da matéria, cabeçalhos de segurança mantidos e página sem erros.
+- **SEO, PWA, redes sociais e barra do editor (novembro de 2026):** no simulador do Cloudflare com o Supabase real e a CSP ativa, 42 checagens: prévia (Open Graph, Twitter, canonical) na capa, nas seções e na matéria, prévia genérica quando a matéria não existe, `robots.txt`, `sitemap.xml` com as matérias publicadas, 404 de verdade, service worker ativo, nada de conta guardado no aparelho, matéria já aberta e capa legíveis sem internet, aviso de sem conexão nas páginas nunca abertas, volta à rede quando a conexão retorna, redes sociais no rodapé (também em alto contraste), barra do editor rolando com a página sem cobrir a coluna lateral e 320/390/1920 px sem rolagem lateral; endereços com dados de login (`?code=`) nunca vão para o cache do aparelho. Regressão: testes de unidade (60), modo local (102) e Supabase real com CSP (15 + 15 da hierarquia + 42 da Central de Segurança), todos passando; e, no banco, em transações desfeitas, 25 checagens de comentários e vídeo, 45 de idade/MFA/auditoria e a bateria da hierarquia, sem nenhuma falha.
 
 ### Pendências e riscos conhecidos
 
@@ -233,7 +244,8 @@ O repositório pode ser público sem expor o portal:
 - [Cloudflare Pages](https://pages.cloudflare.com) — hospedagem estática
 - [Bootstrap 5.3.3](https://getbootstrap.com/) — grid, navbar, offcanvas, modal, formulários e abas (licença MIT)
 - Fontes *Source Serif 4* (títulos e texto das matérias) e *Inter* (interface), servidas pelo próprio site em `assets/fonts/` (licença SIL OFL; sem pedidos ao Google)
-- Cloudflare Pages Functions — só para a prévia de compartilhamento das matérias (`functions/pages/noticia.js`)
+- Cloudflare Pages Functions — prévia de compartilhamento das páginas e matérias, `sitemap.xml` e `robots.txt` (`functions/`)
+- Service worker e Web App Manifest (PWA): instalação como app e leitura offline do que já foi aberto
 
 ## 🖼️ Imagens
 

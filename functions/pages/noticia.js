@@ -7,48 +7,34 @@
    alguém pede /pages/noticia?id=<id>, o Cloudflare busca a matéria no Supabase (só matérias
    PUBLICADAS: a chave é a pública e o RLS do banco vale igual) e coloca no <head> do HTML estático
    título, resumo, imagem (Open Graph / Twitter) e um JSON-LD NewsArticle. O resto da página não
-   muda. Se o Supabase demorar (> 2 s) ou falhar, a página sai como sempre, sem atraso para o leitor.
+   muda. Se o Supabase demorar (> 2 s) ou falhar, a página sai com as tags genéricas do site, sem
+   atraso para o leitor. Peças comuns em functions/_lib/seo.js.
 
    Só roda no Cloudflare Pages (pasta functions/). Abrindo os arquivos direto (file://) ou num
    servidor estático comum, nada disto acontece e o site funciona igual.
    ========================================================= */
+import { SITE, clip, meta, jsonLD, isHTML, supabaseGet, organization, previewTags, defaultImage, withSiteTags } from '../_lib/seo.js';
 
-// Os mesmos valores PÚBLICOS de assets/js/config.js (podem ser trocados pelas variáveis de ambiente
-// SUPABASE_URL / SUPABASE_ANON_KEY do projeto no Cloudflare). Nunca a chave service_role.
-const DEFAULT_SUPABASE_URL = 'https://cjzinwnyzcsxtwmgbcpo.supabase.co';
-const DEFAULT_SUPABASE_KEY = 'sb_publishable_-FcYDCNnccpWU5FWIFiKkA_6Da70Hbn';
-
-const SITE = 'Jornal Brasileiro (JB)';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CATEGORIES = { politica: 'Política', economia: 'Economia', esportes: 'Esportes', investigacao: 'Investigação Especial', tecnologia: 'Tecnologia & Ciência', infraestrutura: 'Infraestrutura', brasil: 'Brasil', mundo: 'Mundo', educacao: 'Educação', saude: 'Saúde', meioambiente: 'Meio Ambiente', cultura: 'Cultura' };
 // Imagens locais em formato que as redes aceitam (SVG não serve para prévia)
 const FALLBACK_IMG = { investigacao: 'assets/img/obras-publicas.jpg', tecnologia: 'assets/img/seguranca-digital.jpg', infraestrutura: 'assets/img/ferrovia.webp' };
-const DEFAULT_IMG = 'assets/img/og-default.png';
 const OPINION = ['opiniao', 'analise', 'editorial'];
-
-const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const clip = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).replace(/\s+\S*$/, '') + '…' : s; };
+const MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif' };
 
 async function fetchNews(id, env) {
-    const base = String(env.SUPABASE_URL || DEFAULT_SUPABASE_URL).replace(/\/$/, '');
-    const key = env.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_KEY;
-    const q = base + '/rest/v1/news?select=id,title,subtitle,image,category,author,date,updated_at,kind' +
-        '&id=eq.' + encodeURIComponent(id) + '&status=eq.publicada&date=lte.' + encodeURIComponent(new Date().toISOString()) + '&limit=1';
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 2000);
-    try {
-        const r = await fetch(q, { headers: { apikey: key, Accept: 'application/json' }, signal: ctrl.signal, cf: { cacheTtl: 60, cacheEverything: true } });
-        if (!r.ok) return null;
-        const rows = await r.json();
-        return Array.isArray(rows) && rows[0] ? rows[0] : null;
-    } finally { clearTimeout(t); }
+    const rows = await supabaseGet(env, 'news?select=id,title,subtitle,image,category,author,date,updated_at,kind' +
+        '&id=eq.' + encodeURIComponent(id) + '&status=eq.publicada&date=lte.' + encodeURIComponent(new Date().toISOString()) + '&limit=1');
+    return Array.isArray(rows) && rows[0] ? rows[0] : null;
 }
 
 function imageOf(n, origin) {
     const img = String(n.image || '');
-    if (/^https:\/\/[^\s"'<>\\]+$/i.test(img)) return img;
-    if (/^assets\/img\/[\w.-]+\.(jpe?g|png|webp|gif)$/i.test(img)) return origin + '/' + img;
-    return origin + '/' + (FALLBACK_IMG[n.category] || DEFAULT_IMG);
+    const type = s => MIME[(String(s).split('?')[0].match(/\.(\w+)$/) || [])[1]?.toLowerCase()];
+    if (/^https:\/\/[^\s"'<>\\]+$/i.test(img)) return { url: img, type: type(img) };
+    if (/^assets\/img\/[\w.-]+\.(jpe?g|png|webp|gif)$/i.test(img)) return { url: origin + '/' + img, type: type(img) };
+    if (FALLBACK_IMG[n.category]) return { url: origin + '/' + FALLBACK_IMG[n.category], type: type(FALLBACK_IMG[n.category]) };
+    return defaultImage(origin);
 }
 
 function headHTML(n, url) {
@@ -56,25 +42,19 @@ function headHTML(n, url) {
     const canonical = origin + '/pages/noticia?id=' + encodeURIComponent(n.id);
     const title = clip(n.title, 200), desc = clip(n.subtitle, 300), image = imageOf(n, origin);
     const section = CATEGORIES[n.category] || '';
-    const meta = (attr, k, v) => v ? '<meta ' + attr + '="' + esc(k) + '" content="' + esc(v) + '">\n' : '';
     const ld = {
         '@context': 'https://schema.org', '@type': OPINION.includes(n.kind) ? 'OpinionNewsArticle' : 'NewsArticle',
-        headline: clip(n.title, 110), description: desc, image: [image], datePublished: n.date, dateModified: n.updated_at || n.date,
-        articleSection: section || undefined, mainEntityOfPage: canonical,
+        headline: clip(n.title, 110), description: desc, image: [image.url], datePublished: n.date, dateModified: n.updated_at || n.date,
+        articleSection: section || undefined, inLanguage: 'pt-BR', mainEntityOfPage: canonical,
         author: [{ '@type': /^Reda|JB$/.test(n.author || '') ? 'Organization' : 'Person', name: n.author || 'Redação JB' }],
-        publisher: { '@type': 'Organization', name: SITE, logo: { '@type': 'ImageObject', url: origin + '/assets/favicon/android-chrome-512x512.png' } }
+        publisher: organization(origin)
     };
-    // JSON dentro de <script>: "<" vira < para o texto nunca fechar a tag
-    const json = JSON.stringify(ld).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
-    return '\n<link rel="canonical" href="' + esc(canonical) + '">\n' +
-        meta('name', 'description', desc) +
-        meta('property', 'og:type', 'article') + meta('property', 'og:site_name', SITE) + meta('property', 'og:locale', 'pt_BR') +
-        meta('property', 'og:title', title) + meta('property', 'og:description', desc) + meta('property', 'og:url', canonical) +
-        meta('property', 'og:image', image) + meta('property', 'og:image:alt', title) +
-        meta('property', 'article:published_time', n.date) + meta('property', 'article:modified_time', n.updated_at || '') +
-        meta('property', 'article:section', section) + meta('property', 'article:author', n.author) +
-        meta('name', 'twitter:card', 'summary_large_image') + meta('name', 'twitter:title', title) + meta('name', 'twitter:description', desc) + meta('name', 'twitter:image', image) +
-        '<script type="application/ld+json">' + json + '</script>\n';
+    return '\n' + meta('name', 'description', desc) +
+        previewTags({
+            url: canonical, title, description: desc, image, type: 'article',
+            extra: meta('property', 'article:published_time', n.date) + meta('property', 'article:modified_time', n.updated_at || '') +
+                meta('property', 'article:section', section) + meta('property', 'article:author', n.author)
+        }) + jsonLD(ld);
 }
 
 export async function onRequestGet(context) {
@@ -82,13 +62,14 @@ export async function onRequestGet(context) {
     const res = await next();
     const url = new URL(request.url);
     const id = url.searchParams.get('id') || '';
-    if (res.status !== 200 || !/text\/html/i.test(res.headers.get('content-type') || '') || !UUID.test(id)) return res;
-    let n = null;
-    try { n = await fetchNews(id, env || {}); } catch (e) { n = null; }
-    if (!n) return res;
+    if (!isHTML(res)) return res;
+    const n = UUID.test(id) ? await fetchNews(id, env || {}) : null;
+    // Sem matéria (id inválido, não publicada, Supabase fora): tags genéricas do site
+    if (!n) return withSiteTags(res, request);
     const head = headHTML(n, url);
     const out = new HTMLRewriter()
         .on('title', { element(el) { el.setInnerContent(clip(n.title, 200) + ' — ' + SITE); } })
+        .on('meta[name="description"]', { element(el) { el.remove(); } })   // a da matéria entra no lugar
         .on('head', { element(el) { el.append(head, { html: true }); } })
         .transform(res);
     // A página muda conforme a matéria: cache curto no navegador e na borda

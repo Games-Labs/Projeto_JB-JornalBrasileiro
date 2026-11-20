@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#941F2B">
     <title>Institucional — Jornal Brasileiro (JB)</title>
+    <meta name="description" content="Quem somos, expediente, política editorial, correções, termos de uso e privacidade (LGPD) do Jornal Brasileiro.">
     <link rel="icon" href="../assets/favicon/favicon.ico" sizes="any">
     <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon/favicon-16x16.png">
@@ -102,7 +104,7 @@
                     <ul>
                         <li><strong>No servidor (Supabase):</strong> conta (e-mail e senha, gerenciados pelo Supabase Auth, que guarda a senha apenas como hash), perfil (nome, cidade, bio, interesses e foto), favoritos de quem tem conta, comentários, denúncias e inscrições na newsletter. Regras de acesso no banco de dados garantem que cada pessoa só veja e altere o que é seu; denúncias e a lista da newsletter só são visíveis para a coordenação editorial.</li>
                         <li><strong>Perfil público:</strong> nome, foto, “Sobre você”, cargo e data de entrada aparecem na sua página de perfil e ao lado dos seus comentários. E-mail, cidade e interesses nunca são públicos. Contas da equipe da redação exibem o selo do JB.</li>
-                        <li><strong>Só no seu navegador:</strong> a sessão de login, o tema claro/escuro, suas escolhas de cookies, o histórico de leitura e os favoritos de quem navega sem conta. Apagar os dados do site no navegador remove essas informações.</li>
+                        <li><strong>Só no seu navegador:</strong> a sessão de login, o tema claro/escuro, suas escolhas de cookies, o histórico de leitura, os favoritos de quem navega sem conta e uma cópia das páginas e matérias públicas já abertas, para ler sem internet (nada da sua conta entra nessa cópia). Apagar os dados do site no navegador remove essas informações.</li>
                         <li><strong>Data de nascimento:</strong> usada só para conferir a idade mínima de 16 anos no cadastro (ou no primeiro acesso pelo Google). Ela não é guardada: fica registrado apenas que a idade foi confirmada.</li>
                         <li><strong>Segurança:</strong> as páginas de login, cadastro e recuperação de senha usam o Cloudflare Turnstile (verificação anti-robô, que analisa sinais do navegador sem rastrear para publicidade). Quem entra com o Google compartilha com o JB só nome e e-mail. A verificação em duas etapas guarda no Supabase apenas a chave do seu app autenticador. Ações da redação e eventos de conta (login, troca de senha, ativação da verificação em duas etapas) ficam num registro de auditoria visível só para a coordenação, sem e-mail nem endereço IP.</li>
                         <li>A contagem de leituras de cada matéria é anônima: não guarda quem leu.</li>

@@ -16,6 +16,13 @@
 /assets/*
   Cache-Control: public, max-age=3600
 
+# Service worker (PWA): o navegador confere a versão nova a cada visita
+/sw.js
+  Cache-Control: no-cache
+
+/assets/favicon/site.webmanifest
+  Content-Type: application/manifest+json
+
 # Página que recebe o link de recuperação (o Cloudflare também a serve sem ".html")
 /pages/redefinir-senha*
   Referrer-Policy: no-referrer

@@ -108,10 +108,19 @@
     });
 
     /* ---------- Rodapé ---------- */
+    // Perfis oficiais do JB (ícones em SVG no próprio código: a CSP não carrega nada das redes)
+    const SOCIAL = [
+        ['Instagram', 'https://www.instagram.com/jornalbrasileiro_ofc', '<rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.4" cy="6.6" r="1.3"/>'],
+        ['TikTok', 'https://www.tiktok.com/@jornalbrasileiro_ofc', '<path d="M12.53.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/>'],
+        ['YouTube', 'https://youtube.com/@JornalBrasileiro_OFC', '<path fill-rule="evenodd" d="M23 7.2a3 3 0 0 0-2.1-2.1C19 4.6 12 4.6 12 4.6s-7 0-8.9.5A3 3 0 0 0 1 7.2 31 31 0 0 0 .5 12 31 31 0 0 0 1 16.8a3 3 0 0 0 2.1 2.1c1.9.5 8.9.5 8.9.5s7 0 8.9-.5a3 3 0 0 0 2.1-2.1 31 31 0 0 0 .5-4.8 31 31 0 0 0-.5-4.8zM9.75 15.02V8.98L15.5 12z"/>']
+    ];
+    const socialLinks = () => '<ul class="footer-social" aria-label="Redes sociais do JB">' + SOCIAL.map(s =>
+        '<li><a href="' + s[1] + '" target="_blank" rel="noopener noreferrer me" aria-label="' + s[0] + ' do JB (abre em nova aba)" title="' + s[0] + '">' +
+        '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + s[2] + '</svg></a></li>').join('') + '</ul>';
     function footer() {
         return '<footer class="site-footer"><div class="container"><div class="row g-4">' +
             '<div class="col-lg-4 footer-brand"><div class="logo-sigla">JB</div><h3>Jornal Brasileiro</h3><p>Compromisso com o jornalismo independente, investigativo e pautado pelo interesse público.</p>' +
-            '<form id="newsletterForm" class="mt-3"><label class="form-label small" for="nlEmail">Newsletter</label><div class="input-group input-group-sm"><input type="email" id="nlEmail" class="form-control" placeholder="seu@email.com" required><button class="btn btn-primary" type="submit">Assinar</button></div><div class="small mt-1" id="nlMsg" role="status"></div></form></div>' +
+            '<form id="newsletterForm" class="mt-3"><label class="form-label small" for="nlEmail">Newsletter</label><div class="input-group input-group-sm"><input type="email" id="nlEmail" class="form-control" placeholder="seu@email.com" required><button class="btn btn-primary" type="submit">Assinar</button></div><div class="small mt-1" id="nlMsg" role="status"></div></form>' + socialLinks() + '</div>' +
             '<div class="col-6 col-lg-2"><h4>Seções</h4><ul class="footer-links">' + SECTIONS.map(s => '<li><a href="' + R + s[0] + '">' + s[1] + '</a></li>').join('') + '</ul></div>' +
             '<div class="col-6 col-lg-2"><h4>Institucional</h4><ul class="footer-links">' +
             '<li><a href="' + R + 'pages/institucional.html#quem-somos">Quem Somos</a></li><li><a href="' + R + 'pages/institucional.html#expediente">Expediente</a></li><li><a href="' + R + 'pages/institucional.html#contato">Fale com a Redação</a></li>' +
@@ -213,4 +222,10 @@
         if (out) out.addEventListener('click', async () => { out.disabled = true; await Auth.logout(); location.href = R + 'index.html'; });
     });
     JB.ready.then(fillTicker);
+
+    /* ---------- PWA: instalar como app e ler offline o que já foi aberto (sw.js na raiz) ---------- */
+    // Só em http(s) (file:// não aceita service worker) e só no site real (o modo local fica como está)
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && JB.mode === 'supabase') {
+        window.addEventListener('load', () => { navigator.serviceWorker.register(R + 'sw.js').catch(e => console.warn('Service worker não registrado', e)); });
+    }
 })();

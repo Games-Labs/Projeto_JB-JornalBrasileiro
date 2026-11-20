@@ -1,19 +1,33 @@
 {
+  "id": "../../",
   "name": "Jornal Brasileiro (JB)",
   "short_name": "JB",
+  "description": "Jornalismo informativo e investigativo: política, economia, esportes, checagens e coberturas ao vivo.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "../../",
+  "scope": "../../",
+  "display": "standalone",
+  "categories": ["news"],
+  "theme_color": "#941F2B",
+  "background_color": "#F5F3EF",
   "icons": [
     {
       "src": "android-chrome-192x192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "android-chrome-512x512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     }
   ],
-  "theme_color": "#941F2B",
-  "background_color": "#F5F3EF",
-  "display": "standalone"
+  "shortcuts": [
+    { "name": "Últimas notícias", "url": "../../pages/noticias.html", "icons": [{ "src": "android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Ao vivo", "url": "../../pages/ao-vivo.html", "icons": [{ "src": "android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" }] },
+    { "name": "Verificação de fatos", "url": "../../pages/verificacao.html", "icons": [{ "src": "android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" }] }
+  ]
 }
