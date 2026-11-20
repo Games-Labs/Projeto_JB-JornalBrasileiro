@@ -18,7 +18,7 @@
 
 ### A) Arquitetura de Execução
 
-Aplicação **Multi-Page** com front-end estático (**HTML5, CSS3 e JavaScript nativo**, Bootstrap 5 para a interface), sem etapa de build, hospedada no **Cloudflare Pages**. Os dados ficam no **Supabase**: banco Postgres (notícias, autores, versões das matérias, perfis, comentários, denúncias, favoritos, newsletter e contagem de leituras), **Supabase Auth** (contas, login e recuperação de senha) e **Supabase Storage** (imagens enviadas pelo painel). A segurança é garantida no banco, por **políticas RLS** e privilégios mínimos ([`supabase/01_schema.sql`](supabase/01_schema.sql)); o navegador usa apenas a chave pública (*anon/publishable*).
+Aplicação **Multi-Page** com front-end estático (**HTML5, CSS3 e JavaScript nativo**, Bootstrap 5 para a interface), sem etapa de build, hospedada no **Cloudflare Pages** (uma única *Pages Function* monta a prévia de cada matéria ao compartilhar o link). Os dados ficam no **Supabase**: banco Postgres (notícias, autores, versões das matérias, perfis, comentários, denúncias, favoritos, newsletter e contagem de leituras), **Supabase Auth** (contas, login e recuperação de senha) e **Supabase Storage** (imagens enviadas pelo painel). A segurança é garantida no banco, por **políticas RLS** e privilégios mínimos ([`supabase/01_schema.sql`](supabase/01_schema.sql)); o navegador usa apenas a chave pública (*anon/publishable*).
 
 **Público-alvo:** leitores em geral, avaliadores do projeto acadêmico e cidadãos interessados em simulações de portais de notícias e jornalismo investigativo.
 
@@ -36,12 +36,14 @@ Aplicação **Multi-Page** com front-end estático (**HTML5, CSS3 e JavaScript n
 6. Cadastro, login (e-mail e senha ou **conta do Google**) e **recuperação de senha por e-mail** (Supabase Auth): o leitor digita o **código de verificação** que o Supabase envia e confere, ou abre o link do mesmo e-mail. Contas a partir de **16 anos**; senhas com 8+ caracteres, minúscula, maiúscula, número e símbolo; **CAPTCHA** (Cloudflare Turnstile) no login, cadastro e recuperação.
 7. Salvamento e edição do perfil, com página de **perfil público** (nome, foto e minibiografia).
 8. Área **Minhas Informações** para usuários autenticados.
-9. Painel Administrativo com **CRUD** de notícias, **fluxo editorial** (rascunho → em revisão → aprovada → publicada → arquivada), **agendamento**, **histórico de versões** com restauração, cadastro de **autores**, relatórios de **audiência**, dashboard, caixa de denúncias e moderação de comentários.
+9. Painel Administrativo com **CRUD** de notícias (escritas no **editor de matérias** em página inteira: texto com negrito, itálico, links, intertítulos, citações e listas; vídeo ou live do YouTube; cinco tipos de gráfico; prévia do card e cópia automática no navegador), **fluxo editorial** (rascunho → em revisão → aprovada → publicada → arquivada), **agendamento**, **histórico de versões** com restauração, cadastro de **autores**, relatórios de **audiência**, dashboard, caixa de denúncias e moderação de comentários.
 10. **Hierarquia da redação** (administrador → coordenador → jornalista → leitor), com aba **Equipe e cargos** no painel, regras impostas pelo banco e registro de cada mudança de cargo.
 11. **Perfis públicos** (nome, foto, minibiografia e comentários) com **selo do JB** para a equipe da redação.
 12. **Segurança da conta** (`seguranca.html`): **verificação em duas etapas** com app autenticador (obrigatória para a equipe da redação, opcional para leitores) e confirmação de idade; aba **Segurança** no painel com o estado das proteções, a equipe sem MFA e a **auditoria** (gravada pelo banco).
 13. Aviso e painel de consentimento de cookies, com referência à LGPD.
-14. Interface responsiva para celulares e desktops.
+14. Comentários: quem comentou com uma conta **edita ou exclui o próprio comentário** (fica marcado “editado”); a coordenação continua moderando pelo painel e pela matéria.
+15. **Prévia ao compartilhar**: links de matéria mostram título, resumo e imagem da própria matéria no WhatsApp, X, Facebook e afins (e dados `NewsArticle` para buscadores).
+16. Interface responsiva para celulares e desktops.
 
 **Seções jornalísticas:**
 
@@ -59,10 +61,10 @@ Aplicação **Multi-Page** com front-end estático (**HTML5, CSS3 e JavaScript n
 | **Perfil público** (`perfil-publico.html?id=...`) | Nome, foto, minibiografia, cargo e comentários de qualquer conta; a equipe da redação ganha o selo do JB e a lista de matérias publicadas |
 | **Institucional** | Política editorial, política de correções, transparência e metodologia, expediente, termos e LGPD |
 
-**Em cada matéria:** autor (com link para o perfil e **selo do JB** quando a assinatura é de alguém da redação), data de publicação e de **atualização**, tempo de leitura, leituras, fontes e referências, quadro de **correções**, gráfico com tabela equivalente, *Leia também*, comentários, favoritar, compartilhar, imprimir e **modo leitura**.
+**Em cada matéria:** texto com intertítulos, citações, listas, negrito, itálico e links; **vídeo ou live do YouTube** no topo (o player só carrega quando o leitor clica, pelo domínio `youtube-nocookie.com`); autor (com link para o perfil e **selo do JB** quando a assinatura é de alguém da redação), data de publicação e de **atualização**, tempo de leitura, leituras, fontes e referências, quadro de **correções**, gráfico (barras, colunas, linha, área ou rosca) sempre com os valores escritos e tabela equivalente, *Leia também*, comentários (o autor edita ou exclui o próprio), favoritar, compartilhar, imprimir e **modo leitura**.
 
 **Extras para o leitor:** **perfil público** com os próprios comentários, **Modo escuro**, **acessibilidade** (tamanho do texto e alto contraste, no rodapé e no menu lateral; link "Pular para o conteúdo"), **Minha Central** (favoritos, histórico e recomendações), ranking **Mais lidas**, newsletter demonstrativa e foto de perfil.
-**Extras para a redação:** seletor de imagem (galeria local, envio do computador com redução automática para o Supabase Storage, ou URL), visualização prévia de matérias não publicadas ou agendadas, filtros da tabela por status/tipo e **“Só as minhas”**, selo **“Sua”** nas próprias matérias, publicação de atualizações ao vivo na hora, registro de correções, manchete da capa (coordenação) e aba **Equipe e cargos** com histórico das mudanças.
+**Extras para a redação:** **editor de matérias** em página inteira (`editor.html`: barra de formatação, atalhos Ctrl+B/I/K/S, colar do Word ou Google Docs mantendo a formatação, contador de palavras e tempo de leitura, aviso de título longo, prévia do card, cópia do texto guardada no navegador até salvar e aviso antes de sair sem salvar), seletor de imagem (galeria local, envio do computador com redução automática para WebP e envio ao Supabase Storage, ou URL), vídeo do YouTube, visualização prévia de matérias não publicadas ou agendadas, filtros da tabela por status/tipo e **“Só as minhas”**, selo **“Sua”** nas próprias matérias, publicação de atualizações ao vivo na hora, registro de correções, manchete da capa (coordenação) e aba **Equipe e cargos** com histórico das mudanças.
 
 ### C) Usuários
 
@@ -82,7 +84,7 @@ Na aba **Equipe e cargos** do painel, o administrador coloca qualquer conta como
 
 **Publicado:** siga o passo a passo de **[docs/DEPLOY.md](docs/DEPLOY.md)** (Supabase + Cloudflare Pages). Em resumo:
 
-1. Rode [`supabase/01_schema.sql`](supabase/01_schema.sql) (e, opcionalmente, `02_seed.sql` e `06_exemplos_secoes.sql`) no SQL Editor do Supabase. Projetos criados com versões anteriores rodam só as atualizações que faltam: [`04_auditoria_seguranca.sql`](supabase/04_auditoria_seguranca.sql), [`05_secoes_editoriais.sql`](supabase/05_secoes_editoriais.sql) e [`07_hierarquia.sql`](supabase/07_hierarquia.sql) e [`08_seguranca.sql`](supabase/08_seguranca.sql).
+1. Rode [`supabase/01_schema.sql`](supabase/01_schema.sql) (e, opcionalmente, `02_seed.sql` e `06_exemplos_secoes.sql`) no SQL Editor do Supabase. Projetos criados com versões anteriores rodam só as atualizações que faltam: [`04_auditoria_seguranca.sql`](supabase/04_auditoria_seguranca.sql), [`05_secoes_editoriais.sql`](supabase/05_secoes_editoriais.sql) e [`07_hierarquia.sql`](supabase/07_hierarquia.sql), [`08_seguranca.sql`](supabase/08_seguranca.sql) e [`09_editor_video_comentarios.sql`](supabase/09_editor_video_comentarios.sql).
 2. Cole a **Project URL**, a chave **anon/publishable** e a chave **do site** do Turnstile em [`assets/js/config.js`](assets/js/config.js). Nunca use a `service_role`.
 3. Publique a pasta no Cloudflare Pages (sem build), configure no Supabase as URLs de redirecionamento, o SMTP, o CAPTCHA, o MFA, o login com o Google e a política de senha, e crie o primeiro administrador.
 
@@ -113,19 +115,22 @@ JB/
 │   ├── recuperar-senha.html   # Pedir a recuperação e confirmar o código do e-mail com a nova senha
 │   ├── redefinir-senha.html   # Aberta pelo link do e-mail: define a nova senha
 │   ├── seguranca.html         # Segurança da conta: idade, código do app autenticador, ativar/remover MFA
-│   └── admin.html             # Painel Administrativo
+│   ├── admin.html             # Painel Administrativo (lista de matérias, autores, audiência, moderação, equipe, segurança)
+│   └── editor.html            # Editor de matérias em página inteira (?id= para editar)
 ├── assets/
-│   ├── css/style.css          # Tema do JB sobre o Bootstrap
+│   ├── css/style.css          # Tema do JB sobre o Bootstrap (paleta, editorias, modo escuro e alto contraste)
+│   ├── fonts/                 # Source Serif 4 e Inter (licença SIL OFL), servidas pelo próprio site
 │   ├── js/
 │   │   ├── config.js          # URL e chave pública do Supabase (única configuração)
 │   │   ├── storage.js         # Objeto JB, utilitários, preferências e modo de demonstração local
 │   │   ├── supabase-backend.js# Dados, login e imagens no Supabase (assume quando config.js está preenchido)
 │   │   ├── layout.js          # Ticker, cabeçalho, rodapé e cookies
-│   │   └── home · news-list · article · arquivo · autor · central · denuncias · auth · perfil · perfil-publico · seguranca · admin .js
+│   │   └── home · news-list · article · arquivo · autor · central · denuncias · auth · perfil · perfil-publico · seguranca · admin · editor .js
 │   ├── favicon/               # Ícones do site (favicon.io)
 │   ├── img/                   # Imagens locais e ilustrações SVG
 │   └── vendor/                # Bootstrap 5.3.3 e supabase-js 2.45.4 (cópias locais)
-├── supabase/                  # Schema + RLS, seed, promoção de admin, atualizações (04, 05, 07, 08) e exemplos (06)
+├── functions/pages/noticia.js # Cloudflare Pages Function: título, resumo e imagem da matéria para a prévia de links
+├── supabase/                  # Schema + RLS, seed, promoção de admin, atualizações (04, 05, 07, 08, 09) e exemplos (06)
 ├── docs/                      # DEPLOY.md e capturas de tela
 ├── LICENSE
 └── README.md
@@ -135,11 +140,12 @@ JB/
 
 | Onde | O quê |
 |------|-------|
-| **Supabase (banco)** | Notícias (com tipo, veredito, fontes, correções, atualizações ao vivo, cronologia, personagens, gráfico e quem criou), autores, versões anteriores das matérias (só a redação lê), perfis (nome, foto, bio e cargo são públicos; e-mail, cidade e interesses, não), registro de mudanças de cargo e **auditoria** (só coordenação), data em que a idade foi confirmada (a data de nascimento não é guardada), comentários, denúncias, favoritos de quem tem conta, newsletter e contagem de leituras |
+| **Supabase (banco)** | Notícias (com tipo, veredito, texto com formatação, vídeo do YouTube (só o identificador), fontes, correções, atualizações ao vivo, cronologia, personagens, gráfico e quem criou), autores, versões anteriores das matérias (só a redação lê), perfis (nome, foto, bio e cargo são públicos; e-mail, cidade e interesses, não), registro de mudanças de cargo e **auditoria** (só coordenação), data em que a idade foi confirmada (a data de nascimento não é guardada), comentários (com a data da última edição pelo autor), denúncias, favoritos de quem tem conta, newsletter e contagem de leituras |
 | **Supabase Auth** | Contas e senhas (o Supabase guarda a senha apenas como hash), vínculo com a conta do Google e os apps autenticadores da verificação em duas etapas |
 | **Cloudflare Turnstile** | Verificação anti-robô nas páginas de login, cadastro, recuperação e troca de senha (o token vai para o Supabase, que confere com a chave secreta) |
+| **YouTube** | Só quando o leitor clica para assistir a um vídeo: o player vem de `youtube-nocookie.com`. Antes do clique, a página carrega apenas a imagem de capa do vídeo |
 | **Supabase Storage** | Imagens enviadas pelo painel (bucket público `news-images`; só a redação envia; trocar ou apagar só a coordenação ou quem enviou) |
-| **Navegador — `localStorage`** | Sessão de login (gerenciada pelo supabase-js), `jb_theme` (tema), `jb_a11y` (tamanho do texto e alto contraste), `jb_cookies` (consentimento), `jb_history` (histórico de leitura) e `jb_favs` (favoritos de visitantes, que vão para a conta no login) |
+| **Navegador — `localStorage`** | Sessão de login (gerenciada pelo supabase-js), `jb_theme` (tema), `jb_a11y` (tamanho do texto e alto contraste), `jb_cookies` (consentimento), `jb_history` (histórico de leitura), `jb_favs` (favoritos de visitantes, que vão para a conta no login) e `jb_drafts` (só para a redação: cópia das matérias que estão sendo escritas no editor, apagada ao salvar; até 10) |
 | **Navegador — `sessionStorage`** | `jb_recovery`: marca temporária de que a aba confirmou um código ou abriu um link de recuperação de senha (sem senha nem token); `jb_login_guard`: quantas senhas erradas seguidas nesta aba e até quando esperar |
 
 > Senhas **nunca** são guardadas no navegador. No modo Supabase, dados antigos do modo de demonstração (contas, sessão, denúncias) são apagados do navegador na primeira visita.
@@ -200,6 +206,8 @@ Não foram encontradas falhas de XSS (todo HTML dinâmico passa por `JB.util.esc
 - **Recuperação por código:** código recusado testado contra o Supabase real; fluxo completo (verificação, senha recusada e nova tentativa sem reenviar o código, troca da senha e encerramento global das sessões) com as respostas do Supabase simuladas no navegador.
 - Não testado automaticamente: a entrega real do e-mail de recuperação e um código real (dependem do SMTP e do modelo de e-mail configurados no Supabase).
 
+- **Editor, vídeo, comentários editáveis, gráficos e nova identidade visual (novembro de 2026):** testes de unidade do texto formatado (escape, links só http/https, intertítulos, listas, entrevistas), do reconhecimento de links do YouTube e dos cinco gráficos (60 checagens); no navegador, modo local com 102 checagens (cores da marca e das editorias, fontes locais sem Google, modo escuro e alto contraste, editor com formatação, colar do Google Docs com script malicioso, vídeo só depois do clique, gráficos, editar/excluir comentário, permissões de jornalista, 320/390/1500 px sem rolagem lateral em todas as páginas) e Supabase real com CSP (16 checagens, inclusive o site novo funcionando com o banco ainda sem a migração 09); a migração 09 rodou antes num ensaio desfeito com 25 checagens de permissão (dona edita só o texto do próprio comentário, outra conta/visitante/conta não liberada não editam, admin não reescreve mas modera, vídeo validado, versionado e auditado) e foi aplicada em produção; a *Pages Function* foi testada no simulador do Cloudflare (`wrangler pages dev`): prévia com dados da matéria, cabeçalhos de segurança mantidos e página sem erros.
+
 ### Pendências e riscos conhecidos
 
 - Configurar **SMTP próprio**, as **Redirect URLs** e o **modelo do e-mail "Reset Password" com `{{ .Token }}`** no Supabase (ver [docs/DEPLOY.md](docs/DEPLOY.md)); sem isso, leitores não recebem o e-mail de recuperação nem o de confirmação, e o e-mail não mostra o código.
@@ -224,7 +232,8 @@ O repositório pode ser público sem expor o portal:
 - [Supabase](https://supabase.com) (`supabase-js` 2.45.4 incluído em `assets/vendor/supabase/`, licença MIT) — banco Postgres, autenticação, Storage e RLS
 - [Cloudflare Pages](https://pages.cloudflare.com) — hospedagem estática
 - [Bootstrap 5.3.3](https://getbootstrap.com/) — grid, navbar, offcanvas, modal, formulários e abas (licença MIT)
-- Fontes *Merriweather* e *Inter* (Google Fonts, opcionais; há fallback para fontes do sistema)
+- Fontes *Source Serif 4* (títulos e texto das matérias) e *Inter* (interface), servidas pelo próprio site em `assets/fonts/` (licença SIL OFL; sem pedidos ao Google)
+- Cloudflare Pages Functions — só para a prévia de compartilhamento das matérias (`functions/pages/noticia.js`)
 
 ## 🖼️ Imagens
 
@@ -234,7 +243,7 @@ As imagens em `assets/img/` são ilustrativas e **não** representam acontecimen
 
 Distribuído sob a **[PolyForm Noncommercial License 1.0.0](LICENSE)**: o uso comercial não é permitido sem autorização. Direitos autorais © 2026 Mathias Silva Cunha (GamesYutuber).
 
-A licença cobre o código-fonte do projeto. Componentes de terceiros mantêm suas próprias licenças (Bootstrap — MIT; fontes do Google — SIL OFL) e as fotografias podem ter titulares distintos.
+A licença cobre o código-fonte do projeto. Componentes de terceiros mantêm suas próprias licenças (Bootstrap — MIT; fontes Source Serif 4 e Inter — SIL OFL, licenças em `assets/fonts/`) e as fotografias podem ter titulares distintos.
 
 ## 👥 Equipe e autoria
 

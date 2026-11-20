@@ -37,7 +37,7 @@ JB.ready.then(function () {
     function heroHTML(n) {
         return '<article class="list-hero">' +
             '<a href="' + esc(util.articleUrl(n)) + '" tabindex="-1" aria-hidden="true"><img src="' + esc(util.imgSrc(n)) + '" alt="" fetchpriority="high"></a>' +
-            '<div>' + util.badgesHTML(n) + '<a class="category-tag" href="' + esc(util.catUrl(n.category)) + '">' + esc(util.catLabel(n.category)) + '</a>' +
+            '<div>' + util.badgesHTML(n) + util.catTag(n.category) +
             '<h2><a href="' + esc(util.articleUrl(n)) + '">' + esc(n.title) + '</a></h2><p>' + esc(n.subtitle) + '</p>' +
             '<span class="meta-info">Por ' + esc(n.author) + ' • ' + util.timeAgo(n.date) + '</span></div></article>';
     }

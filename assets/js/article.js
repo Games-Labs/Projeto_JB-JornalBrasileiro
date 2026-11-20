@@ -41,14 +41,11 @@ JB.ready.then(function () {
         return '<div class="verdict-box verdict-' + esc(n.verdict) + '"><span class="small text-uppercase fw-bold">Classificação</span>' +
             '<strong>' + esc(v.label) + '</strong><span>' + esc(v.desc) + ' <a href="verificacao.html#metodo">Como checamos</a></span></div>';
     }
-    // Entrevista: parágrafos que começam com "P:" / "R:" viram pergunta e resposta
-    function bodyHTML() {
-        return n.body.map(p => {
-            const m = /^\s*([PR])\s*[:\-–—]\s*(.*)$/s.exec(p);
-            if (kind === 'entrevista' && m) return m[1] === 'P' ? '<p class="qa-q"><span class="qa-tag">JB</span>' + esc(m[2]) + '</p>' : '<p class="qa-a">' + esc(m[2]) + '</p>';
-            return '<p>' + esc(p) + '</p>';
-        }).join('');
-    }
+    // Texto com intertítulos, listas, citações, negrito/itálico e links (util.bodyHTML escapa tudo).
+    // Entrevista: parágrafos que começam com "P:" / "R:" viram pergunta e resposta.
+    const bodyHTML = () => util.bodyHTML(n.body, { interview: kind === 'entrevista' });
+    // Com vídeo do YouTube, o player toma o lugar da foto no topo (a foto segue nos cards e no compartilhamento)
+    const mediaHTML = () => util.videoHTML(n) || '<img class="lead-img" fetchpriority="high" src="' + esc(util.imgSrc(n)) + '" alt="' + esc(n.title) + '">';
     function liveHTML() {
         if (kind !== 'aovivo') return '';
         const ups = (n.updates || []).slice().sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -101,7 +98,7 @@ JB.ready.then(function () {
     }
 
     box.innerHTML = previewNote() + util.badgesHTML(n) +
-        '<a class="category-tag" href="' + esc(util.catUrl(n.category)) + '">' + esc(util.catLabel(n.category)) + '</a>' +
+        util.catTag(n.category) +
         '<h1 class="article-title">' + esc(n.title) + '</h1><p class="lead">' + esc(n.subtitle) + '</p><div id="article-meta">' + meta() + '</div>' +
         '<div class="article-tools d-flex flex-wrap gap-2 mb-3 no-print">' +
         '<button type="button" class="btn btn-outline-dark btn-sm" id="btn-fav"></button>' +
@@ -111,10 +108,10 @@ JB.ready.then(function () {
         '<span class="btn-group btn-group-sm" role="group" aria-label="Tamanho do texto"><button type="button" class="btn btn-outline-dark" data-a11y="font-" aria-label="Diminuir o texto">A−</button><button type="button" class="btn btn-outline-dark" data-a11y="font+" aria-label="Aumentar o texto">A+</button></span>' +
         '<span class="small align-self-center" id="share-msg" role="status"></span></div>' +
         kindNote() + verdictBox() +
-        '<img class="lead-img" fetchpriority="high" src="' + esc(util.imgSrc(n)) + '" alt="' + esc(n.title) + '">' +
+        mediaHTML() +
         '<div class="article-body">' + bodyHTML() + '</div>' +
         '<div id="live-wrap">' + liveHTML() + '</div>' +
-        util.barChartHTML(n.chart) + timelineHTML() + sourcesHTML() + correctionsHTML() + authorBox() +
+        util.chartHTML(n.chart) + timelineHTML() + sourcesHTML() + correctionsHTML() + authorBox() +
         '<p class="small text-muted mt-3">Conteúdo fictício, produzido para fins acadêmicos.</p>' +
         '<button type="button" class="btn btn-dark reading-exit" id="btn-read-exit">Sair do modo leitura</button>';
     if (JB.ui) JB.ui.paintA11y();
@@ -171,8 +168,12 @@ JB.ready.then(function () {
         }, 30000);
     }
 
-    /* Comentários (moderados pelo editor) */
+    /* Comentários (moderados pelo editor). Quem escreveu, logado, edita ou apaga o próprio comentário;
+       coordenador/admin apaga qualquer um (também no painel). Quem confere é o banco (RLS). */
     const list = document.getElementById('comment-list');
+    const me = Auth.current();
+    let editing = null;   // id do comentário em edição
+    const mine = c => !!me && !!c.userId && c.userId === me.id && Auth.accountOk();
     const renderComments = () => {
         const cs = Comments.forNews(n.id);
         document.getElementById('comment-count').textContent = cs.length;
@@ -182,11 +183,42 @@ JB.ready.then(function () {
             const s = Members.staffById(c.userId);
             return '<a class="comment-author" href="' + esc(util.profileUrl(c.userId)) + '"><strong>' + esc(c.name) + '</strong></a>' + (s ? ' ' + util.sealHTML(s.role) : '');
         };
-        list.innerHTML = cs.map(c => '<div class="comment">' + who(c) + ' <small>• ' + esc(util.fmtDate(c.date)) + '</small><p class="mb-0 mt-1" style="white-space:pre-wrap">' + esc(c.text) + '</p></div>').join('') ||
+        const actions = c => {
+            const b = [];
+            if (mine(c) && Comments.canEdit()) b.push('<button type="button" class="btn btn-link btn-sm" data-cedit="' + esc(c.id) + '">Editar</button>');
+            if (mine(c) || Auth.isEditor()) b.push('<button type="button" class="btn btn-link btn-sm text-danger" data-cdel="' + esc(c.id) + '"' + (mine(c) ? '' : ' title="Moderação"') + '>Excluir</button>');
+            return b.length ? '<span class="comment-actions">' + b.join('') + '</span>' : '';
+        };
+        const body = c => editing === c.id
+            ? '<form class="comment-edit" data-cform="' + esc(c.id) + '" method="post"><label class="visually-hidden" for="ce-' + esc(c.id) + '">Editar comentário</label>' +
+              '<textarea class="form-control" id="ce-' + esc(c.id) + '" rows="3" maxlength="500" required>' + esc(c.text) + '</textarea>' +
+              '<div class="d-flex gap-2 mt-2"><button class="btn btn-primary btn-sm" type="submit">Salvar</button><button class="btn btn-outline-dark btn-sm" type="button" data-ccancel>Cancelar</button></div></form>'
+            : '<p class="comment-text">' + esc(c.text) + '</p>';
+        list.innerHTML = cs.map(c => '<div class="comment" id="c-' + esc(c.id) + '"><div class="comment-head">' + who(c) + ' <small>• ' + esc(util.fmtDate(c.date)) +
+            (c.editedAt ? ' <span class="comment-edited" title="Editado em ' + esc(util.fmtDate(c.editedAt)) + '">(editado)</span>' : '') + '</small>' + actions(c) + '</div>' + body(c) + '</div>').join('') ||
             '<p class="text-muted">Seja o primeiro a comentar.</p>';
+        if (editing) { const ta = list.querySelector('[data-cform] textarea'); if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } }
     };
+    list.addEventListener('click', async e => {
+        const ed = e.target.closest('[data-cedit]'), del = e.target.closest('[data-cdel]'), cancel = e.target.closest('[data-ccancel]');
+        if (ed) { editing = ed.dataset.cedit; renderComments(); }
+        if (cancel) { editing = null; renderComments(); }
+        if (del && confirm('Excluir este comentário? Não dá para desfazer.')) {
+            Comments.remove(n.id, del.dataset.cdel); editing = null; renderComments();
+            if (await JB.flush()) { const m = document.getElementById('comment-msg'); m.textContent = 'Comentário excluído.'; }
+        }
+    });
+    list.addEventListener('submit', async e => {
+        const f = e.target.closest('[data-cform]'); if (!f) return;
+        e.preventDefault();
+        const text = f.querySelector('textarea').value.trim();
+        if (!text) { f.querySelector('textarea').focus(); return; }
+        const cid = f.dataset.cform;
+        if (!Comments.update(n.id, cid, text)) return;
+        editing = null; renderComments();
+        if (await JB.flush()) { document.getElementById('comment-msg').textContent = 'Comentário atualizado.'; const el = document.getElementById('c-' + cid); if (el) el.querySelector('[data-cedit]')?.focus(); }
+    });
     const form = document.getElementById('comment-form');
-    const me = Auth.current();
     if (me) {   // logado: o comentário sai sempre com o nome da conta
         form.elements.name.value = me.name; form.elements.name.readOnly = true;
         document.getElementById('c-name-help').hidden = false;

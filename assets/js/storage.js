@@ -13,7 +13,7 @@
 (function () {
     'use strict';
 
-    const KEYS = { news: 'jb_news', users: 'jb_users', session: 'jb_session', reports: 'jb_reports', cookies: 'jb_cookies', views: 'jb_views', favs: 'jb_favs', history: 'jb_history', comments: 'jb_comments', newsletter: 'jb_newsletter', theme: 'jb_theme', authors: 'jb_authors', versions: 'jb_versions', a11y: 'jb_a11y', seed: 'jb_seed', roleLog: 'jb_role_log' };
+    const KEYS = { news: 'jb_news', users: 'jb_users', session: 'jb_session', reports: 'jb_reports', cookies: 'jb_cookies', views: 'jb_views', favs: 'jb_favs', history: 'jb_history', comments: 'jb_comments', newsletter: 'jb_newsletter', theme: 'jb_theme', authors: 'jb_authors', versions: 'jb_versions', a11y: 'jb_a11y', seed: 'jb_seed', roleLog: 'jb_role_log', drafts: 'jb_drafts' };
 
     // Fallback em memória caso o localStorage esteja bloqueado
     const memory = {};
@@ -108,11 +108,12 @@
         if (n.chart === undefined) n.chart = null;
         if (n.verdict === undefined) n.verdict = null;
         if (n.updated_at === undefined) n.updated_at = null;
+        if (typeof n.video !== 'string') n.video = '';
         n.live = !!n.live;
         return n;
     }
     // Campos cuja mudança gera uma nova versão (mesma lista do gatilho news_track_changes no banco)
-    const VERSIONED = ['title', 'subtitle', 'body', 'image', 'author', 'category', 'kind', 'verdict', 'sources', 'timeline', 'people', 'chart'];
+    const VERSIONED = ['title', 'subtitle', 'body', 'image', 'author', 'category', 'kind', 'verdict', 'sources', 'timeline', 'people', 'chart', 'video'];
     const TOUCHES = VERSIONED.concat(['updates', 'corrections']);   // mudam a data de atualização
 
     // Imagens locais disponíveis (usadas no painel e como fallback por categoria)
@@ -331,7 +332,7 @@
         refresh() { return Promise.resolve(true); },
         search(q) {
             q = q.toLowerCase();
-            return News.all().filter(x => (x.title + ' ' + x.subtitle + ' ' + x.author + ' ' + x.body.join(' ') + ' ' + x.updates.map(u => u.text).join(' ')).toLowerCase().includes(q));
+            return News.all().filter(x => (x.title + ' ' + x.subtitle + ' ' + x.author + ' ' + x.body.map(plainText).join(' ') + ' ' + x.updates.map(u => u.text).join(' ')).toLowerCase().includes(q));
         }
     };
 
@@ -505,7 +506,7 @@
             return News.all().filter(x => v[x.id]).sort((a, b) => v[b.id] - v[a.id]).slice(0, n);
         }
     };
-    const readingTime = n => Math.max(1, Math.round(n.body.join(' ').split(/\s+/).length / 200));
+    const readingTime = n => Math.max(1, Math.round(n.body.map(plainText).join(' ').split(/\s+/).length / 200));
 
     /* ---------- Favoritos, histórico, comentários, newsletter e tema ---------- */
     const Favs = {
@@ -529,6 +530,16 @@
         },
         // Comentários de uma conta (perfil público), só em matérias publicadas
         byUser(userId) { return Promise.resolve(Comments.flat().filter(c => c.userId === userId && News.all().some(n => n.id === c.newsId)).slice(0, 30)); },
+        canEdit() { return true; },
+        // O próprio autor edita o texto (no Supabase o banco confere: só quem escreveu, só o texto)
+        update(newsId, cid, text) {
+            const all = read(KEYS.comments, {}), me = Auth.current();
+            const c = (all[newsId] || []).find(x => x.id === cid);
+            if (!c || !me || c.userId !== me.id) return false;
+            c.text = text; c.editedAt = new Date().toISOString();
+            write(KEYS.comments, all);
+            return true;
+        },
         remove(newsId, cid) { const all = read(KEYS.comments, {}); all[newsId] = (all[newsId] || []).filter(c => c.id !== cid); write(KEYS.comments, all); },
         flat() { const all = read(KEYS.comments, {}); return Object.keys(all).flatMap(id => all[id].map(c => Object.assign({ newsId: id }, c))).sort((a, b) => new Date(b.date) - new Date(a.date)); },
         load() { return Promise.resolve(true); }   // no Supabase baixa só os comentários da matéria aberta
@@ -537,6 +548,18 @@
         count() { return read(KEYS.newsletter, []).length; },
         add(email) { email = email.trim().toLowerCase(); const l = read(KEYS.newsletter, []); if (l.includes(email)) return false; l.push(email); write(KEYS.newsletter, l); return true; },
         load() { return Promise.resolve(true); }
+    };
+    // Rascunhos do editor de matérias guardados só neste navegador (protege contra fechar a aba sem
+    // salvar). Conveniência de quem escreve: a matéria de verdade continua no banco. Até 10 rascunhos.
+    const Drafts = {
+        get(key) { const all = read(KEYS.drafts, {}) || {}; return all[key] || null; },
+        set(key, data) {
+            const all = read(KEYS.drafts, {}) || {};
+            all[key] = { data, at: new Date().toISOString() };
+            const keep = Object.keys(all).sort((a, b) => new Date(all[b].at) - new Date(all[a].at)).slice(0, 10);
+            write(KEYS.drafts, keep.reduce((o, k) => { o[k] = all[k]; return o; }, {}));
+        },
+        clear(key) { const all = read(KEYS.drafts, {}) || {}; if (key in all) { delete all[key]; write(KEYS.drafts, all); } }
     };
     // Imagens enviadas pelo painel: no modo local viram data URL; no Supabase vão para o Storage.
     const Media = {
@@ -621,39 +644,191 @@
         if (k === 'aovivo' && n.live) parts.push(liveBadge());
         else if (k !== 'noticia') parts.push('<span class="kind-badge kind-' + esc(k) + '">' + esc(kindLabel(k)) + '</span>');
         if (k === 'checagem' && n.verdict) parts.push(verdictBadge(n.verdict));
+        if (n.video) parts.push('<span class="kind-badge kind-video"><svg viewBox="0 0 16 16" width="9" height="9" aria-hidden="true" focusable="false"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg> Vídeo</span>');
         return parts.length ? '<div class="card-badges">' + parts.join('') + '</div>' : '';
     }
     // Data de atualização: só aparece se for depois da publicação (edição, correção ou nova atualização ao vivo).
     const wasUpdated = n => !!n.updated_at && new Date(n.updated_at) - new Date(n.date) > 60000;
+    // Rótulo da editoria com a cor dela (classes cat-* em style.css)
+    const catTag = c => '<a class="category-tag cat-' + esc(c) + '" href="' + esc(catUrl(c)) + '">' + esc(catLabel(c)) + '</a>';
 
     function newsCard(n) {
         const byline = OPINION_KINDS.includes(n.kind) || n.kind === 'entrevista' ? '<span class="card-author">Por ' + esc(n.author) + '</span>' : '';
-        return '<article class="news-card">' +
-            '<img class="card-thumb" loading="lazy" src="' + esc(imgSrc(n)) + '" alt="' + esc(n.title) + '">' +
-            badgesHTML(n) +
-            '<a class="category-tag" href="' + esc(catUrl(n.category)) + '">' + esc(catLabel(n.category)) + '</a>' +
+        return '<article class="news-card cat-' + esc(n.category) + '">' +
+            '<a class="card-media" href="' + esc(articleUrl(n)) + '" tabindex="-1" aria-hidden="true"><img class="card-thumb" loading="lazy" decoding="async" src="' + esc(imgSrc(n)) + '" alt=""></a>' +
+            '<div class="news-card-body">' + badgesHTML(n) + catTag(n.category) +
             '<h3><a href="' + esc(articleUrl(n)) + '">' + esc(n.title) + '</a></h3>' +
-            '<p>' + esc(n.subtitle) + '</p>' + byline + '<span class="time">' + timeAgo(n.date) + '</span></article>';
+            '<p>' + esc(n.subtitle) + '</p>' + byline + '<span class="time">' + timeAgo(n.date) + '</span></div></article>';
     }
 
-    // Gráfico de barras horizontais (uma série, cor única). Valores sempre escritos ao lado da barra
-    // e tabela equivalente para leitores de tela / impressão. items: [{label, value}]
-    function barChartHTML(c) {
-        const items = ((c && c.items) || []).filter(i => i && String(i.label || '').trim() && isFinite(Number(i.value)));
-        if (!items.length) return '';
+    /* ---------- Vídeos do YouTube ----------
+       No banco fica só o identificador: o ID do vídeo (11 caracteres; serve também para lives) ou
+       "channel:UC…" (a live atual de um canal). O player usa youtube-nocookie.com e só carrega
+       quando o leitor clica (até lá nenhum dado vai para o YouTube). */
+    const YT_ID = /^[A-Za-z0-9_-]{11}$/, YT_CHANNEL = /^UC[A-Za-z0-9_-]{22}$/;
+    function parseVideo(input) {
+        const s = String(input || '').trim();
+        if (!s) return '';
+        if (YT_ID.test(s)) return s;
+        if (/^channel:/.test(s)) return YT_CHANNEL.test(s.slice(8)) ? s : '';
+        let u;
+        try { u = new URL(/^https?:\/\//i.test(s) ? s : 'https://' + s); } catch (e) { return ''; }
+        const host = u.hostname.replace(/^(www|m|music)\./, '');
+        const parts = u.pathname.split('/').filter(Boolean);
+        let id = '';
+        if (host === 'youtu.be') id = parts[0] || '';
+        else if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+            if (parts[0] === 'watch') id = u.searchParams.get('v') || '';
+            else if (['embed', 'shorts', 'live', 'v'].includes(parts[0]) && parts[1] !== 'live_stream') id = parts[1] || '';
+            else if (parts[0] === 'embed' && parts[1] === 'live_stream') { const ch = u.searchParams.get('channel') || ''; return YT_CHANNEL.test(ch) ? 'channel:' + ch : ''; }
+            else if (parts[0] === 'channel' && YT_CHANNEL.test(parts[1] || '')) return 'channel:' + parts[1];
+        }
+        return YT_ID.test(id) ? id : '';
+    }
+    const isChannel = v => /^channel:/.test(v);
+    const videoEmbedUrl = v => isChannel(v) ? 'https://www.youtube-nocookie.com/embed/live_stream?channel=' + v.slice(8) + '&autoplay=1'
+        : 'https://www.youtube-nocookie.com/embed/' + v + '?autoplay=1&rel=0';
+    const videoPageUrl = v => isChannel(v) ? 'https://www.youtube.com/channel/' + v.slice(8) + '/live' : 'https://www.youtube.com/watch?v=' + v;
+    // Player "clique para carregar": capa + botão. O clique é tratado em layout.js (CSP sem script inline).
+    function videoHTML(n) {
+        const v = parseVideo(n && n.video);
+        if (!v) return '';
+        const poster = isChannel(v) ? imgSrc(n) : 'https://i.ytimg.com/vi/' + v + '/hqdefault.jpg';
+        const label = (n.kind === 'aovivo' ? 'Assistir à transmissão: ' : 'Assistir ao vídeo: ') + (n.title || '');
+        return '<figure class="jb-video" data-video-embed="' + esc(videoEmbedUrl(v)) + '" data-video-title="' + esc(n.title || 'Vídeo') + '">' +
+            '<button type="button" class="jb-video-play" aria-label="' + esc(label) + '"><img src="' + esc(poster) + '" alt="" loading="lazy" decoding="async">' +
+            '<span class="jb-video-icon" aria-hidden="true"><svg viewBox="0 0 68 48" width="68" height="48" focusable="false"><path d="M66.5 7.7a8.5 8.5 0 0 0-6-6C55.2.3 34 .3 34 .3S12.8.3 7.5 1.7a8.5 8.5 0 0 0-6 6C.1 13 .1 24 .1 24s0 11 1.4 16.3a8.5 8.5 0 0 0 6 6C12.8 47.7 34 47.7 34 47.7s21.2 0 26.5-1.4a8.5 8.5 0 0 0 6-6C67.9 35 67.9 24 67.9 24s0-11-1.4-16.3z" fill="currentColor"/><path d="M45 24 27 14v20z" fill="#fff"/></svg></span></button>' +
+            '<figcaption class="jb-video-note">Vídeo do YouTube. Ao reproduzir, o YouTube pode registrar dados da sua visita. <a href="' + esc(videoPageUrl(v)) + '" target="_blank" rel="noopener noreferrer">Abrir no YouTube</a></figcaption></figure>';
+    }
+
+    /* ---------- Texto da matéria com formatação ----------
+       Cada item de `body` é um bloco de texto (o banco continua com uma lista de strings):
+         "## Intertítulo", "### Subtítulo menor", "> Citação", "- item" (lista), "1. item" (lista numerada)
+         ou um parágrafo. Dentro do bloco: **negrito**, *itálico*, [texto](https://link). "\*" = asterisco literal.
+       Tudo é escapado antes de virar HTML; links só http/https. Matérias antigas (texto puro) aparecem iguais. */
+    const MD_ESC = { '\\': '\uE000', '*': '\uE001', '[': '\uE002', ']': '\uE003', '(': '\uE004', ')': '\uE005', '#': '\uE006', '>': '\uE007', '-': '\uE008', '.': '\uE009' };
+    const MD_UNESC = Object.keys(MD_ESC).reduce((o, k) => { o[MD_ESC[k]] = k; return o; }, {});
+    const hideEscapes = s => s.replace(/\\([\\*[\]()#>.-])/g, (m, c) => MD_ESC[c]);
+    const showEscapes = s => s.replace(/[\uE000-\uE009]/g, c => MD_UNESC[c]);
+    function inlineHTML(text) {
+        let s = esc(hideEscapes(String(text == null ? '' : text)));
+        s = s.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)*]+)\)/g, (m, t, u) => '<a href="' + u + '" target="_blank" rel="noopener noreferrer nofollow">' + t + '</a>');
+        s = s.replace(/\*\*(?=\S)([\s\S]*?\S)\*\*/g, '<strong>$1</strong>');
+        s = s.replace(/\*(?=[^\s*])([^*]*?[^\s*])\*/g, '<em>$1</em>');
+        s = s.replace(/\*(?=[^\s*])([^*\s])\*/g, '<em>$1</em>');
+        return showEscapes(s).replace(/\n/g, '<br>');   // quebra de linha dentro do bloco (Shift+Enter no editor)
+    }
+    // Tipo do bloco: {type: 'p'|'h2'|'h3'|'quote'|'ul'|'ol', text}
+    function blockOf(raw) {
+        const s = String(raw == null ? '' : raw);
+        let m;
+        if ((m = /^###\s+([\s\S]+)$/.exec(s))) return { type: 'h3', text: m[1] };
+        if ((m = /^##\s+([\s\S]+)$/.exec(s))) return { type: 'h2', text: m[1] };
+        if ((m = /^>\s?([\s\S]+)$/.exec(s))) return { type: 'quote', text: m[1] };
+        if ((m = /^[-•]\s+([\s\S]+)$/.exec(s))) return { type: 'ul', text: m[1] };
+        if ((m = /^\d{1,3}[.)]\s+([\s\S]+)$/.exec(s))) return { type: 'ol', text: m[1] };
+        return { type: 'p', text: s };
+    }
+    // Texto sem marcação (busca, tempo de leitura, resumos)
+    const plainText = raw => showEscapes(hideEscapes(blockOf(raw).text).replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)*]+)\)/g, '$1').replace(/\*\*|\*/g, '').replace(/\n/g, ' '));
+    // opts.interview: parágrafos "P:" / "R:" viram pergunta e resposta (entrevistas)
+    function bodyHTML(blocks, opts) {
+        opts = opts || {};
+        let html = '', list = null;
+        const close = () => { if (list) { html += '</' + list + '>'; list = null; } };
+        (blocks || []).forEach(raw => {
+            const b = blockOf(raw);
+            if (b.type === 'ul' || b.type === 'ol') {
+                if (list !== b.type) { close(); html += '<' + b.type + '>'; list = b.type; }
+                html += '<li>' + inlineHTML(b.text) + '</li>';
+                return;
+            }
+            close();
+            const qa = opts.interview && b.type === 'p' && /^\s*([PR])\s*[:\-–—]\s*([\s\S]*)$/.exec(b.text);
+            if (qa) html += qa[1] === 'P' ? '<p class="qa-q"><span class="qa-tag">JB</span><span>' + inlineHTML(qa[2]) + '</span></p>' : '<p class="qa-a">' + inlineHTML(qa[2]) + '</p>';
+            else if (b.type === 'h2' || b.type === 'h3') html += '<' + b.type + '>' + inlineHTML(b.text) + '</' + b.type + '>';
+            else if (b.type === 'quote') html += '<blockquote><p>' + inlineHTML(b.text) + '</p></blockquote>';
+            else html += '<p>' + inlineHTML(b.text) + '</p>';
+        });
+        close();
+        return html;
+    }
+
+    /* ---------- Gráficos ----------
+       chart: {type, title, unit, source, items:[{label, value}]}. Uma série. Os valores sempre aparecem
+       escritos (não dependem da cor) e há uma tabela equivalente para leitor de tela e impressão. */
+    const CHART_TYPES = { bar: 'Barras horizontais', column: 'Colunas', line: 'Linha', area: 'Área', donut: 'Rosca (partes de um todo)' };
+    const CHART_COLORS = 12;   // cores --chart-1 … --chart-12 em style.css (rosca)
+    const fmtNum = v => Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+    function chartItems(c) {
+        const items = ((c && c.items) || []).filter(i => i && String(i.label || '').trim() && isFinite(Number(i.value)) && String(i.value) !== '');
+        return (c && c.type === 'donut') ? items.filter(i => Number(i.value) > 0) : items;
+    }
+    function barsHTML(c, items) {
         const max = Math.max.apply(null, items.map(i => Math.abs(Number(i.value)))) || 1;
-        const fmt = v => Number(v).toLocaleString('pt-BR');
+        return '<div class="jb-chart-bars">' + items.map(i => {
+            const pct = Math.max(1, Math.round(Math.abs(Number(i.value)) / max * 100));
+            return '<div class="jb-bar-row"><span class="jb-bar-label">' + esc(i.label) + '</span>' +
+                '<span class="jb-bar-track"><span class="jb-bar' + (Number(i.value) < 0 ? ' is-negative' : '') + '" style="width:' + pct + '%"></span></span><span class="jb-bar-value">' + esc(fmtNum(i.value)) + '</span></div>';
+        }).join('') + '</div>';
+    }
+    // Escala vertical comum a colunas, linha e área (inclui o zero)
+    function scaleOf(items) {
+        const vals = items.map(i => Number(i.value));
+        let min = Math.min(0, Math.min.apply(null, vals)), max = Math.max(0, Math.max.apply(null, vals));
+        if (max === min) max = min + 1;
+        return v => (Number(v) - min) / (max - min);   // 0 (base) … 1 (topo)
+    }
+    function columnsHTML(c, items) {
+        const s = scaleOf(items), zero = s(0);
+        return '<div class="jb-cols" style="--n:' + items.length + ';--zero:' + (zero * 100).toFixed(2) + '%">' + items.map(i => {
+            const a = s(i.value), lo = Math.min(a, zero), hi = Math.max(a, zero);
+            return '<div class="jb-col"><span class="jb-col-plot"><span class="jb-col-bar' + (Number(i.value) < 0 ? ' is-negative' : '') + '" style="bottom:' + (lo * 100).toFixed(2) + '%;height:' + Math.max(0.6, (hi - lo) * 100).toFixed(2) + '%">' +
+                '<span class="jb-col-value">' + esc(fmtNum(i.value)) + '</span></span></span><span class="jb-col-label">' + esc(i.label) + '</span></div>';
+        }).join('') + '</div>';
+    }
+    // Linha/área: o traço é um SVG esticado (preserveAspectRatio none); pontos e textos são HTML,
+    // posicionados em %, para não encolherem no celular.
+    function lineHTML(c, items, area) {
+        const s = scaleOf(items), n = items.length;
+        const x = i => (i + 0.5) / n * 100, y = v => 92 - s(v) * 84;
+        const pts = items.map((it, i) => x(i).toFixed(2) + ',' + y(it.value).toFixed(2));
+        const base = y(0).toFixed(2);
+        const shape = area ? '<polygon class="jb-area" points="' + x(0).toFixed(2) + ',' + base + ' ' + pts.join(' ') + ' ' + x(n - 1).toFixed(2) + ',' + base + '"/>' : '';
+        return '<div class="jb-line' + (area ? ' is-area' : '') + '" style="--n:' + n + '"><div class="jb-line-plot">' +
+            '<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false"><line class="jb-line-zero" x1="0" x2="100" y1="' + base + '" y2="' + base + '" vector-effect="non-scaling-stroke"/>' +
+            shape + '<polyline class="jb-line-path" points="' + pts.join(' ') + '" vector-effect="non-scaling-stroke"/></svg>' +
+            items.map((it, i) => '<span class="jb-pt" style="left:' + x(i).toFixed(2) + '%;top:' + y(it.value).toFixed(2) + '%"><span class="jb-pt-value">' + esc(fmtNum(it.value)) + '</span></span>').join('') +
+            '</div><div class="jb-line-labels">' + items.map(it => '<span>' + esc(it.label) + '</span>').join('') + '</div></div>';
+    }
+    // Rosca: conic-gradient com um pequeno vão entre as fatias; legenda com valor e porcentagem.
+    function donutHTML(c, items) {
+        const total = items.reduce((t, i) => t + Number(i.value), 0) || 1;
+        let acc = 0;
+        const gap = items.length > 1 ? 0.6 : 0;   // graus
+        const stops = items.map((it, i) => {
+            const a = acc / total * 360, b = (acc += Number(it.value)) / total * 360, col = 'var(--chart-' + (i % CHART_COLORS + 1) + ')';
+            return 'transparent ' + a.toFixed(2) + 'deg ' + (a + gap).toFixed(2) + 'deg,' + col + ' ' + (a + gap).toFixed(2) + 'deg ' + Math.max(a + gap, b - gap).toFixed(2) + 'deg,transparent ' + Math.max(a + gap, b - gap).toFixed(2) + 'deg ' + b.toFixed(2) + 'deg';
+        });
+        const pct = v => (Number(v) / total * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
+        return '<div class="jb-donut"><div class="jb-donut-figure"><span class="jb-donut-ring" style="background:conic-gradient(' + stops.join(',') + ')"></span>' +
+            '<span class="jb-donut-total"><strong>' + esc(fmtNum(total)) + '</strong>' + (c.unit ? '<small>' + esc(c.unit) + '</small>' : '<small>total</small>') + '</span></div>' +
+            '<ul class="jb-donut-legend">' + items.map((it, i) => '<li><span class="jb-swatch" style="background:var(--chart-' + (i % CHART_COLORS + 1) + ')"></span><span class="jb-donut-label">' + esc(it.label) + '</span>' +
+                '<span class="jb-donut-value">' + esc(fmtNum(it.value)) + ' <small>(' + pct(it.value) + ')</small></span></li>').join('') + '</ul></div>';
+    }
+    function chartHTML(c) {
+        const items = chartItems(c);
+        if (!items.length) return '';
+        const type = CHART_TYPES[c.type] ? c.type : 'bar';
         const unit = c.unit ? ' ' + esc(c.unit) : '';
-        return '<figure class="jb-chart">' + (c.title ? '<figcaption class="jb-chart-title">' + esc(c.title) + '</figcaption>' : '') +
-            '<div class="jb-chart-bars" aria-hidden="true">' + items.map(i => {
-                const pct = Math.max(1, Math.round(Math.abs(Number(i.value)) / max * 100));
-                return '<div class="jb-bar-row" title="' + esc(i.label) + ': ' + esc(fmt(i.value)) + esc(c.unit ? ' ' + c.unit : '') + '"><span class="jb-bar-label">' + esc(i.label) + '</span>' +
-                    '<span class="jb-bar-track"><span class="jb-bar" style="width:' + pct + '%"></span></span><span class="jb-bar-value">' + esc(fmt(i.value)) + '</span></div>';
-            }).join('') + '</div>' +
+        const visual = type === 'column' ? columnsHTML(c, items) : type === 'line' ? lineHTML(c, items) : type === 'area' ? lineHTML(c, items, true) : type === 'donut' ? donutHTML(c, items) : barsHTML(c, items);
+        return '<figure class="jb-chart jb-chart-' + type + '">' + (c.title ? '<figcaption class="jb-chart-title">' + esc(c.title) + (c.unit ? ' <span class="jb-chart-unit">(' + esc(c.unit) + ')</span>' : '') + '</figcaption>' : '') +
+            '<div class="jb-chart-visual" aria-hidden="true">' + visual + '</div>' +
             '<details class="jb-chart-table"><summary>Ver dados em tabela</summary><table class="table table-sm mb-0"><thead><tr><th scope="col">Item</th><th scope="col" class="text-end">Valor' + unit + '</th></tr></thead><tbody>' +
-            items.map(i => '<tr><td>' + esc(i.label) + '</td><td class="text-end">' + esc(fmt(i.value)) + '</td></tr>').join('') + '</tbody></table></details>' +
+            items.map(i => '<tr><td>' + esc(i.label) + '</td><td class="text-end">' + esc(fmtNum(i.value)) + '</td></tr>').join('') + '</tbody></table></details>' +
             (c.source ? '<p class="jb-chart-source">Fonte: ' + esc(c.source) + '</p>' : '') + '</figure>';
     }
+    const barChartHTML = c => chartHTML(Object.assign({}, c, { type: 'bar' }));   // painel (Audiência)
 
     // Estados de carregamento e de erro padronizados (usados em todas as páginas)
     const loadingHTML = text => '<div class="jb-loading" role="status"><span class="jb-spinner" aria-hidden="true"></span>' + esc(text || 'Carregando…') + '</div>';
@@ -672,7 +847,8 @@
     window.JB = {
         remote, mode: 'local', ready: Promise.resolve(), authReady: Promise.resolve(), loadError: null, flush, storageOk: () => storageOk, PASSWORD_MIN, MIN_AGE, KEYS, Captcha, Security,
         CATEGORIES, KINDS, VERDICTS, OPINION_KINDS, VERSIONED, IMAGES, STATUS, STATUS_FLOW, ROLES, STAFF_ROLES, JOURNALIST_STATUSES,
-        News, Authors, Versions, Auth, Members, Reports, Cookies, Views, Favs, History, Comments, Newsletter, Theme, A11y, Media,
-        util: { isPublished, isScheduled, withDefaults, changeKind, wasUpdated, avatarHTML, readingTime, root, esc, imgSrc, timeAgo, fmtDate, articleUrl, authorUrl, profileUrl, roleLabel, isStaffRole, sealHTML, catLabel, catUrl, kindLabel, safeUrl, verdictBadge, liveBadge, badgesHTML, newsCard, barChartHTML, loadingHTML, errorHTML, passwordIssues, ageFrom }
+        CHART_TYPES, News, Authors, Versions, Auth, Members, Reports, Cookies, Views, Favs, History, Comments, Newsletter, Theme, A11y, Media, Drafts,
+        util: { isPublished, isScheduled, withDefaults, changeKind, wasUpdated, avatarHTML, readingTime, root, esc, imgSrc, timeAgo, fmtDate, articleUrl, authorUrl, profileUrl, roleLabel, isStaffRole, sealHTML, catLabel, catUrl, catTag, kindLabel, safeUrl, verdictBadge, liveBadge, badgesHTML, newsCard,
+            chartHTML, barChartHTML, chartItems, parseVideo, videoHTML, videoPageUrl, inlineHTML, blockOf, bodyHTML, plainText, loadingHTML, errorHTML, passwordIssues, ageFrom }
     };
 })();

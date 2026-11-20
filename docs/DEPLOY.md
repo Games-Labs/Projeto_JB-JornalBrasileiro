@@ -9,7 +9,7 @@ O **Cloudflare Pages** só serve os arquivos estáticos.
 
 1. Crie uma conta em <https://supabase.com> e um **New project** (guarde a *Database password* num gerenciador de senhas; o site não usa).
 2. Abra **SQL Editor → New query**, cole o conteúdo de [`supabase/01_schema.sql`](../supabase/01_schema.sql) e clique **Run**. Ele cria tabelas, RLS, privilégios mínimos e o bucket de imagens `news-images` do Storage.
-   - **Projeto criado com uma versão anterior?** Não rode o 01 de novo: rode só as atualizações que faltam, nesta ordem (todas idempotentes, não apagam dados): [`supabase/04_auditoria_seguranca.sql`](../supabase/04_auditoria_seguranca.sql) (auditoria de segurança) [`supabase/05_secoes_editoriais.sql`](../supabase/05_secoes_editoriais.sql) (tipos de conteúdo, ao vivo, checagem, agendamento, autores e versões) [`supabase/07_hierarquia.sql`](../supabase/07_hierarquia.sql) (cargos coordenador/jornalista, perfis públicos e selo) e [`supabase/08_seguranca.sql`](../supabase/08_seguranca.sql) (MFA obrigatório para a equipe, idade mínima, auditoria, limites contra spam e formatos de imagem). Sem o 05 e o 07, o site novo não carrega as notícias. **Atenção ao 08:** depois dele, toda a equipe (inclusive o administrador) só tem os poderes da redação depois de confirmar a idade e ativar a verificação em duas etapas pelo site novo (`pages/seguranca.html`).
+   - **Projeto criado com uma versão anterior?** Não rode o 01 de novo: rode só as atualizações que faltam, nesta ordem (todas idempotentes, não apagam dados): [`supabase/04_auditoria_seguranca.sql`](../supabase/04_auditoria_seguranca.sql) (auditoria de segurança) [`supabase/05_secoes_editoriais.sql`](../supabase/05_secoes_editoriais.sql) (tipos de conteúdo, ao vivo, checagem, agendamento, autores e versões) [`supabase/07_hierarquia.sql`](../supabase/07_hierarquia.sql) (cargos coordenador/jornalista, perfis públicos e selo) e [`supabase/08_seguranca.sql`](../supabase/08_seguranca.sql) (MFA obrigatório para a equipe, idade mínima, auditoria, limites contra spam e formatos de imagem) e [`supabase/09_editor_video_comentarios.sql`](../supabase/09_editor_video_comentarios.sql) (vídeo do YouTube nas matérias e edição do próprio comentário). Sem o 09 o site continua no ar, mas sem vídeo e sem edição de comentário (o console avisa). Sem o 05 e o 07, o site novo não carrega as notícias. **Atenção ao 08:** depois dele, toda a equipe (inclusive o administrador) só tem os poderes da redação depois de confirmar a idade e ativar a verificação em duas etapas pelo site novo (`pages/seguranca.html`).
 3. (Opcional) Faça o mesmo com [`supabase/02_seed.sql`](../supabase/02_seed.sql) para carregar as 17 notícias de demonstração e com [`supabase/06_exemplos_secoes.sql`](../supabase/06_exemplos_secoes.sql) para os autores e as matérias de exemplo das seções (ao vivo, editorial, opinião, análise, entrevista e checagens).
 4. **Authentication → Sign In / Providers → Email**:
    - Para um trabalho acadêmico é mais simples **desligar "Confirm email"**; assim o cadastro já entra logado.
@@ -106,6 +106,7 @@ As regras valem no banco (RLS e a função `set_member_role`), não só na tela;
    | Build output directory | `/` |
 
 4. **Save and Deploy**. Cada `git push` na `main` publica sozinho. O endereço é `https://NOME.pages.dev`.
+   A pasta [`functions/`](../functions) é publicada junto (Pages Functions, sem configuração): `functions/pages/noticia.js` coloca título, resumo e imagem de cada matéria no HTML para a prévia de links (WhatsApp, X, Facebook). Ela usa a mesma URL e chave **pública** do `config.js`; se trocar de projeto Supabase, troque também ali (ou defina as variáveis `SUPABASE_URL` e `SUPABASE_ANON_KEY` em **Settings → Variables**). Teste com o *Sharing Debugger* do Facebook ou colando o link no WhatsApp. O plano gratuito do Cloudflare inclui 100 mil execuções de Functions por dia.
 5. Volte ao passo 7 do Supabase e informe esse endereço.
 
 ### Cabeçalhos de segurança (`_headers`)
@@ -119,6 +120,8 @@ O arquivo [`_headers`](../_headers) aplica no Cloudflare: **Content-Security-Pol
   node -e "const c=require('fs').readFileSync('index.html','utf8').match(/<script>(try\{.*?)<\/script>/)[1];console.log('sha256-'+require('crypto').createHash('sha256').update(c).digest('base64'))"
   ```
 - Não use `onclick=`/`style` com JavaScript inline em HTML novo: a CSP bloqueia handlers inline (use `addEventListener`).
+- `https://www.youtube-nocookie.com` em `frame-src` é o player dos vídeos das matérias (só carrega quando o leitor clica).
+- As fontes ficam em `assets/fonts/`; por isso `style-src`/`font-src` não liberam mais o Google Fonts.
 - `https://challenges.cloudflare.com` em `script-src` e `frame-src` é o CAPTCHA (Turnstile). Sem ele, o desafio não aparece e o login falha quando o Supabase exige CAPTCHA.
 
 ## 3. Testar localmente
@@ -129,7 +132,7 @@ O login do Supabase é mais confiável em `http://` do que em `file://`:
 npx serve .          # ou a extensão Live Server do VS Code
 ```
 
-O `_headers` só vale no Cloudflare; localmente a CSP não é aplicada.
+O `_headers` e a pasta `functions/` só valem no Cloudflare; localmente a CSP não é aplicada e a prévia de links não é montada (o site funciona igual). Para testar os dois como no Cloudflare: `npx wrangler pages dev .` na raiz do projeto.
 
 ## 4. Conferir a segurança (RLS)
 

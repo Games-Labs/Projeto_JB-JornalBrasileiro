@@ -9,9 +9,9 @@
     <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon/favicon-16x16.png">
     <link rel="apple-touch-icon" href="../assets/favicon/apple-touch-icon.png">
     <link rel="manifest" href="../assets/favicon/site.webmanifest">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Merriweather:ital,wght@0,700;0,900;1,400&display=swap" rel="stylesheet">
+    <!-- Fontes hospedadas no próprio site (Source Serif 4 e Inter, licença OFL): sem pedidos ao Google -->
+    <link rel="preload" href="../assets/fonts/source-serif-4-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="../assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="../assets/vendor/bootstrap/bootstrap.min.css">
     <link rel="stylesheet" href="../assets/css/style.css">
     <script>try{var d=document.documentElement,s=localStorage;if(s.getItem('jb_theme')==='dark')d.setAttribute('data-bs-theme','dark');var a=JSON.parse(s.getItem('jb_a11y')||'{}')||{};if(a.font>0&&a.font<4)d.setAttribute('data-font',String(a.font|0));if(a.contrast)d.setAttribute('data-contrast','high')}catch(e){}</script>
@@ -19,11 +19,12 @@
 <body data-root="../" data-page="noticias">
     <div id="site-top"></div>
     <main class="container main-layout">
-        <article id="article"><div class="jb-loading" role="status"><span class="jb-spinner" aria-hidden="true"></span>Carregando a matéria…</div></article>
+        <article id="article" class="article-sheet"><div class="jb-loading" role="status"><span class="jb-spinner" aria-hidden="true"></span>Carregando a matéria…</div></article>
         <section id="comments-wrap" class="mt-5 no-print" hidden>
             <hr class="editorial-divider">
             <h2 class="section-title">Comentários (<span id="comment-count">0</span>)</h2>
-            <p class="small text-muted">Os comentários são públicos e moderados pelo editor. Não publique dados pessoais.</p>
+            <p class="small text-muted">Os comentários são públicos e moderados pelo editor. Não publique dados pessoais. Com uma conta, você pode editar ou excluir os seus.</p>
+            <p class="small visually-hidden" id="comment-msg" role="status"></p>
             <form id="comment-form" class="panel-box mb-3" novalidate>
                 <div class="row g-3">
                     <div class="col-md-4"><label class="form-label" for="c-name">Nome</label><input class="form-control" id="c-name" name="name" maxlength="60" required><div class="form-text" id="c-name-help" hidden>Você está logado: o comentário usa o nome da sua conta.</div><div class="invalid-feedback">Informe seu nome.</div></div>

@@ -23,7 +23,23 @@
     const isPublished = JB.util.isPublished;
     const guestFavs = { all: Favs.all, has: Favs.has, toggle: Favs.toggle, ids: Favs.ids, clear: Favs.clear };
     const BUCKET = 'news-images';
-    const NEWS_COLS = 'id,category,title,subtitle,image,author,body,status,featured,date,kind,verdict,live,sources,corrections,updates,timeline,people,chart,updated_at,created_by';
+    const NEWS_COLS_V8 = 'id,category,title,subtitle,image,author,body,status,featured,date,kind,verdict,live,sources,corrections,updates,timeline,people,chart,updated_at,created_by';
+    const COMMENT_COLS_V8 = 'id,news_id,user_id,name,text,date';
+    // Colunas da migração supabase/09_editor_video_comentarios.sql (news.video, comments.edited_at).
+    // Se o site novo for publicado antes da migração, o banco responde 42703 (coluna inexistente):
+    // o site volta para as colunas antigas e continua no ar, só sem vídeo e sem edição de comentário.
+    const schema = { news: true, comments: true };
+    const newsCols = () => schema.news ? NEWS_COLS_V8 + ',video' : NEWS_COLS_V8;
+    const commentCols = () => schema.comments ? COMMENT_COLS_V8 + ',edited_at' : COMMENT_COLS_V8;
+    async function compat(key, build) {
+        const r = await build();
+        if (r && r.error && r.error.code === '42703' && schema[key]) {
+            schema[key] = false;
+            console.warn('O banco ainda não tem a migração supabase/09_editor_video_comentarios.sql (' + key + '). Usando as colunas antigas.');
+            return build();
+        }
+        return r;
+    }
     const AUTHOR_COLS = 'id,name,role,bio,avatar,columnist,created_at';
     const TIMEOUT_MS = 15000, UPLOAD_TIMEOUT_MS = 60000;
 
@@ -170,7 +186,7 @@
     const session = sb ? sb.auth.getSession().then(r => (r.data && r.data.session) || null, e => { console.error(e); return null; }) : Promise.resolve(null);
     const authReady = session.then(s => Promise.all([loadMe(s && s.user), refreshAal()]));
     const dataReady = Promise.all([
-        get(() => sb.from('news').select(NEWS_COLS).order('date', { ascending: false }), [], true).then(rows => { C.news = rows.map(JB.util.withDefaults); }),
+        get(() => compat('news', () => sb.from('news').select(newsCols()).order('date', { ascending: false })), [], true).then(rows => { C.news = rows.map(JB.util.withDefaults); }),
         get(() => sb.from('authors').select(AUTHOR_COLS).order('name'), []).then(rows => { C.authors = rows.map(toAuthor); }),
         get(() => sb.from('news_views').select('news_id,count'), []).then(rows => { C.views = {}; rows.forEach(v => { C.views[v.news_id] = Number(v.count); }); }),
         session.then(s => loadFavs(s && s.user))
@@ -187,6 +203,7 @@
         save(item) {
             const i = C.news.findIndex(x => x.id === item.id);
             delete item.updated_at;   // definida só pelo banco (gatilho news_track_changes)
+            if (!schema.news) delete item.video;   // banco sem a migração 09
             if (i >= 0) {
                 const before = Object.assign({}, C.news[i]);
                 const change = JB.util.changeKind(before, item);
@@ -206,7 +223,7 @@
         },
         // Relê uma matéria do servidor (usado pela cobertura ao vivo). true = conseguiu.
         async refresh(id) {
-            const row = await get(() => sb.from('news').select(NEWS_COLS).eq('id', id).maybeSingle(), undefined);
+            const row = await get(() => compat('news', () => sb.from('news').select(newsCols()).eq('id', id).maybeSingle()), undefined);
             if (row === undefined) return false;
             C.news = C.news.filter(x => x.id !== id);
             if (row) C.news.push(JB.util.withDefaults(row));
@@ -286,13 +303,15 @@
     });
 
     /* ---------- Comentários (baixados sob demanda) ---------- */
-    const toComment = c => ({ id: c.id, newsId: c.news_id, userId: c.user_id, name: c.name, text: c.text, date: c.date });
+    const toComment = c => ({ id: c.id, newsId: c.news_id, userId: c.user_id, name: c.name, text: c.text, date: c.date, editedAt: c.edited_at || null });
     Object.assign(Comments, {
+        // Edição do texto pelo próprio autor disponível neste banco? (false = falta a migração 09)
+        canEdit() { return schema.comments; },
         // load(newsId): comentários de uma matéria; load(): todos (painel do editor).
         async load(newsId) {
             const key = newsId || '*';
             if (C.commentsLoaded[key] || C.commentsLoaded['*']) return true;
-            const q = () => { let b = sb.from('comments').select('id,news_id,user_id,name,text,date').order('date', { ascending: false }); if (newsId) b = b.eq('news_id', newsId); return newsId ? b.limit(200) : b; };
+            const q = () => compat('comments', () => { let b = sb.from('comments').select(commentCols()).order('date', { ascending: false }); if (newsId) b = b.eq('news_id', newsId); return newsId ? b.limit(200) : b; });
             let failed = false;
             const rows = await get(q, null);
             if (!rows) failed = true;
@@ -305,8 +324,21 @@
         flat() { return C.comments.slice().sort(byDateDesc); },
         // Comentários de uma conta (perfil público). O RLS só devolve os de matérias publicadas.
         async byUser(userId) {
-            const rows = await get(() => sb.from('comments').select('id,news_id,user_id,name,text,date').eq('user_id', userId).order('date', { ascending: false }).limit(30), null);
+            const rows = await get(() => compat('comments', () => sb.from('comments').select(commentCols()).eq('user_id', userId).order('date', { ascending: false }).limit(30)), null);
             return rows ? rows.map(toComment) : null;
+        },
+        // O autor troca o texto do próprio comentário. O banco confere (RLS + gatilho comments_protect):
+        // só quem escreveu, conta liberada, e só a coluna `text`; edited_at é gravado pelo gatilho.
+        update(newsId, cid, text) {
+            const c = C.comments.find(x => x.id === cid);
+            if (!c || !C.me || c.userId !== C.me.id || !schema.comments) return false;
+            const before = { text: c.text, editedAt: c.editedAt };
+            c.text = text; c.editedAt = nowIso();
+            run(async () => {
+                const r = await sb.from('comments').update({ text }).eq('id', cid).select('id');
+                return !r.error && !(r.data && r.data.length) ? { error: new Error('comentário não atualizado (sem permissão)') } : r;
+            }, 'editar o comentário', () => { Object.assign(c, before); });
+            return true;
         },
         add(id, c) {
             // Logado: o banco grava o nome e a autoria da própria conta (gatilho comments_set_author).

@@ -175,6 +175,17 @@
     });
     // Botões "Tentar de novo" dos estados de erro (util.errorHTML)
     document.addEventListener('click', e => { if (e.target.closest('[data-jb-reload]')) location.reload(); });
+    // Vídeo do YouTube (util.videoHTML): o player só é carregado quando o leitor clica.
+    document.addEventListener('click', e => {
+        const btn = e.target.closest('.jb-video-play'); if (!btn) return;
+        const fig = btn.closest('[data-video-embed]'), src = fig && fig.dataset.videoEmbed;
+        if (!src || !/^https:\/\/www\.youtube-nocookie\.com\/embed\/[\w?=&-]+$/.test(src)) return;
+        const f = document.createElement('iframe');
+        f.src = src; f.title = fig.dataset.videoTitle || 'Vídeo do YouTube';
+        f.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+        f.allowFullscreen = true; f.referrerPolicy = 'strict-origin-when-cross-origin';
+        btn.replaceWith(f); f.focus();
+    });
 
     /* ---------- Conta ainda não liberada (idade ou verificação em duas etapas) ---------- */
     // Aviso no topo de todas as páginas até a pessoa concluir o passo em seguranca.html.

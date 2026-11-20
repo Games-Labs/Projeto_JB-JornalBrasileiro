@@ -152,7 +152,9 @@ create table public.news (
     updates     jsonb not null default '[]'::jsonb,         -- [{date, text, author}] atualizações ao vivo
     timeline    jsonb not null default '[]'::jsonb,         -- [{when, text}] cronologia (investigações)
     people      jsonb not null default '[]'::jsonb,         -- [{name, role}] personagens envolvidos
-    chart       jsonb,                                      -- {title, unit, source, items:[{label, value}]}
+    chart       jsonb,                                      -- {type, title, unit, source, items:[{label, value}]}
+    video       text not null default ''                    -- vídeo do YouTube: ID (11) ou 'channel:UC…' (live do canal)
+                constraint news_video_format check (video = '' or video ~ '^[A-Za-z0-9_-]{11}$' or video ~ '^channel:UC[A-Za-z0-9_-]{22}$'),
     updated_at  timestamptz,                                -- definida só pelo banco (gatilho)
     created_by  uuid references public.profiles(id) on delete set null,   -- quem criou (gatilho news_set_creator)
     constraint news_extras_check check (
@@ -196,16 +198,17 @@ language plpgsql security definer set search_path = public
 as $$
 begin
     if (new.title, new.subtitle, new.body, new.image, new.author, new.category, new.kind, new.verdict,
-        new.sources, new.timeline, new.people, new.chart)
+        new.sources, new.timeline, new.people, new.chart, new.video)
        is distinct from
        (old.title, old.subtitle, old.body, old.image, old.author, old.category, old.kind, old.verdict,
-        old.sources, old.timeline, old.people, old.chart) then
+        old.sources, old.timeline, old.people, old.chart, old.video) then
         insert into public.news_versions (news_id, replaced_by, snapshot)
         values (old.id,
                 coalesce((select left(p.name, 120) from public.profiles p where p.id = auth.uid()), ''),
                 jsonb_build_object('title', old.title, 'subtitle', old.subtitle, 'body', old.body, 'image', old.image,
                                    'author', old.author, 'category', old.category, 'kind', old.kind, 'verdict', old.verdict,
-                                   'sources', old.sources, 'timeline', old.timeline, 'people', old.people, 'chart', old.chart));
+                                   'sources', old.sources, 'timeline', old.timeline, 'people', old.people, 'chart', old.chart,
+                                   'video', old.video));
         delete from public.news_versions
          where news_id = old.id
            and id not in (select id from public.news_versions where news_id = old.id order by replaced_at desc, id desc limit 20);
@@ -263,7 +266,8 @@ create table public.comments (
     user_id uuid references auth.users(id) on delete set null,
     name    text not null check (char_length(trim(name)) between 1 and 80),
     text    text not null check (char_length(trim(text)) between 1 and 2000),
-    date    timestamptz not null default now()
+    date    timestamptz not null default now(),
+    edited_at timestamptz                          -- última edição pelo autor (gatilho comments_protect_update)
 );
 create index comments_news_idx on public.comments (news_id, date desc);
 create index comments_user_idx on public.comments (user_id);
@@ -285,6 +289,25 @@ $$;
 create trigger comments_set_author
     before insert on public.comments
     for each row execute function public.comments_set_author();
+
+-- Pela API, numa edição só o texto muda (as outras colunas voltam ao valor antigo) e edited_at
+-- é a hora do banco. No SQL Editor (sem auth.uid()) nada é forçado.
+create or replace function public.comments_protect_update()
+returns trigger
+language plpgsql set search_path = public
+as $$
+begin
+    if auth.uid() is not null then
+        new.id := old.id; new.news_id := old.news_id; new.user_id := old.user_id;
+        new.name := old.name; new.date := old.date;
+        if new.text is distinct from old.text then new.edited_at := now(); else new.edited_at := old.edited_at; end if;
+    end if;
+    return new;
+end;
+$$;
+create trigger comments_protect_update
+    before update on public.comments
+    for each row execute function public.comments_protect_update();
 
 -- ---------- Denúncias / pautas ----------
 create table public.reports (
@@ -458,6 +481,7 @@ grant execute on function public.hit_news(uuid) to anon, authenticated;
 revoke execute on function public.handle_new_user() from public, anon, authenticated;
 revoke execute on function public.protect_profile_role() from public, anon, authenticated;
 revoke execute on function public.comments_set_author() from public, anon, authenticated;
+revoke execute on function public.comments_protect_update() from public, anon, authenticated;
 revoke execute on function public.news_track_changes() from public, anon, authenticated;
 revoke execute on function public.news_clear_updated() from public, anon, authenticated;
 
@@ -516,6 +540,12 @@ create policy "comments: criar" on public.comments
         and exists (select 1 from public.news n where n.id = news_id and n.status = 'publicada' and n.date <= now()));
 create policy "comments: excluir proprio ou editor" on public.comments
     for delete to authenticated using (user_id = (select auth.uid()) or (select public.is_editor()));
+-- O autor (logado) edita o texto do próprio comentário em matéria publicada.
+create policy "comments: autor edita" on public.comments
+    for update to authenticated
+    using (user_id = (select auth.uid())
+           and exists (select 1 from public.news n where n.id = news_id and n.status = 'publicada' and n.date <= now()))
+    with check (user_id = (select auth.uid()));
 
 -- reports: qualquer um envia; só coordenador/admin lê/exclui.
 create policy "reports: enviar" on public.reports
@@ -574,6 +604,7 @@ grant insert, update, delete                                   on public.news   
 grant select                                                   on public.comments   to anon, authenticated;
 grant insert (id, news_id, user_id, name, text)                on public.comments   to anon, authenticated;
 grant delete                                                   on public.comments   to authenticated;
+grant update (text)                                            on public.comments   to authenticated;   -- só o texto
 grant insert (id, subject, story, anonymous, name, email, attachment) on public.reports to anon, authenticated;
 grant select, delete                                           on public.reports    to authenticated;
 grant insert (email)                                           on public.newsletter to anon, authenticated;
@@ -661,9 +692,9 @@ begin
         if new.status is distinct from old.status then
             perform public.audit('news.status', 'news', new.id::text, new.title, jsonb_build_object('from', old.status, 'to', new.status));
         end if;
-        if (new.title, new.subtitle, new.body, new.image, new.author, new.category, new.kind, new.verdict, new.sources, new.timeline, new.people, new.chart, new.corrections)
+        if (new.title, new.subtitle, new.body, new.image, new.author, new.category, new.kind, new.verdict, new.sources, new.timeline, new.people, new.chart, new.corrections, new.video)
            is distinct from
-           (old.title, old.subtitle, old.body, old.image, old.author, old.category, old.kind, old.verdict, old.sources, old.timeline, old.people, old.chart, old.corrections) then
+           (old.title, old.subtitle, old.body, old.image, old.author, old.category, old.kind, old.verdict, old.sources, old.timeline, old.people, old.chart, old.corrections, old.video) then
             perform public.audit('news.edit', 'news', new.id::text, new.title, '{}'::jsonb);
         end if;
         if new.featured and not old.featured then
@@ -862,6 +893,9 @@ create policy "comments: conta liberada comenta" on public.comments
 drop policy if exists "comments: conta liberada apaga" on public.comments;
 create policy "comments: conta liberada apaga" on public.comments
     as restrictive for delete to authenticated using ((select public.account_ok()));
+drop policy if exists "comments: conta liberada edita" on public.comments;
+create policy "comments: conta liberada edita" on public.comments
+    as restrictive for update to authenticated using ((select public.account_ok())) with check ((select public.account_ok()));
 
 drop policy if exists "audit: editor le" on public.audit_log;
 create policy "audit: editor le" on public.audit_log

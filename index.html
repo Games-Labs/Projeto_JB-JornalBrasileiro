@@ -11,10 +11,9 @@
     <link rel="manifest" href="assets/favicon/site.webmanifest">
     <meta name="description" content="Jornal Brasileiro (JB): portal de webjornalismo informativo e investigativo (projeto acadêmico).">
 
-    <!-- Fontes (opcionais: há fallback para fontes do sistema) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Merriweather:ital,wght@0,700;0,900;1,400&display=swap" rel="stylesheet">
+    <!-- Fontes hospedadas no próprio site (Source Serif 4 e Inter, licença OFL): sem pedidos ao Google -->
+    <link rel="preload" href="assets/fonts/source-serif-4-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
 
     <!-- Bootstrap local (primeiro) + tema do JB (depois, para poder sobrescrever) -->
     <link rel="stylesheet" href="assets/vendor/bootstrap/bootstrap.min.css">
@@ -71,7 +70,7 @@
         <div class="home-section" data-home="investigacao" hidden>
             <hr class="editorial-divider">
             <div class="d-flex justify-content-between align-items-baseline">
-                <h2 class="section-title flex-grow-1 me-3">Investigação Especial</h2>
+                <h2 class="section-title flex-grow-1 me-3 cat-investigacao">Investigação Especial</h2>
                 <a class="small fw-semibold" href="pages/investigacao.html">Central de Investigações →</a>
             </div>
             <div class="row g-4" data-grid></div>
@@ -85,7 +84,7 @@
         <section id="home-opinion" hidden>
             <hr class="editorial-divider">
             <div class="d-flex justify-content-between align-items-baseline">
-                <h2 class="section-title flex-grow-1 me-3">Editorial e Opinião</h2>
+                <h2 class="section-title flex-grow-1 me-3 cat-opiniao">Editorial e Opinião</h2>
                 <a class="small fw-semibold" href="pages/opiniao.html">Todas as colunas →</a>
             </div>
             <div class="row g-4">

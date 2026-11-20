@@ -23,14 +23,14 @@ JB.ready.then(function () {
     const take = list => { list.forEach(n => used.add(n.id)); return list; };
     const fresh = list => list.filter(n => !used.has(n.id));
     const cards = (list, col) => list.map(n => '<div class="' + (col || 'col-md-6 col-lg-4') + '">' + util.newsCard(n) + '</div>').join('');
-    const mini = n => '<article class="mini-card">' + util.badgesHTML(n) + '<a class="category-tag" href="' + esc(util.catUrl(n.category)) + '">' + esc(util.catLabel(n.category)) + '</a>' +
+    const mini = n => '<article class="mini-card">' + util.badgesHTML(n) + util.catTag(n.category) +
         '<h3><a href="' + esc(util.articleUrl(n)) + '">' + esc(n.title) + '</a></h3><span class="time">' + util.timeAgo(n.date) + '</span></article>';
 
     /* 1. Manchete: a marcada pelo editor ou a notícia mais recente */
     const lead = all.find(n => n.featured) || all.find(n => isNews(n) && n.kind !== 'aovivo') || all[0];
     if (lead) {
         take([lead]);
-        leadEl.innerHTML = util.badgesHTML(lead) + '<a class="category-tag" href="' + esc(util.catUrl(lead.category)) + '">' + esc(util.catLabel(lead.category)) + '</a>' +
+        leadEl.innerHTML = util.badgesHTML(lead) + util.catTag(lead.category) +
             '<h1><a href="' + esc(util.articleUrl(lead)) + '">' + esc(lead.title) + '</a></h1><p class="subtitle">' + esc(lead.subtitle) + '</p>' +
             '<img class="lead-img" fetchpriority="high" src="' + esc(util.imgSrc(lead)) + '" alt="' + esc(lead.title) + '">' +
             '<div class="meta-info">Por <a href="' + esc(util.authorUrl(lead.author)) + '"><strong>' + esc(lead.author) + '</strong></a> • ' + util.timeAgo(lead.date) + '</div>';
@@ -67,7 +67,7 @@ JB.ready.then(function () {
         take([special]);
         $('home-special').hidden = false;
         $('home-special-body').innerHTML = '<article class="special-card"><img src="' + esc(util.imgSrc(special)) + '" alt="' + esc(special.title) + '" loading="lazy">' +
-            '<div>' + util.badgesHTML(special) + '<a class="category-tag" href="' + esc(util.catUrl(special.category)) + '">' + esc(util.catLabel(special.category)) + '</a>' +
+            '<div>' + util.badgesHTML(special) + util.catTag(special.category) +
             '<h3><a href="' + esc(util.articleUrl(special)) + '">' + esc(special.title) + '</a></h3><p>' + esc(special.subtitle) + '</p>' +
             '<span class="meta-info">' + util.readingTime(special) + ' min de leitura • Por ' + esc(special.author) + '</span></div></article>';
     }
@@ -85,7 +85,7 @@ JB.ready.then(function () {
             const list = take(fresh(News.byCategory(c).filter(isReport)).slice(0, 3));
             if (!list.length) return '';
             any = true;
-            return '<div class="col-lg-6"><div class="d-flex justify-content-between align-items-baseline"><h2 class="section-title flex-grow-1 me-3">' + esc(CATEGORIES[c].label) + '</h2>' +
+            return '<div class="col-lg-6"><div class="d-flex justify-content-between align-items-baseline"><h2 class="section-title flex-grow-1 me-3 cat-' + esc(c) + '">' + esc(CATEGORIES[c].label) + '</h2>' +
                 '<a class="small fw-semibold" href="' + esc(util.catUrl(c)) + '">Ver mais →</a></div>' + list.map(mini).join('') + '</div>';
         }).join('');
         sec.hidden = !any;
