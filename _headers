@@ -13,7 +13,21 @@
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
   Cross-Origin-Opener-Policy: same-origin
 
-/assets/*
+# JS e CSS mudam a cada deploy: o navegador sempre confere com o servidor (resposta 304, sem
+# baixar de novo, quando não mudou). Com max-age, o HTML novo chegava com o JS/CSS velho por até 1 h.
+/assets/js/*
+  Cache-Control: no-cache
+/assets/css/*
+  Cache-Control: no-cache
+
+# Imagens, fontes, ícones e bibliotecas quase nunca mudam: 1 h no navegador
+/assets/img/*
+  Cache-Control: public, max-age=3600
+/assets/fonts/*
+  Cache-Control: public, max-age=3600
+/assets/favicon/*
+  Cache-Control: public, max-age=3600
+/assets/vendor/*
   Cache-Control: public, max-age=3600
 
 # Service worker (PWA): o navegador confere a versão nova a cada visita

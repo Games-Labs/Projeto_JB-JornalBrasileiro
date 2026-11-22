@@ -72,8 +72,8 @@ export async function onRequestGet(context) {
         .on('meta[name="description"]', { element(el) { el.remove(); } })   // a da matéria entra no lugar
         .on('head', { element(el) { el.append(head, { html: true }); } })
         .transform(res);
-    // A página muda conforme a matéria: cache curto no navegador e na borda
+    // A página muda conforme a matéria (e a cada deploy): o navegador sempre confere com o servidor
     const h = new Headers(out.headers);
-    h.set('Cache-Control', 'public, max-age=60');
+    h.set('Cache-Control', 'public, max-age=0, must-revalidate');
     return new Response(out.body, { status: out.status, statusText: out.statusText, headers: h });
 }

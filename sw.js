@@ -72,11 +72,16 @@ function alternatives(url) {
     return out;
 }
 
+// Scripts, estilos e manifest do site: sempre conferidos com o servidor, mesmo que o navegador
+// tenha uma cópia "ainda válida" no cache HTTP (senão o HTML novo chegava com o JS/CSS velho)
+const REVALIDATE = ['script', 'style', 'manifest'];
+
 async function networkFirst(event, cacheName, max, isNav) {
     const req = event.request;
     const cache = await caches.open(cacheName);
     try {
-        const res = await fetch(req);
+        const own = new URL(req.url).origin === self.location.origin;
+        const res = await fetch(own && REVALIDATE.includes(req.destination) ? new Request(req, { cache: 'no-cache' }) : req);
         if (storable(res) && !SENSITIVE.test(req.url)) event.waitUntil(clean(res.clone()).then(r => cache.put(req, r)).then(() => trim(cache, max)).catch(() => { }));
         return res;
     } catch (err) {

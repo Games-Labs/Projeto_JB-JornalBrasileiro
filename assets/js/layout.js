@@ -254,4 +254,27 @@
     if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && JB.mode === 'supabase') {
         window.addEventListener('load', () => { navigator.serviceWorker.register(R + 'sw.js').catch(e => console.warn('Service worker não registrado', e)); });
     }
+
+    /* App instalado (tela cheia, sem botão de recarregar e às vezes sem "puxar para atualizar"): o sistema
+       guarda a página aberta em segundo plano e ela voltava com as notícias de horas atrás. Ao voltar
+       depois de AWAY_MS, procura a versão nova do site e recarrega as páginas de leitura, nunca uma
+       com texto digitado (comentário, busca, formulário) nem o painel/editor. */
+    const READING = ['inicio', 'noticias', 'politica', 'economia', 'esportes', 'investigacao', 'verificacao', 'opiniao', 'entrevistas',
+        'aovivo', 'arquivo', 'autor', 'perfil-publico', 'institucional', 'central'];
+    const AWAY_MS = 5 * 60 * 1000;
+    const installed = () => (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+    const typed = () => Array.prototype.some.call(document.querySelectorAll('input, textarea, select'), f =>
+        f.type === 'hidden' ? false : f.type === 'checkbox' || f.type === 'radio' ? f.checked !== f.defaultChecked
+            : f.tagName === 'SELECT' ? Array.prototype.some.call(f.options, o => o.selected !== o.defaultSelected) : f.value !== f.defaultValue);
+    let hiddenAt = 0, reloading = false;
+    function resumed() {
+        const away = hiddenAt ? Date.now() - hiddenAt : 0;
+        hiddenAt = 0;
+        if (reloading || away < AWAY_MS) return;
+        if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistration().then(r => r && r.update()).catch(() => { });
+        if (installed() && READING.includes(page) && !typed() && navigator.onLine !== false) { reloading = true; location.reload(); }
+    }
+    document.addEventListener('visibilitychange', () => { if (document.hidden) hiddenAt = hiddenAt || Date.now(); else resumed(); });
+    window.addEventListener('pagehide', () => { hiddenAt = hiddenAt || Date.now(); });
+    window.addEventListener('pageshow', e => { if (e.persisted) resumed(); });   // página restaurada do histórico (bfcache)
 })();
