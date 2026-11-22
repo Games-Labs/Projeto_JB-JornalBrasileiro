@@ -42,20 +42,27 @@
     function userArea() {
         const u = Auth.current();
         if (!u) return '<a href="' + R + 'pages/login.html" class="btn btn-user btn-sm px-3">Entrar</a>';
+        const item = (href, ic, label) => '<li><a class="dropdown-item" href="' + href + '">' + icon(ic) + '<span>' + label + '</span></a></li>';
         return '<div class="dropdown"><button class="btn btn-user btn-sm ps-1 pe-3 d-flex align-items-center gap-2 dropdown-toggle" data-bs-toggle="dropdown" data-bs-display="static" aria-expanded="false" aria-label="Menu do usuário">' + util.avatarHTML(u, 'avatar-sm') + '<span>' + esc(u.name.split(' ')[0]) + '</span></button>' +
-            '<ul class="dropdown-menu dropdown-menu-end">' +
-            '<li><a class="dropdown-item" href="' + R + 'pages/central.html">Minha Central</a></li>' +
-            '<li><a class="dropdown-item" href="' + R + 'pages/perfil.html">Minhas Informações</a></li>' +
-            '<li><a class="dropdown-item" href="' + esc(util.profileUrl(u.id)) + '">Meu perfil público</a></li>' +
-            (JB.mode === 'supabase' ? '<li><a class="dropdown-item" href="' + R + 'pages/seguranca.html">Segurança da conta</a></li>' : '') +
-            (util.isStaffRole(u.role) ? '<li><a class="dropdown-item" href="' + R + 'pages/admin.html">Painel Administrativo</a></li>' : '') +
-            '<li><hr class="dropdown-divider"></li><li><button class="dropdown-item" id="jb-logout">Sair</button></li></ul></div>';
+            '<ul class="dropdown-menu dropdown-menu-end user-menu">' +
+            '<li class="user-menu-head">' + util.avatarHTML(u, 'avatar-md') + '<div><strong class="user-menu-name">' + esc(u.name) + '</strong><span class="user-menu-role">' + esc(JB.ROLES[u.role] || 'Leitor') + '</span></div></li>' +
+            item(R + 'pages/central.html', 'central', 'Minha Central') +
+            item(R + 'pages/perfil.html', 'perfil', 'Minhas Informações') +
+            item(esc(util.profileUrl(u.id)), 'publico', 'Meu perfil público') +
+            (JB.mode === 'supabase' ? item(R + 'pages/seguranca.html', 'seguranca', 'Segurança da conta') : '') +
+            (util.isStaffRole(u.role) ? item(R + 'pages/admin.html', 'painel', 'Painel Administrativo') : '') +
+            '<li><hr class="dropdown-divider"></li><li><button class="dropdown-item user-menu-out" id="jb-logout">' + icon('sair') + '<span>Sair</span></button></li></ul></div>';
     }
 
     function header() {
         const link = (id, href, label, cls) => '<li class="nav-item"><a class="nav-link ' + (cls || '') + (page === id ? ' active' : '') + '" href="' + R + href + '">' + label + '</a></li>';
-        const topics = Object.keys(CATEGORIES).map(k => '<li><a href="' + R + CATEGORIES[k].page + '">' + esc(CATEGORIES[k].label) + '</a></li>').join('');
-        const sections = SECTIONS.map(s => '<li><a href="' + R + s[0] + '">' + s[1] + '</a></li>').join('');
+        // --i: atraso da animação de entrada de cada item (um depois do outro)
+        const d = i => ' style="--i:' + i + '"', nS = SECTIONS.length, nC = Object.keys(CATEGORIES).length;
+        const here = (location.pathname.split('/').pop() || 'index.html') + location.search;
+        const cur = href => href === here ? ' aria-current="page"' : '';
+        const sections = SECTIONS.map((s, i) => '<li class="drawer-anim"' + d(i + 1) + '><a href="' + R + s[0] + '"' + cur(s[0].replace('pages/', '')) + '>' + icon(s[2]) + '<span>' + s[1] + '</span>' +
+            '<svg class="drawer-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></a></li>').join('');
+        const topics = Object.keys(CATEGORIES).map((k, i) => '<li class="drawer-anim"' + d(nS + 2 + i) + '><a class="cat-' + k + '" href="' + R + CATEGORIES[k].page + '"' + cur(CATEGORIES[k].page.replace('pages/', '')) + '>' + esc(CATEGORIES[k].label) + '</a></li>').join('');
         return '<a class="skip-link" href="#conteudo">Pular para o conteúdo</a><header class="site-header sticky-top"><nav class="navbar navbar-expand-xxl"><div class="container-fluid px-3 px-xxl-4">' +
             '<button class="hamburger-btn me-3" type="button" data-bs-toggle="offcanvas" data-bs-target="#topicsDrawer" aria-controls="topicsDrawer" aria-label="Abrir editorias"><span></span><span></span><span></span></button>' +
             '<a href="' + R + 'index.html" class="logo navbar-brand me-auto"><span class="logo-sigla">JB</span><div class="logo-texto"><strong>Jornal Brasileiro</strong><small>Investigação &amp; Fatos</small></div></a>' +
@@ -70,18 +77,37 @@
             '<svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>' +
             '<svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="currentColor" stroke="none"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg></button>' +
             '<div id="userArea" class="user-area"><span class="user-slot" aria-hidden="true"></span></div>' + '</div></div></div></nav></header>' +
-            '<div class="offcanvas offcanvas-start" tabindex="-1" id="topicsDrawer" aria-labelledby="topicsLabel"><div class="offcanvas-header border-bottom"><h5 class="offcanvas-title" id="topicsLabel">Seções e editorias</h5>' +
+            '<div class="offcanvas offcanvas-start jb-drawer" tabindex="-1" id="topicsDrawer" aria-labelledby="topicsLabel"><div class="offcanvas-header">' +
+            '<div class="drawer-brand"><span class="logo-sigla" aria-hidden="true">JB</span><div><h5 class="offcanvas-title" id="topicsLabel">Seções e editorias</h5><small>Jornal Brasileiro</small></div></div>' +
             '<button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar"></button></div><div class="offcanvas-body">' +
-            '<h6 class="drawer-heading">Seções</h6><ul class="topics-list mb-4">' + sections + '</ul>' +
-            '<h6 class="drawer-heading">Editorias</h6><ul class="topics-list mb-4">' + topics + '<li><a href="' + R + 'pages/central.html"><strong>Minha Central</strong></a></li></ul>' +
-            '<h6 class="drawer-heading">Acessibilidade</h6>' + a11yControls() + '</div></div>';
+            '<h6 class="drawer-heading drawer-anim"' + d(0) + '>Seções</h6><ul class="drawer-links">' + sections + '</ul>' +
+            '<h6 class="drawer-heading drawer-anim"' + d(nS + 1) + '>Editorias</h6><ul class="drawer-cats">' + topics + '</ul>' +
+            '<a class="drawer-cta drawer-anim"' + d(nS + nC + 2) + ' href="' + R + 'pages/central.html">' + icon('central') + '<span><strong>Minha Central</strong><small>Favoritos, histórico e preferências</small></span></a>' +
+            '<div class="drawer-a11y drawer-anim"' + d(nS + nC + 3) + '><h6 class="drawer-heading">Acessibilidade</h6>' + a11yControls() + '</div></div></div>';
     }
 
     /* ---------- Seções do portal (menu lateral e rodapé) ---------- */
     const SECTIONS = [
-        ['pages/ao-vivo.html', 'Ao vivo'], ['pages/investigacao.html', 'Central de Investigações'], ['pages/verificacao.html', 'Verificação de fatos'],
-        ['pages/opiniao.html', 'Opinião e análise'], ['pages/entrevistas.html', 'Entrevistas'], ['pages/arquivo.html', 'Arquivo'], ['pages/autor.html', 'Equipe e colunistas']
+        ['pages/ao-vivo.html', 'Ao vivo', 'aovivo'], ['pages/investigacao.html', 'Central de Investigações', 'investigacao'], ['pages/verificacao.html', 'Verificação de fatos', 'verificacao'],
+        ['pages/opiniao.html', 'Opinião e análise', 'opiniao'], ['pages/entrevistas.html', 'Entrevistas', 'entrevistas'], ['pages/arquivo.html', 'Arquivo', 'arquivo'], ['pages/autor.html', 'Equipe e colunistas', 'equipe']
     ];
+    // Ícones dos menus (SVG no próprio código, traço herda a cor do texto)
+    const ICONS = {
+        aovivo: '<circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4M16.2 7.8a6 6 0 0 1 0 8.4M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2"/>',
+        investigacao: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.4-4.4"/>',
+        verificacao: '<path d="M12 3 5 6v5.5c0 4.3 3 7.8 7 9.5 4-1.7 7-5.2 7-9.5V6z"/><path d="m9 12 2.2 2.2L15.5 10"/>',
+        opiniao: '<path d="M20.5 12a8.5 8.5 0 0 1-12.4 7.5L3.5 20.5l1-4.4A8.5 8.5 0 1 1 20.5 12z"/>',
+        entrevistas: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>',
+        arquivo: '<rect x="3" y="4" width="18" height="4.5" rx="1"/><path d="M5 8.5V19a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8.5M10 12.5h4"/>',
+        equipe: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/>',
+        central: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>',
+        perfil: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2.3"/><path d="M5.8 16.5a3.4 3.4 0 0 1 6.4 0M15 10h3M15 13.5h3"/>',
+        publico: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>',
+        seguranca: '<rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>',
+        painel: '<path d="M4 20V11M10 20V5M16 20v-6M21 20H3"/>',
+        sair: '<path d="M14 4h4.5a1.5 1.5 0 0 1 1.5 1.5v13a1.5 1.5 0 0 1-1.5 1.5H14M9.5 16.5 5 12l4.5-4.5M5 12h10.5"/>'
+    };
+    const icon = k => '<svg class="menu-ico" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' + ICONS[k] + '</svg>';
 
     /* ---------- Acessibilidade: tamanho do texto e alto contraste ---------- */
     function a11yControls() {

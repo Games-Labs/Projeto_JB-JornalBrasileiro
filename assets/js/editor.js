@@ -616,17 +616,7 @@ JB.authReady.then(function () {
     // Gravação recusada pelo servidor: o cache já foi desfeito
     document.addEventListener('jb:sync-error', () => paintDirty());
 
-    /* ---------- Barra e ferramentas fixas abaixo do cabeçalho ---------- */
-    function stickyOffsets() {
-        const header = document.querySelector('.site-header'), bar = $('editor-bar');
-        const h = header ? header.getBoundingClientRect().height : 0;
-        const barSticky = bar && getComputedStyle(bar).position === 'sticky';
-        document.documentElement.style.setProperty('--jb-header-h', Math.round(h) + 'px');
-        document.documentElement.style.setProperty('--jb-toolbar-top', Math.round(h + (barSticky ? bar.getBoundingClientRect().height : 0)) + 'px');
-    }
-    window.addEventListener('resize', () => { stickyOffsets(); grow(field('title')); grow(field('subtitle')); });
-    document.addEventListener('shown.bs.collapse', stickyOffsets);
-    document.addEventListener('hidden.bs.collapse', stickyOffsets);
+    window.addEventListener('resize', () => { grow(field('title')); grow(field('subtitle')); });
 
     /* ---------- Carga ---------- */
     JB.ready.then(() => {
@@ -647,7 +637,6 @@ JB.authReady.then(function () {
         ready = true;
         markClean(); offerDraft();
         grow(field('title')); grow(field('subtitle'));
-        requestAnimationFrame(stickyOffsets);
         if (!currentId) field('title').focus();
     });
 });

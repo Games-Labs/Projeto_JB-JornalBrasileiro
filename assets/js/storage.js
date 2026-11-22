@@ -149,7 +149,7 @@
     function minutesAgo(m) { return new Date(Date.now() - m * 60000).toISOString(); }
 
     /* Exemplos das seções editoriais (o mesmo conteúdo está em supabase/06_exemplos_secoes.sql) */
-    const SEED_VERSION = 2;
+    const SEED_VERSION = 3;
     const SAMPLE_AUTHORS = [
         { name: 'Redação JB', role: 'Equipe de reportagem', bio: 'Equipe de reportagem geral do Jornal Brasileiro.', columnist: false },
         { name: 'Redação Investigativa JB', role: 'Núcleo de investigação', bio: 'Núcleo responsável pelas reportagens investigativas e pela análise de documentos públicos.', columnist: false },
@@ -240,7 +240,11 @@
                 ['O que foi dito: em entrevista, a secretária de Educação afirmou que a frequência média subiu de 87% para 91% após a adoção do painel.',
                     'O que verificamos: os boletins mensais publicados pela rede (dados fictícios) mostram exatamente esses valores.',
                     'Conclusão: VERDADEIRO. ' + NOTE],
-                { kind: 'checagem', verdict: 'verdadeiro', author: 'Núcleo de Verificação JB' })
+                { kind: 'checagem', verdict: 'verdadeiro', author: 'Núcleo de Verificação JB' }),
+            n('esportes', 'Estádios públicos passam a divulgar custos de manutenção em painel aberto', 'Arenas administradas por governos estaduais terão gastos, receitas e contratos publicados todo mês.', 'assets/img/cat-esportes.svg', 400,
+                ['Os estádios administrados por governos estaduais vão publicar mensalmente, em formato aberto, os custos de manutenção, as receitas com jogos e eventos e os contratos de operação.',
+                    'A medida responde a pedidos de torcidas organizadas e de pesquisadores, que apontavam dificuldade para comparar o custo das arenas construídas com dinheiro público.',
+                    'O primeiro relatório deve sair no fim do mês, com dados dos últimos doze meses. ' + NOTE])
         ];
     }
 

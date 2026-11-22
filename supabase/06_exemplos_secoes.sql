@@ -189,3 +189,20 @@ select 'educacao',
        null
 where not exists (select 1 from public.news where title = 'Frequência escolar subiu em rede que testa novo painel');
 
+insert into public.news (category, title, subtitle, image, author, body, status, featured, date, kind, verdict, live, sources, updates, chart)
+select 'esportes',
+       'Estádios públicos passam a divulgar custos de manutenção em painel aberto',
+       'Arenas administradas por governos estaduais terão gastos, receitas e contratos publicados todo mês.',
+       'assets/img/cat-esportes.svg',
+       'Redação JB',
+       '["Os estádios administrados por governos estaduais vão publicar mensalmente, em formato aberto, os custos de manutenção, as receitas com jogos e eventos e os contratos de operação.","A medida responde a pedidos de torcidas organizadas e de pesquisadores, que apontavam dificuldade para comparar o custo das arenas construídas com dinheiro público.","O primeiro relatório deve sair no fim do mês, com dados dos últimos doze meses. Conteúdo fictício de demonstração do projeto acadêmico Jornal Brasileiro (JB)."]'::jsonb,
+       'publicada',
+       false,
+       now() - interval '400 minutes',
+       'noticia',
+       null,
+       false,
+       '[]'::jsonb,
+       '[]'::jsonb,
+       null
+where not exists (select 1 from public.news where title = 'Estádios públicos passam a divulgar custos de manutenção em painel aberto');
