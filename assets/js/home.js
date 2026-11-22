@@ -23,7 +23,7 @@ JB.ready.then(function () {
     const take = list => { list.forEach(n => used.add(n.id)); return list; };
     const fresh = list => list.filter(n => !used.has(n.id));
     const cards = (list, col) => list.map(n => '<div class="' + (col || 'col-md-6 col-lg-4') + '">' + util.newsCard(n) + '</div>').join('');
-    const catHead = c => '<div class="d-flex justify-content-between align-items-baseline"><h2 class="section-title flex-grow-1 me-3 cat-' + esc(c) + '">' + esc(CATEGORIES[c].label) + '</h2>' +
+    const catHead = c => '<div class="section-head cat-' + esc(c) + '"><h2 class="section-title">' + esc(CATEGORIES[c].label) + '</h2>' +
         '<a class="small fw-semibold" href="' + esc(util.catUrl(c)) + '">Ver mais →</a></div>';
     // Primeira matéria de cada editoria: com imagem e resumo
     const feature = n => '<article class="mini-card mini-feature"><a class="mini-feature-media" href="' + esc(util.articleUrl(n)) + '" tabindex="-1" aria-hidden="true">' +
