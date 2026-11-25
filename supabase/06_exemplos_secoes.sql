@@ -15,6 +15,14 @@ insert into public.authors (name, role, bio, columnist) values
   ('Rafael Monteiro', 'Analista político', 'Personagem fictício. Acompanha o Congresso e as negociações do governo.', true),
   ('Carla Nunes', 'Repórter de Tecnologia & Ciência', 'Personagem fictícia. Cobre dados abertos, inteligência artificial e governo digital.', false)
 on conflict (name) do nothing;
+-- Perfis da redação com o selo do JB (coluna authors.official, de 01_schema.sql / 10_equipe_selos_lockdown.sql)
+do $$
+begin
+    if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'authors' and column_name = 'official') then
+        update public.authors set official = true
+         where name in ('Redação JB', 'Redação Investigativa JB', 'Conselho Editorial JB', 'Núcleo de Verificação JB', 'Carla Nunes');
+    end if;
+end $$;
 
 -- ---------- Reportagem do dossiê: cronologia, personagens, fontes e gráfico ----------
 update public.news set

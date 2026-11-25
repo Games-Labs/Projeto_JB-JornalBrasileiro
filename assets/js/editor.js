@@ -7,7 +7,7 @@
    matéria de outro é o banco (RLS); esconder opções aqui é só interface. */
 JB.authReady.then(function () {
     'use strict';
-    const { News, Authors, Auth, Drafts, CATEGORIES, KINDS, VERDICTS, IMAGES, STATUS, CHART_TYPES, util } = JB;
+    const { News, Authors, Auth, Members, Drafts, CATEGORIES, KINDS, VERDICTS, IMAGES, STATUS, CHART_TYPES, util } = JB;
     const { esc } = util;
     const $ = id => document.getElementById(id);
     const form = $('news-form');
@@ -95,6 +95,14 @@ JB.authReady.then(function () {
             flush();
             const t = c.nodeName;
             if (!isBlock(c)) { walk(c, out); return; }   // embrulho em linha com blocos dentro (colado do Google Docs)
+            // Imagem do meio do texto (gerada por util.bodyHTML): volta a ser "![legenda](endereço)".
+            // Endereço fora do permitido (https, galeria do site, data URL de imagem) é descartado.
+            if (t === 'FIGURE' && c.hasAttribute('data-src')) {
+                const cap = c.querySelector('figcaption'), img = c.querySelector('img');
+                const b = util.imgBlock(c.getAttribute('data-src'), cap ? cap.textContent : img ? img.getAttribute('alt') : '');
+                if (util.blockOf(b).type === 'img') out.push(b);
+                return;
+            }
             if (t === 'UL' || t === 'OL') {
                 let i = 0;
                 Array.prototype.forEach.call(c.childNodes, li => {
@@ -121,8 +129,84 @@ JB.authReady.then(function () {
     const readBody = () => domToBlocks(rte);
     function setBody(blocks) {
         rte.innerHTML = blocks && blocks.length ? util.bodyHTML(blocks) : '<p><br></p>';
+        decorateFigures();
         paintEmpty();
     }
+    // Imagens dentro do editor: bloco fechado (não se digita dentro) com botões de legenda e remover
+    function decorateFigures() {
+        rte.querySelectorAll('figure.body-figure:not([data-ed])').forEach(fig => {
+            fig.setAttribute('data-ed', ''); fig.contentEditable = 'false';
+            const tools = document.createElement('span');
+            tools.className = 'body-figure-tools';
+            tools.innerHTML = '<button type="button" class="btn btn-sm btn-light" data-fig="caption">Legenda</button><button type="button" class="btn btn-sm btn-light" data-fig="remove">Remover</button>';
+            fig.prepend(tools);
+        });
+    }
+    const figureEl = (src, caption) => {
+        const tpl = document.createElement('template');
+        tpl.innerHTML = util.bodyHTML([util.imgBlock(src, caption)]);   // gerado por nós, já escapado
+        const fig = tpl.content.firstElementChild;
+        return fig && fig.nodeName === 'FIGURE' ? fig : null;
+    };
+    rte.addEventListener('click', e => {
+        const b = e.target.closest('[data-fig]'); if (!b) return;
+        e.preventDefault();
+        const fig = b.closest('figure');
+        if (b.dataset.fig === 'remove') { if (confirm('Remover esta imagem do texto?')) { fig.remove(); onBodyInput(); } return; }
+        const cap = fig.querySelector('figcaption');
+        const next = window.prompt('Legenda da imagem (também é lida por leitores de tela):', cap ? cap.textContent : '');
+        if (next === null) return;
+        const nf = figureEl(fig.getAttribute('data-src'), next.slice(0, 300));
+        if (nf) { fig.replaceWith(nf); decorateFigures(); onBodyInput(); }
+    });
+    // Painel "Imagem" da barra: envio (reduzido no navegador) ou endereço https, mais a legenda.
+    let imgAnchor = null;
+    const imgMsg = t => { $('rte-img-msg').textContent = t; };
+    function openImgPanel() {
+        const s = getSelection();
+        let top = s.rangeCount && rte.contains(s.anchorNode) ? s.anchorNode : null;
+        while (top && top.parentNode !== rte) top = top.parentNode;
+        imgAnchor = top && top !== rte ? top : null;
+        $('rte-img-file').value = ''; $('rte-img-url').value = ''; $('rte-img-cap').value = '';
+        imgMsg(imgAnchor ? 'A imagem entra logo depois do parágrafo onde está o cursor.' : 'A imagem entra no fim do texto.');
+        $('rte-img-panel').hidden = false;
+        $('rte-toolbar').querySelector('[data-cmd="image"]').setAttribute('aria-expanded', 'true');
+        $('rte-img-file').focus();
+    }
+    function closeImgPanel() {
+        $('rte-img-panel').hidden = true;
+        $('rte-toolbar').querySelector('[data-cmd="image"]').setAttribute('aria-expanded', 'false');
+    }
+    $('rte-img-cancel').addEventListener('click', () => { closeImgPanel(); rte.focus(); });
+    $('rte-img-insert').addEventListener('click', async () => {
+        const file = $('rte-img-file').files[0], url = $('rte-img-url').value.trim(), cap = $('rte-img-cap').value.trim();
+        let src = '';
+        const btn = $('rte-img-insert');
+        if (file) {
+            if (!/^image\//.test(file.type)) { imgMsg('Escolha um arquivo de imagem (JPG, PNG, WebP ou GIF).'); return; }
+            btn.disabled = true; uploading = true; saveBtn.disabled = true; imgMsg('Enviando imagem…');
+            try { src = await JB.Media.upload(await resize(file, 1200)); }
+            catch (err) { imgMsg(err.message || 'Falha ao enviar a imagem.'); return; }
+            finally { btn.disabled = false; uploading = false; saveBtn.disabled = false; }
+        } else if (url) {
+            if (!/^https:\/\/[^\s()]+$/i.test(url)) { imgMsg('Use um endereço que comece com https:// (sem espaços nem parênteses).'); return; }
+            src = url;
+        } else { imgMsg('Escolha um arquivo ou cole o endereço da imagem.'); return; }
+        const fig = figureEl(src, cap);
+        if (!fig) { imgMsg('Endereço de imagem não aceito.'); return; }
+        if (!cap && !confirm('Inserir sem legenda? Sem ela, quem usa leitor de tela não sabe o que a imagem mostra.')) return;
+        let after;
+        if (imgAnchor && imgAnchor.parentNode === rte && imgAnchor.nodeName === 'P' && !imgAnchor.textContent.trim()) { imgAnchor.before(fig); after = imgAnchor; }
+        else {
+            after = document.createElement('p'); after.appendChild(document.createElement('br'));
+            if (imgAnchor && imgAnchor.parentNode === rte) imgAnchor.after(fig, after); else rte.append(fig, after);
+        }
+        decorateFigures(); closeImgPanel();
+        rte.focus();
+        const r = document.createRange(); r.setStart(after, 0); r.collapse(true);
+        const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+        onBodyInput();
+    });
     const paintEmpty = () => { rte.classList.toggle('is-empty', !rte.textContent.trim() && !rte.querySelector('li')); };
 
     // Comandos da barra
@@ -163,7 +247,8 @@ JB.authReady.then(function () {
         quote: () => { const q = closestIn(['BLOCKQUOTE']); if (q) unwrap(q); else exec('formatBlock', 'blockquote'); },
         ul: () => exec('insertUnorderedList'), ol: () => exec('insertOrderedList'),
         clear: () => { exec('removeFormat'); exec('unlink'); if (closestIn(['H2', 'H3'])) exec('formatBlock', 'p'); const q = closestIn(['BLOCKQUOTE']); if (q) unwrap(q); },
-        undo: () => exec('undo'), redo: () => exec('redo')
+        undo: () => exec('undo'), redo: () => exec('redo'),
+        image: () => { if ($('rte-img-panel').hidden) openImgPanel(); else closeImgPanel(); }
     };
     $('rte-toolbar').addEventListener('mousedown', e => { if (e.target.closest('.rte-btn')) e.preventDefault(); });   // não tira a seleção do texto
     $('rte-toolbar').addEventListener('click', e => {
@@ -244,6 +329,7 @@ JB.authReady.then(function () {
     // Links dentro do editor não navegam
     rte.addEventListener('click', e => { if (e.target.closest('a')) e.preventDefault(); });
     function onBodyInput() {
+        decorateFigures();   // imagens coladas de outra matéria
         paintEmpty();
         if (!rte.firstChild) rte.innerHTML = '<p><br></p>';
         $('body-error').hidden = true; rte.classList.remove('is-invalid');
@@ -438,7 +524,7 @@ JB.authReady.then(function () {
         const fake = util.withDefaults({
             id: currentId || 'previa', title: field('title').value.trim() || 'Título da matéria', subtitle: field('subtitle').value.trim() || 'Resumo da matéria',
             category: field('category').value, kind: field('kind').value, verdict: field('verdict').value || null, live: field('live').checked,
-            video: util.parseVideo(field('video').value), image: field('image').value, author: field('author').value.trim() || 'Redação JB',
+            video: util.parseVideo(field('video').value), image: field('image').value, author: field('author').value.trim() || 'Redação JB', coauthors: formCoauthors.slice(),
             date: field('pubdate').value ? new Date(field('pubdate').value).toISOString() : nowIso(), body: []
         });
         $('card-preview').innerHTML = util.newsCard(fake);
@@ -451,11 +537,15 @@ JB.authReady.then(function () {
         STATE_FIELDS.forEach(k => { s[k] = field(k).value; });
         s.live = field('live').checked; s.featured = field('featured').checked;
         s.body = readBody();
+        s.coauthors = formCoauthors.slice(); s.editors = formEditors.slice();
         return s;
     }
     function applyState(s) {
         STATE_FIELDS.forEach(k => { if (k in s && field(k)) field(k).value = s[k]; });
         field('live').checked = !!s.live; field('featured').checked = !!s.featured;
+        formCoauthors = Array.isArray(s.coauthors) ? s.coauthors.slice() : []; renderCoauthors();
+        if (Array.isArray(s.editors)) formEditors = s.editors.slice();
+        renderCollab();
         setBody(s.body || []);
         setImage(s.image || '');
         afterFill();
@@ -501,6 +591,57 @@ JB.authReady.then(function () {
         $('draft-note').hidden = true;
     });
 
+    /* ---------- Coautores (assinatura) ---------- */
+    let formCoauthors = [];
+    function renderCoauthors() {
+        $('coauthor-chips').innerHTML = formCoauthors.map((c, i) => '<li class="chip">' + esc(c) +
+            '<button type="button" class="chip-del" data-co-del="' + i + '" aria-label="Tirar ' + esc(c) + ' dos coautores">×</button></li>').join('');
+    }
+    function addCoauthor() {
+        const inp = $('f-coauthor'), v = inp.value.replace(/\s+/g, ' ').trim();
+        if (!v) return;
+        const fail = t => { note(t, 'warning'); inp.focus(); };
+        if (v === field('author').value.trim()) return fail(v + ' já é o autor principal.');
+        if (formCoauthors.includes(v)) return fail(v + ' já está nos coautores.');
+        if (formCoauthors.length >= 10) return fail('No máximo 10 coautores.');
+        if (formCoauthors.join('').length + v.length > 1200) return fail('Os nomes dos coautores passaram do limite.');
+        formCoauthors.push(v); inp.value = ''; renderCoauthors(); changed(); renderCard();
+    }
+    $('coauthor-add').addEventListener('click', addCoauthor);
+    $('f-coauthor').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addCoauthor(); } });
+    $('coauthor-chips').addEventListener('click', e => {
+        const b = e.target.closest('[data-co-del]'); if (!b) return;
+        formCoauthors.splice(Number(b.dataset.coDel), 1); renderCoauthors(); changed(); renderCard();
+        $('f-coauthor').focus();
+    });
+
+    /* ---------- Colaboradores de edição (jornalistas que também editam a matéria) ---------- */
+    let formEditors = [], staffReady = false;
+    function renderCollab() {
+        const box = $('collab-list'), n = currentId ? News.get(currentId) : null;
+        const creator = n ? n.created_by : me.id, can = Auth.canManageEditors(n);
+        if (!staffReady) { box.innerHTML = util.loadingHTML('Carregando a equipe…'); return; }
+        const people = Members.staff().filter(p => p.role === 'jornalista' && p.id !== creator);
+        // quem saiu da equipe continua na lista enquanto estiver marcado (para poder desmarcar)
+        formEditors.filter(id => !people.some(p => p.id === id)).forEach(id => people.push({ id, name: 'Conta fora da equipe', role: 'leitor' }));
+        if (!can) {
+            const names = people.filter(p => formEditors.includes(p.id)).map(p => esc(p.name));
+            box.innerHTML = '<p class="small mb-0">' + (names.length ? 'Podem editar: ' + names.join(', ') + '.' : 'Nenhum colaborador.') + ' Só quem criou a matéria ou um coordenador muda esta lista.</p>';
+            return;
+        }
+        box.innerHTML = people.length ? people.map(p => '<label class="form-check small"><input class="form-check-input" type="checkbox" data-collab value="' + esc(p.id) + '"' + (formEditors.includes(p.id) ? ' checked' : '') + '> ' +
+            esc(p.name) + ' ' + util.sealHTML(p.role) + '</label>').join('') : '<p class="small text-muted mb-0">Nenhum outro jornalista na equipe.</p>';
+    }
+    $('collab-list').addEventListener('change', e => {
+        const c = e.target.closest('[data-collab]'); if (!c) return;
+        formEditors = formEditors.filter(id => id !== c.value);
+        if (c.checked) {
+            if (formEditors.length >= 10) { c.checked = false; note('No máximo 10 colaboradores.', 'warning'); return; }
+            formEditors.push(c.value);
+        }
+        changed();
+    });
+
     /* ---------- Preenchimento ---------- */
     const toLocalInput = iso => { if (!iso) return ''; const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
     let editingDate = null;
@@ -515,6 +656,7 @@ JB.authReady.then(function () {
         field('status').value = defaultStatus;
         field('chartType').value = 'bar';
         if (!editor) field('author').value = me.name;   // jornalista assina com o próprio nome (pode trocar)
+        formCoauthors = []; formEditors = []; renderCoauthors(); renderCollab();
         formUpdates = []; formCorrections = []; renderUpdates(); renderCorrections();
         setBody([]); setImage('');
         $('form-title').textContent = 'Nova matéria'; document.title = 'Nova matéria — Jornal Brasileiro (JB)';
@@ -539,6 +681,7 @@ JB.authReady.then(function () {
         $('chart-box').open = !!n.chart;
         $('extras').open = !!((n.sources || []).length || (n.timeline || []).length || (n.people || []).length);
         formUpdates = (n.updates || []).slice(); formCorrections = (n.corrections || []).slice(); renderUpdates(); renderCorrections();
+        formCoauthors = (n.coauthors || []).slice(); formEditors = (n.editors || []).slice(); renderCoauthors(); renderCollab();
         setBody(n.body); setImage(n.image || '');
         $('form-title').textContent = 'Editar matéria'; document.title = 'Editar: ' + n.title + ' — Jornal Brasileiro (JB)';
         $('preview-link').href = util.articleUrl(n); $('preview-link').hidden = false;
@@ -566,7 +709,7 @@ JB.authReady.then(function () {
         if (uploading || saveBtn.disabled) return;
         if (!validate()) return;
         const current = currentId ? News.get(currentId) : null;
-        if (current && !Auth.canEditNews(current)) { note('Você não pode editar esta matéria (só as suas, até “Aprovada”).', 'danger'); return; }
+        if (current && !Auth.canEditNews(current)) { note('Você não pode editar esta matéria (só as suas e as em que é colaborador, até “Aprovada”).', 'danger'); return; }
         if (!allowedStatuses.includes(field('status').value)) { note('Seu cargo não permite esse status. Jornalistas levam a matéria até “Aprovada”; quem publica é um coordenador.', 'danger'); return; }
         const kind = field('kind').value, pub = field('pubdate').value, correction = field('correction').value.trim();
         if (correction) formCorrections.push({ date: nowIso(), text: correction });
@@ -576,8 +719,11 @@ JB.authReady.then(function () {
             body: readBody(), video: util.parseVideo(field('video').value),
             kind, verdict: kind === 'checagem' ? (field('verdict').value || null) : null, live: kind === 'aovivo' && field('live').checked,
             sources: readSources(), timeline: parseLines(field('timeline').value, 'when', 'text'), people: parseLines(field('people').value, 'name', 'role'),
-            chart: chartState().chart, updates: kind === 'aovivo' ? formUpdates.slice() : [], corrections: formCorrections.slice()
+            chart: chartState().chart, updates: kind === 'aovivo' ? formUpdates.slice() : [], corrections: formCorrections.slice(),
+            coauthors: formCoauthors.filter(c => c !== (field('author').value.trim() || 'Redação JB'))
         };
+        // Colaboradores: só quem criou a matéria ou coordenador/admin (o banco ignora os outros)
+        if (Auth.canManageEditors(current)) item.editors = formEditors.slice();
         // Data de publicação: a escolhida (agendamento) ou agora. Editando sem mexer no campo, mantém a data.
         if (pub) {
             const chosen = new Date(pub).toISOString();
@@ -618,6 +764,19 @@ JB.authReady.then(function () {
 
     window.addEventListener('resize', () => { grow(field('title')); grow(field('subtitle')); });
 
+    // Cargo trocado (ou conta removida da equipe) com o editor aberto: confere ao voltar para a aba
+    // e a cada minuto. Perdeu o acesso: recarrega (o texto fica guardado neste navegador).
+    const recheck = async () => {
+        if (document.hidden) return;
+        await Auth.refresh();
+        if (Auth.isStaff()) return;
+        if (ready && isDirty()) Drafts.set(draftKey(), formState());
+        ready = false;   // sem o aviso de "sair da página"
+        location.reload();
+    };
+    window.addEventListener('focus', recheck);
+    setInterval(recheck, 60000);
+
     /* ---------- Carga ---------- */
     JB.ready.then(() => {
         $('ed-loading').hidden = true;
@@ -627,7 +786,7 @@ JB.authReady.then(function () {
             const n = News.get(currentId);
             if (!n) { $('ed-error').innerHTML = '<div class="alert alert-warning">Matéria não encontrada. <a href="admin.html">Voltar ao painel</a> ou <a href="editor.html">criar uma nova</a>.</div>'; return; }
             if (!Auth.canEditNews(n)) {
-                $('ed-error').innerHTML = '<div class="alert alert-warning">Você não pode editar esta matéria' + (Auth.role() === 'jornalista' ? ' (jornalistas editam só as próprias, até “Aprovada”)' : '') +
+                $('ed-error').innerHTML = '<div class="alert alert-warning">Você não pode editar esta matéria' + (Auth.role() === 'jornalista' ? ' (jornalistas editam só as próprias e as em que são colaboradores, até “Aprovada”)' : '') +
                     '. <a href="' + esc(util.articleUrl(n)) + '">Ler a matéria</a> · <a href="admin.html">Voltar ao painel</a></div>';
                 return;
             }
@@ -636,6 +795,7 @@ JB.authReady.then(function () {
         form.hidden = false;
         ready = true;
         markClean(); offerDraft();
+        Members.loadStaff().then(() => { staffReady = true; renderCollab(); });
         grow(field('title')); grow(field('subtitle'));
         if (!currentId) field('title').focus();
     });

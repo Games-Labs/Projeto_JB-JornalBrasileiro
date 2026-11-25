@@ -319,14 +319,14 @@ begin
             if n >= 5 then raise exception 'JB: muitos comentários seguidos; aguarde um minuto' using errcode = '54000'; end if;
         else
             select count(*) into n from public.comments where user_id is null and date > now() - interval '10 minutes';
-            if n >= 30 then raise exception 'JB: muitos comentários de visitantes; tente mais tarde' using errcode = '54000'; end if;
+            if n >= 150 then raise exception 'JB: muitos comentários de visitantes; tente mais tarde' using errcode = '54000'; end if;
         end if;
     elsif tg_table_name = 'reports' then
         select count(*) into n from public.reports where date > now() - interval '10 minutes';
-        if n >= 30 then raise exception 'JB: muitas denúncias em pouco tempo; tente mais tarde' using errcode = '54000'; end if;
+        if n >= 150 then raise exception 'JB: muitas denúncias em pouco tempo; tente mais tarde' using errcode = '54000'; end if;
     elsif tg_table_name = 'newsletter' then
         select count(*) into n from public.newsletter where created_at > now() - interval '10 minutes';
-        if n >= 30 then raise exception 'JB: muitas inscrições em pouco tempo; tente mais tarde' using errcode = '54000'; end if;
+        if n >= 150 then raise exception 'JB: muitas inscrições em pouco tempo; tente mais tarde' using errcode = '54000'; end if;
     end if;
     return new;
 end;

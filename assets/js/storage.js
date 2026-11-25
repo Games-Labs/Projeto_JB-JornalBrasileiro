@@ -13,7 +13,7 @@
 (function () {
     'use strict';
 
-    const KEYS = { news: 'jb_news', users: 'jb_users', session: 'jb_session', reports: 'jb_reports', cookies: 'jb_cookies', views: 'jb_views', favs: 'jb_favs', history: 'jb_history', comments: 'jb_comments', newsletter: 'jb_newsletter', theme: 'jb_theme', authors: 'jb_authors', versions: 'jb_versions', a11y: 'jb_a11y', seed: 'jb_seed', roleLog: 'jb_role_log', drafts: 'jb_drafts' };
+    const KEYS = { news: 'jb_news', users: 'jb_users', session: 'jb_session', reports: 'jb_reports', cookies: 'jb_cookies', views: 'jb_views', favs: 'jb_favs', history: 'jb_history', comments: 'jb_comments', newsletter: 'jb_newsletter', theme: 'jb_theme', authors: 'jb_authors', versions: 'jb_versions', a11y: 'jb_a11y', seed: 'jb_seed', roleLog: 'jb_role_log', drafts: 'jb_drafts', site: 'jb_site' };
 
     // Fallback em memória caso o localStorage esteja bloqueado
     const memory = {};
@@ -95,11 +95,18 @@
     const EDITOR_ROLES = ['admin', 'coordenador'];
     const JOURNALIST_STATUSES = ['rascunho', 'revisao', 'aprovada'];
     const roleRank = r => { const i = STAFF_ROLES.indexOf(r); return i < 0 ? 9 : i; };
+    // Selos de perfil: independentes do cargo, dados por coordenador/admin (set_member_badges no banco)
+    const BADGES = {
+        colaborador: { label: 'Colaborador', desc: 'Colabora com conteúdo, informações ou pautas para o JB.' },
+        apoiador: { label: 'Apoiador Oficial', desc: 'Apoia oficialmente o projeto do Jornal Brasileiro.' },
+        ajudante: { label: 'Ajudante do Jornal', desc: 'Ajuda a redação no dia a dia do jornal.' },
+        reporter: { label: 'Repórter', desc: 'Repórter que contribui com o JB.' }
+    };
     // Agendamento: "publicada" com data no futuro só aparece quando a data chega.
     const isScheduled = n => (!n.status || n.status === 'publicada') && !!n.date && new Date(n.date) > Date.now();
     const isPublished = n => (!n.status || n.status === 'publicada') && !isScheduled(n);   // dados antigos (sem status) contam como publicados
     // Campos novos com valor padrão (matérias antigas não têm)
-    const EXTRA_ARRAYS = ['sources', 'corrections', 'updates', 'timeline', 'people'];
+    const EXTRA_ARRAYS = ['sources', 'corrections', 'updates', 'timeline', 'people', 'coauthors', 'editors'];
     function withDefaults(n) {
         if (!n) return n;
         if (!n.kind) n.kind = 'noticia';
@@ -113,7 +120,7 @@
         return n;
     }
     // Campos cuja mudança gera uma nova versão (mesma lista do gatilho news_track_changes no banco)
-    const VERSIONED = ['title', 'subtitle', 'body', 'image', 'author', 'category', 'kind', 'verdict', 'sources', 'timeline', 'people', 'chart', 'video'];
+    const VERSIONED = ['title', 'subtitle', 'body', 'image', 'author', 'category', 'kind', 'verdict', 'sources', 'timeline', 'people', 'chart', 'video', 'coauthors'];
     const TOUCHES = VERSIONED.concat(['updates', 'corrections']);   // mudam a data de atualização
 
     // Imagens locais disponíveis (usadas no painel e como fallback por categoria)
@@ -149,15 +156,16 @@
     function minutesAgo(m) { return new Date(Date.now() - m * 60000).toISOString(); }
 
     /* Exemplos das seções editoriais (o mesmo conteúdo está em supabase/06_exemplos_secoes.sql) */
-    const SEED_VERSION = 3;
+    const SEED_VERSION = 4;
+    // official: perfil oficial da redação (selo do JB). Mesmo conteúdo de supabase/06_exemplos_secoes.sql.
     const SAMPLE_AUTHORS = [
-        { name: 'Redação JB', role: 'Equipe de reportagem', bio: 'Equipe de reportagem geral do Jornal Brasileiro.', columnist: false },
-        { name: 'Redação Investigativa JB', role: 'Núcleo de investigação', bio: 'Núcleo responsável pelas reportagens investigativas e pela análise de documentos públicos.', columnist: false },
-        { name: 'Conselho Editorial JB', role: 'Editorial', bio: 'Assina os editoriais, que expressam a posição institucional do jornal.', columnist: false },
-        { name: 'Núcleo de Verificação JB', role: 'Verificação de fatos', bio: 'Checa declarações públicas, conteúdos virais e dados oficiais, com metodologia publicada.', columnist: false },
-        { name: 'Helena Prado', role: 'Colunista de Economia', bio: 'Personagem fictícia. Escreve às terças sobre juros, emprego e orçamento das famílias.', columnist: true },
-        { name: 'Rafael Monteiro', role: 'Analista político', bio: 'Personagem fictício. Acompanha o Congresso e as negociações do governo.', columnist: true },
-        { name: 'Carla Nunes', role: 'Repórter de Tecnologia & Ciência', bio: 'Personagem fictícia. Cobre dados abertos, inteligência artificial e governo digital.', columnist: false }
+        { name: 'Redação JB', role: 'Equipe de reportagem', bio: 'Equipe de reportagem geral do Jornal Brasileiro.', columnist: false, official: true },
+        { name: 'Redação Investigativa JB', role: 'Núcleo de investigação', bio: 'Núcleo responsável pelas reportagens investigativas e pela análise de documentos públicos.', columnist: false, official: true },
+        { name: 'Conselho Editorial JB', role: 'Editorial', bio: 'Assina os editoriais, que expressam a posição institucional do jornal.', columnist: false, official: true },
+        { name: 'Núcleo de Verificação JB', role: 'Verificação de fatos', bio: 'Checa declarações públicas, conteúdos virais e dados oficiais, com metodologia publicada.', columnist: false, official: true },
+        { name: 'Helena Prado', role: 'Colunista de Economia', bio: 'Personagem fictícia. Escreve às terças sobre juros, emprego e orçamento das famílias.', columnist: true, official: false },
+        { name: 'Rafael Monteiro', role: 'Analista político', bio: 'Personagem fictício. Acompanha o Congresso e as negociações do governo.', columnist: true, official: false },
+        { name: 'Carla Nunes', role: 'Repórter de Tecnologia & Ciência', bio: 'Personagem fictícia. Cobre dados abertos, inteligência artificial e governo digital.', columnist: false, official: true }
     ];
     const DOSSIE_EXTRAS = {
         kind: 'reportagem',
@@ -275,6 +283,11 @@
             ].concat(sectionSamples(n)));
             store.set(KEYS.seed, String(SEED_VERSION));
         }
+        // Demonstrações criadas antes do selo dos perfis da redação: autores de exemplo ganham o selo, uma vez.
+        if (Number(store.get(KEYS.seed) || 1) < 4 && store.get(KEYS.authors) !== null) {
+            const sample = SAMPLE_AUTHORS.reduce((o, a) => { o[a.name] = a.official; return o; }, {});
+            write(KEYS.authors, read(KEYS.authors, []).map(a => 'official' in a ? a : Object.assign(a, { official: a.name in sample ? sample[a.name] : !a.columnist })));
+        }
         // Demonstrações criadas antes das seções novas: acrescenta só os exemplos novos, uma vez.
         if (Number(store.get(KEYS.seed) || 1) < SEED_VERSION) {
             const list = read(KEYS.news, []);
@@ -308,6 +321,13 @@
         save(item) {
             const list = read(KEYS.news, []);
             const i = list.findIndex(x => x.id === item.id);
+            // Colaboradores de edição: só quem criou ou coordenador/admin mudam (gatilho news_set_editors)
+            if ('editors' in item) {
+                const old = i >= 0 ? list[i] : null, me = Auth.current();
+                if (old && !Auth.isEditor() && (!me || old.created_by !== me.id)) item.editors = (old.editors || []).slice();
+                const creator = old ? old.created_by : me && me.id;
+                item.editors = [...new Set((item.editors || []).filter(e => e && e !== creator))].slice(0, 10);
+            }
             if (i >= 0) {
                 const change = changeKind(withDefaults(list[i]), item);
                 if (change === 'version') {   // guarda a versão anterior (20 últimas)
@@ -331,12 +351,12 @@
         },
         byCategory(cat) { return News.all().filter(x => x.category === cat); },
         byKind(kinds) { kinds = [].concat(kinds); return News.all().filter(x => kinds.includes(x.kind || 'noticia')); },
-        byAuthor(name) { return News.all().filter(x => x.author === name); },
+        byAuthor(name) { return News.all().filter(x => x.author === name || (x.coauthors || []).includes(name)); },
         // Relê uma matéria do servidor (cobertura ao vivo). No modo local, lê de novo o navegador.
         refresh() { return Promise.resolve(true); },
         search(q) {
             q = q.toLowerCase();
-            return News.all().filter(x => (x.title + ' ' + x.subtitle + ' ' + x.author + ' ' + x.body.map(plainText).join(' ') + ' ' + x.updates.map(u => u.text).join(' ')).toLowerCase().includes(q));
+            return News.all().filter(x => (x.title + ' ' + x.subtitle + ' ' + x.author + ' ' + x.coauthors.join(' ') + ' ' + x.body.map(plainText).join(' ') + ' ' + x.updates.map(u => u.text).join(' ')).toLowerCase().includes(q));
         }
     };
 
@@ -423,7 +443,9 @@
         async mfaEnroll() { return { ok: false, error: 'A verificação em duas etapas só funciona com o Supabase configurado.' }; },
         async mfaVerify() { return { ok: false, error: 'A verificação em duas etapas só funciona com o Supabase configurado.' }; },
         async mfaRemove() { return { ok: false, error: 'A verificação em duas etapas só funciona com o Supabase configurado.' }; },
-        logEvent() { }
+        logEvent() { },
+        // Relê o perfil do servidor (cargo trocado por outra pessoa). No modo local nada muda.
+        refresh() { return Promise.resolve(true); }
     };
 
     // Permissões derivadas do cargo (usam Auth.current(), então valem também no modo Supabase,
@@ -439,11 +461,15 @@
         // Status que o usuário pode dar a uma matéria (jornalista: só até "Aprovada")
         allowedStatuses() { return Auth.isEditor() ? STATUS_FLOW.slice() : Auth.isStaff() ? JOURNALIST_STATUSES.slice() : []; },
         isOwnNews(n) { const u = Auth.current(); return !!u && !!n && n.created_by === u.id; },
+        // Jornalista colaborador de edição da matéria (news.editors)
+        isCollaborator(n) { const u = Auth.current(); return !!u && !!n && (n.editors || []).includes(u.id); },
         canEditNews(n) {
             if (!n) return false;
             if (Auth.isEditor()) return true;
-            return Auth.role() === 'jornalista' && Auth.isOwnNews(n) && JOURNALIST_STATUSES.includes(n.status || 'publicada');
+            return Auth.role() === 'jornalista' && (Auth.isOwnNews(n) || Auth.isCollaborator(n)) && JOURNALIST_STATUSES.includes(n.status || 'publicada');
         },
+        // Quem muda a lista de colaboradores: quem criou a matéria ou coordenador/admin (gatilho news_set_editors)
+        canManageEditors(n) { return Auth.isEditor() || (Auth.isStaff() && (!n || !n.id || Auth.isOwnNews(n))); },
         // Cargos que o usuário logado pode dar a `target` ({id, role}); [] = não pode mexer.
         assignableRoles(target) {
             const me = Auth.current(), r = Auth.role();
@@ -451,12 +477,20 @@
             if (r === 'admin') return ['leitor', 'jornalista', 'coordenador'];
             if (r === 'coordenador' && ['leitor', 'jornalista'].includes(target.role || 'leitor')) return ['leitor', 'jornalista'];
             return [];
+        },
+        // Pode dar/tirar selos de `target`? (mesmas regras de set_member_badges no banco)
+        canGiveBadges(target) {
+            const me = Auth.current(), r = Auth.role();
+            if (!me || !target || target.id === me.id || target.role === 'admin') return false;
+            if (r === 'admin') return true;
+            return r === 'coordenador' && ['leitor', 'jornalista'].includes(target.role || 'leitor');
         }
     });
 
     /* ---------- Membros: cargos (painel) e perfis públicos ---------- */
     // Perfil público: nunca inclui e-mail, cidade nem interesses.
-    const publicOf = u => ({ id: u.id, name: u.name, role: u.role || 'leitor', bio: u.bio || '', avatar: u.avatar || '', created: u.created });
+    const publicOf = u => ({ id: u.id, name: u.name, role: u.role || 'leitor', bio: u.bio || '', avatar: u.avatar || '', created: u.created, badges: (u.badges || []).slice() });
+    const cleanBadges = list => [...new Set((list || []).filter(b => BADGES[b]))].sort();
     let memberList = [];
     const Members = {
         // Painel (coordenador/admin): busca contas por nome ou e-mail
@@ -464,8 +498,8 @@
             if (!Auth.isEditor()) { memberList = []; return Promise.resolve(true); }
             q = String(q || '').trim().toLowerCase();
             memberList = Auth.users().filter(u => !q || (u.name + ' ' + u.email).toLowerCase().includes(q))
-                .map(u => ({ id: u.id, name: u.name, email: u.email, role: u.role || 'leitor', created: u.created }))
-                .sort((a, b) => roleRank(a.role) - roleRank(b.role) || byName(a, b));
+                .map(u => ({ id: u.id, name: u.name, email: u.email, role: u.role || 'leitor', created: u.created, badges: (u.badges || []).slice() }))
+                .sort((a, b) => roleRank(a.role) - roleRank(b.role) || b.badges.length - a.badges.length || byName(a, b));
             return Promise.resolve(true);
         },
         list() { return memberList.slice(); },
@@ -481,11 +515,20 @@
             write(KEYS.roleLog, [{ targetId: id, targetName: t.name, oldRole: old, newRole: role, byName: me ? me.name : '', date: new Date().toISOString() }].concat(read(KEYS.roleLog, [])).slice(0, 50));
             return Promise.resolve({ ok: true });
         },
+        // Selos de perfil (mesmas regras de set_member_badges no banco)
+        setBadges(id, badges) {
+            const users = Auth.users(), t = users.find(u => u.id === id);
+            if (!t) return Promise.resolve({ ok: false, error: 'Conta não encontrada.' });
+            if (!Auth.canGiveBadges(t)) return Promise.resolve({ ok: false, error: 'Você não tem permissão para mudar os selos desta conta.' });
+            t.badges = cleanBadges(badges); write(KEYS.users, users);
+            const m = memberList.find(x => x.id === id); if (m) m.badges = t.badges.slice();
+            return Promise.resolve({ ok: true });
+        },
         loadLog() { return Promise.resolve(true); },
         log() { return Auth.isEditor() ? read(KEYS.roleLog, []) : []; },
-        // Equipe da redação (selo do JB), pública
+        // Equipe da redação (selo do JB) e contas com selo de perfil, públicas
         loadStaff() { return Promise.resolve(true); },
-        staff() { return Auth.users().filter(u => STAFF_ROLES.includes(u.role)).map(publicOf).sort((a, b) => roleRank(a.role) - roleRank(b.role) || byName(a, b)); },
+        staff() { return Auth.users().filter(u => STAFF_ROLES.includes(u.role) || (u.badges || []).length).map(publicOf).sort((a, b) => roleRank(a.role) - roleRank(b.role) || byName(a, b)); },
         staffById(id) { return Members.staff().find(p => p.id === id) || null; },
         staffByName(name) { return Members.staff().find(p => p.name === name) || null; },
         // Perfil público de qualquer conta: objeto, null (não existe) ou undefined (falha de conexão)
@@ -495,9 +538,26 @@
     /* ---------- Denúncias / pautas ---------- */
     const Reports = {
         all() { return read(KEYS.reports, []).slice().sort((a, b) => new Date(b.date) - new Date(a.date)); },
-        add(r) { const list = read(KEYS.reports, []); r.id = uid(); r.date = new Date().toISOString(); list.push(r); write(KEYS.reports, list); return r; },
+        // Só quem tem conta denuncia (no Supabase o banco confere). null = sem conta liberada.
+        add(r) {
+            if (!Auth.current() || !Auth.accountOk()) return null;
+            const list = read(KEYS.reports, []); r.id = uid(); r.date = new Date().toISOString(); r.attachments = r.attachments || []; list.push(r); write(KEYS.reports, list); return r;
+        },
         remove(id) { write(KEYS.reports, read(KEYS.reports, []).filter(r => r.id !== id)); },
-        load() { return Promise.resolve(true); }   // no Supabase baixa as denúncias só no painel
+        load() { return Promise.resolve(true); },   // no Supabase baixa as denúncias só no painel
+        // Anexos (imagens já reduzidas no navegador, ou PDF). No modo local ficam como data URL neste
+        // navegador; no Supabase vão para o bucket privado report-files.
+        upload(blob, name) {
+            return new Promise((resolve, reject) => {
+                const fr = new FileReader();
+                fr.onload = () => resolve({ path: 'local:' + uid(), name: String(name || 'anexo').slice(0, 200), size: blob.size, type: blob.type, data: fr.result });
+                fr.onerror = () => reject(fr.error); fr.readAsDataURL(blob);
+            });
+        },
+        // { path: url } para abrir no painel (no Supabase: links temporários, só coordenador/admin)
+        newFolder: () => uid(),
+        fileUrls(list) { const o = {}; (list || []).forEach(a => { if (a && a.data) o[a.path] = a.data; }); return Promise.resolve(o); },
+        removeFiles() { return Promise.resolve(true); }
     };
 
     /* ---------- Visualizações (ranking "Mais lidas") ---------- */
@@ -527,10 +587,13 @@
     };
     const Comments = {
         forNews(id) { return (read(KEYS.comments, {})[id] || []).slice().sort((a, b) => new Date(b.date) - new Date(a.date)); },
+        // Só quem tem conta comenta (no Supabase o banco confere): sempre no nome da conta
         add(id, c) {
-            const all = read(KEYS.comments, {}), me = Auth.current();   // logado: sempre no nome da conta
-            (all[id] = all[id] || []).push({ id: uid(), userId: me ? me.id : null, name: me ? me.name : c.name, text: c.text, date: new Date().toISOString() });
+            const all = read(KEYS.comments, {}), me = Auth.current();
+            if (!me || !Auth.accountOk()) return false;
+            (all[id] = all[id] || []).push({ id: uid(), userId: me.id, name: me.name, text: c.text, date: new Date().toISOString() });
             write(KEYS.comments, all);
+            return true;
         },
         // Comentários de uma conta (perfil público), só em matérias publicadas
         byUser(userId) { return Promise.resolve(Comments.flat().filter(c => c.userId === userId && News.all().some(n => n.id === c.newsId)).slice(0, 30)); },
@@ -552,6 +615,16 @@
         count() { return read(KEYS.newsletter, []).length; },
         add(email) { email = email.trim().toLowerCase(); const l = read(KEYS.newsletter, []); if (l.includes(email)) return false; l.push(email); write(KEYS.newsletter, l); return true; },
         load() { return Promise.resolve(true); }
+    };
+    // Modo lockdown (aba Segurança do painel). No modo local fica só neste navegador (simulado);
+    // no Supabase, o banco fecha o site para quem não é da equipe (site_status / set_lockdown).
+    const Site = {
+        status() { const s = read(KEYS.site, null) || {}; return Promise.resolve({ lockdown: !!s.lockdown, message: s.lockdown ? String(s.message || '') : '', since: s.lockdown ? s.since || null : null }); },
+        setLockdown(on, message) {
+            if (!Auth.isEditor()) return Promise.resolve({ ok: false, error: 'Só coordenadores e administradores ligam o modo lockdown.' });
+            write(KEYS.site, { lockdown: !!on, message: String(message || '').slice(0, 500), since: new Date().toISOString() });
+            return Promise.resolve({ ok: true });
+        }
     };
     // Rascunhos do editor de matérias guardados só neste navegador (protege contra fechar a aba sem
     // salvar). Conveniência de quem escreve: a matéria de verdade continua no banco. Até 10 rascunhos.
@@ -630,12 +703,21 @@
     // Cargos e selo do JB (só para a equipe da redação)
     const roleLabel = r => ROLES[r] || ROLES.leitor;
     const isStaffRole = r => STAFF_ROLES.includes(r);
-    const sealHTML = role => {
-        if (!isStaffRole(role)) return '';
-        const t = esc(roleLabel(role) + ' do Jornal Brasileiro');
+    const sealSpan = title => {
+        const t = esc(title);
         return '<span class="jb-seal" title="' + t + '"><svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true" focusable="false"><path d="M6.4 11.6 2.8 8l1.1-1.1 2.5 2.5 5.7-5.7L13.2 4.8z" fill="currentColor"/></svg><span aria-hidden="true">JB</span><span class="visually-hidden">' + t + '</span></span>';
     };
+    const sealHTML = role => isStaffRole(role) ? sealSpan(roleLabel(role) + ' do Jornal Brasileiro') : '';
+    // Perfis oficiais da redação (autores com official = true): mesmo selo do JB
+    const officialSealHTML = a => a && a.official ? sealSpan('Perfil oficial da redação do Jornal Brasileiro') : '';
+    // Selos de perfil (Colaborador, Apoiador Oficial…): contorno, para não confundir com o selo da equipe
+    const profileBadgesHTML = list => (list || []).filter(b => BADGES[b]).map(b => '<span class="jb-badge jb-badge-' + esc(b) + '" title="' + esc(BADGES[b].desc) + '">' +
+        '<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true" focusable="false"><path d="M8 1.2l1.9 4 4.4.5-3.3 3 .9 4.3L8 10.8 4.1 13l.9-4.3-3.3-3 4.4-.5z" fill="currentColor"/></svg>' + esc(BADGES[b].label) + '</span>').join(' ');
     const profileUrl = id => root() + 'pages/perfil-publico.html?id=' + encodeURIComponent(id || '');
+    // Assinatura com coautores: "A", "A e B", "A, B e C". link(name) devolve o HTML de cada nome.
+    const bylineNames = n => [n.author || 'Redação JB'].concat((n.coauthors || []).filter(x => x && x !== n.author));
+    const joinNames = parts => parts.length < 2 ? parts.join('') : parts.slice(0, -1).join(', ') + ' e ' + parts[parts.length - 1];
+    const bylineHTML = (n, link) => joinNames(bylineNames(n).map(nm => link ? link(nm) : esc(nm)));
     const OPINION_KINDS = ['opiniao', 'analise', 'editorial'];
     // Só links http(s) viram <a>; qualquer outra coisa (javascript:, data:) é ignorada.
     const safeUrl = u => (/^https?:\/\//i.test(String(u || '').trim()) ? String(u).trim() : '');
@@ -657,7 +739,7 @@
     const catTag = c => '<a class="category-tag cat-' + esc(c) + '" href="' + esc(catUrl(c)) + '">' + esc(catLabel(c)) + '</a>';
 
     function newsCard(n) {
-        const byline = OPINION_KINDS.includes(n.kind) || n.kind === 'entrevista' ? '<span class="card-author">Por ' + esc(n.author) + '</span>' : '';
+        const byline = OPINION_KINDS.includes(n.kind) || n.kind === 'entrevista' ? '<span class="card-author">Por ' + bylineHTML(n) + '</span>' : '';
         return '<article class="news-card cat-' + esc(n.category) + '">' +
             '<a class="card-media" href="' + esc(articleUrl(n)) + '" tabindex="-1" aria-hidden="true"><img class="card-thumb" loading="lazy" decoding="async" src="' + esc(imgSrc(n)) + '" alt=""></a>' +
             '<div class="news-card-body">' + badgesHTML(n) + catTag(n.category) +
@@ -722,10 +804,15 @@
         s = s.replace(/\*(?=[^\s*])([^*\s])\*/g, '<em>$1</em>');
         return showEscapes(s).replace(/\n/g, '<br>');   // quebra de linha dentro do bloco (Shift+Enter no editor)
     }
-    // Tipo do bloco: {type: 'p'|'h2'|'h3'|'quote'|'ul'|'ol', text}
+    // Imagem no meio do texto: bloco "![legenda](endereço)". Só https://, imagem da galeria do site
+    // ou data URL de imagem (modo local). A legenda é texto puro (colchetes escapados com \).
+    const IMG_BLOCK = /^!\[((?:\\[\s\S]|[^\]\\\n])*)\]\((https:\/\/[^\s()]+|assets\/img\/[\w.-]+|data:image\/(?:jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+)\)$/;
+    const imgBlock = (src, caption) => '![' + String(caption || '').replace(/\s+/g, ' ').trim().replace(/([\\\]\[])/g, '\\$1') + '](' + src + ')';
+    // Tipo do bloco: {type: 'p'|'h2'|'h3'|'quote'|'ul'|'ol'|'img', text (, src)}
     function blockOf(raw) {
         const s = String(raw == null ? '' : raw);
         let m;
+        if ((m = IMG_BLOCK.exec(s)) && safeImg(m[2])) return { type: 'img', src: m[2], text: m[1].replace(/\\([\s\S])/g, '$1') };
         if ((m = /^###\s+([\s\S]+)$/.exec(s))) return { type: 'h3', text: m[1] };
         if ((m = /^##\s+([\s\S]+)$/.exec(s))) return { type: 'h2', text: m[1] };
         if ((m = /^>\s?([\s\S]+)$/.exec(s))) return { type: 'quote', text: m[1] };
@@ -734,7 +821,7 @@
         return { type: 'p', text: s };
     }
     // Texto sem marcação (busca, tempo de leitura, resumos)
-    const plainText = raw => showEscapes(hideEscapes(blockOf(raw).text).replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)*]+)\)/g, '$1').replace(/\*\*|\*/g, '').replace(/\n/g, ' '));
+    const plainText = raw => blockOf(raw).type === 'img' ? blockOf(raw).text : showEscapes(hideEscapes(blockOf(raw).text).replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)*]+)\)/g, '$1').replace(/\*\*|\*/g, '').replace(/\n/g, ' '));
     // opts.interview: parágrafos "P:" / "R:" viram pergunta e resposta (entrevistas)
     function bodyHTML(blocks, opts) {
         opts = opts || {};
@@ -748,7 +835,13 @@
                 return;
             }
             close();
-            const qa = opts.interview && b.type === 'p' && /^\s*([PR])\s*[:\-–—]\s*([\s\S]*)$/.exec(b.text);
+            if (b.type === 'img') {
+                const src = /^(https:|data:)/i.test(b.src) ? b.src : root() + b.src;
+                html += '<figure class="body-figure" data-src="' + esc(b.src) + '"><img src="' + esc(src) + '" alt="' + esc(b.text) + '" loading="lazy" decoding="async">' +
+                    (b.text ? '<figcaption>' + esc(b.text) + '</figcaption>' : '') + '</figure>';
+                return;
+            }
+            const qa = opts.interview && b.type === 'p' &&/^\s*([PR])\s*[:\-–—]\s*([\s\S]*)$/.exec(b.text);
             if (qa) html += qa[1] === 'P' ? '<p class="qa-q"><span class="qa-tag">JB</span><span>' + inlineHTML(qa[2]) + '</span></p>' : '<p class="qa-a">' + inlineHTML(qa[2]) + '</p>';
             else if (b.type === 'h2' || b.type === 'h3') html += '<' + b.type + '>' + inlineHTML(b.text) + '</' + b.type + '>';
             else if (b.type === 'quote') html += '<blockquote><p>' + inlineHTML(b.text) + '</p></blockquote>';
@@ -850,9 +943,9 @@
     if (!remote) seed();   // no modo Supabase os dados vêm do servidor
     window.JB = {
         remote, mode: 'local', ready: Promise.resolve(), authReady: Promise.resolve(), loadError: null, flush, storageOk: () => storageOk, PASSWORD_MIN, MIN_AGE, KEYS, Captcha, Security,
-        CATEGORIES, KINDS, VERDICTS, OPINION_KINDS, VERSIONED, IMAGES, STATUS, STATUS_FLOW, ROLES, STAFF_ROLES, JOURNALIST_STATUSES,
-        CHART_TYPES, News, Authors, Versions, Auth, Members, Reports, Cookies, Views, Favs, History, Comments, Newsletter, Theme, A11y, Media, Drafts,
-        util: { isPublished, isScheduled, withDefaults, changeKind, wasUpdated, avatarHTML, readingTime, root, esc, imgSrc, timeAgo, fmtDate, articleUrl, authorUrl, profileUrl, roleLabel, isStaffRole, sealHTML, catLabel, catUrl, catTag, kindLabel, safeUrl, verdictBadge, liveBadge, badgesHTML, newsCard,
-            chartHTML, barChartHTML, chartItems, parseVideo, videoHTML, videoPageUrl, inlineHTML, blockOf, bodyHTML, plainText, loadingHTML, errorHTML, passwordIssues, ageFrom }
+        CATEGORIES, KINDS, VERDICTS, OPINION_KINDS, VERSIONED, IMAGES, STATUS, STATUS_FLOW, ROLES, STAFF_ROLES, JOURNALIST_STATUSES, BADGES,
+        CHART_TYPES, News, Authors, Versions, Auth, Members, Reports, Cookies, Views, Favs, History, Comments, Newsletter, Theme, A11y, Media, Drafts, Site,
+        util: { isPublished, isScheduled, withDefaults, changeKind, wasUpdated, avatarHTML, readingTime, root, esc, imgSrc, safeImg, timeAgo, fmtDate, articleUrl, authorUrl, profileUrl, roleLabel, isStaffRole, sealHTML, officialSealHTML, profileBadgesHTML, catLabel, catUrl, catTag, kindLabel, safeUrl, verdictBadge, liveBadge, badgesHTML, newsCard,
+            bylineNames, bylineHTML, chartHTML, barChartHTML, chartItems, parseVideo, videoHTML, videoPageUrl, inlineHTML, blockOf, imgBlock, bodyHTML, plainText, loadingHTML, errorHTML, passwordIssues, ageFrom }
     };
 })();

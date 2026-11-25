@@ -28,15 +28,17 @@
                     <h1 class="h2">Denuncie ou Envie uma Pauta</h1>
                     <p>Tem documentos, imagens ou informações de interesse público? Nossa equipe garante sigilo da fonte conforme previsto na Constituição Federal.</p>
                     <ul class="security-notes">
-                        <li>✔ Anonimato garantido (envio sem identificação obrigatória)</li>
-                        <li>✔ Metadados de arquivos removidos na triagem</li>
+                        <li>✔ Envio anônimo: seu nome e e-mail não vão para a redação</li>
+                        <li>✔ Fotos reprocessadas no seu navegador antes do envio (somem localização, aparelho e outros metadados)</li>
+                        <li>✔ Anexos guardados em área privada: só a coordenação abre, por links temporários</li>
                     </ul>
                     <img src="../assets/img/seguranca-digital.jpg" class="img-fluid rounded border mt-3" alt="Chave sobre fundo de código digital, simbolizando sigilo e segurança" loading="lazy">
-                    <p class="small mt-3 mb-0"><em>Projeto acadêmico: o relato é enviado ao banco de dados do portal e só a equipe editorial (administradores) pode lê-lo. Não envie informações reais ou sensíveis.</em></p>
+                    <p class="small mt-3 mb-0"><em>Projeto acadêmico: o relato é enviado ao banco de dados do portal e só a coordenação da redação pode lê-lo. Para evitar abuso, é preciso entrar numa conta para enviar; no envio anônimo o relato não guarda seu nome nem e-mail, mas o sistema de arquivos registra internamente qual conta enviou os anexos. Não envie informações reais ou sensíveis.</em></p>
                 </div>
                 <div class="col-lg-7">
                     <div class="alert alert-success" id="report-ok" role="status" hidden>✔ Denúncia registrada com sucesso. Obrigado por colaborar com o jornalismo de interesse público.</div>
                     <div class="alert alert-danger" id="report-fail" role="alert" hidden>Não foi possível enviar a denúncia agora. Seu texto continua no formulário: verifique a conexão e tente novamente.</div>
+                    <div class="panel-box" id="report-gate" hidden></div>
                     <form id="report-form" method="post" novalidate>
                         <div class="mb-3">
                             <label class="form-label" for="assunto">Assunto / Área da Denúncia</label>
@@ -50,8 +52,9 @@
                         </div>
                         <div class="mb-3">
                             <label class="form-label" for="anexo">Anexar Evidências (PDF, Imagens)</label>
-                            <input type="file" class="form-control" id="anexo" accept=".pdf,image/*">
-                            <div class="form-text">Neste protótipo o arquivo não é enviado: apenas o nome e o tamanho são registrados.</div>
+                            <input type="file" class="form-control" id="anexo" accept=".pdf,image/jpeg,image/png,image/webp,image/gif" multiple aria-describedby="anexo-help anexo-list">
+                            <div class="form-text" id="anexo-help">Até 6 arquivos: imagens (reduzidas para no máximo 1600 px) e PDFs de até 5 MB.</div>
+                            <ul class="small mb-0 mt-1" id="anexo-list" aria-live="polite"></ul>
                         </div>
                         <div class="form-check mb-3">
                             <input class="form-check-input" type="checkbox" id="anonimo" checked>

@@ -81,6 +81,7 @@
                                     <div class="small mt-1" id="au-avatar-msg" role="status"></div>
                                 </div>
                                 <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="au-col" name="columnist"><label class="form-check-label" for="au-col">Colunista (aparece em Opinião)</label></div>
+                                <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="au-official" name="official"><label class="form-check-label" for="au-official">Perfil oficial da redação (mostra o selo do JB)</label></div>
                                 <button class="btn btn-primary" type="submit">Salvar autor</button>
                                 <button class="btn btn-outline-dark" type="button" id="author-cancel">Limpar</button>
                             </form>
@@ -106,12 +107,13 @@
                     <div class="row g-4">
                         <div class="col-lg-8">
                             <div class="panel-box">
-                                <h2 class="h5 mb-2">Cargos da redação</h2>
+                                <h2 class="h5 mb-2">Cargos e selos da redação</h2>
                                 <p class="small mb-3" id="team-rules"></p>
-                                <form id="team-search" class="d-flex gap-2 mb-3" role="search" method="post">
+                                <form id="team-search" class="d-flex gap-2 mb-2" role="search" method="post">
                                     <input type="search" class="form-control" name="q" maxlength="120" placeholder="Buscar por nome ou e-mail" aria-label="Buscar conta por nome ou e-mail">
                                     <button class="btn btn-primary" type="submit">Buscar</button>
                                 </form>
+                                <p class="small text-muted mb-3" id="team-scope">Mostrando a equipe e quem tem selo. Busque um nome ou e-mail para achar qualquer conta.</p>
                                 <div class="alert" id="team-msg" role="status" hidden></div>
                                 <div id="team-rows"></div>
                             </div>
@@ -126,6 +128,11 @@
                                     <li><strong>Leitor</strong> — conta comum do portal.</li>
                                 </ol>
                             </div>
+                            <div class="panel-box mb-3">
+                                <h2 class="h6 fw-bold">Selos de perfil</h2>
+                                <p class="small mb-2">Aparecem no perfil público e nos comentários. Não dão nenhum poder na redação.</p>
+                                <ul class="small mb-0 ps-3" id="badge-legend"></ul>
+                            </div>
                             <div class="panel-box">
                                 <h2 class="h6 fw-bold">Últimas mudanças de cargo</h2>
                                 <ul class="admin-list small mb-0" id="team-log"></ul>
@@ -136,6 +143,30 @@
 
                 <div class="tab-pane fade" id="tab-security" role="tabpanel">
                     <div class="row g-4">
+                        <div class="col-12">
+                            <div class="panel-box lockdown-panel" id="lockdown-panel">
+                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                                    <h2 class="h5 mb-0">Modo lockdown</h2>
+                                    <span class="badge" id="lockdown-state">…</span>
+                                </div>
+                                <p class="small mb-2">Fecha o site para o público numa emergência (invasão, vazamento, conteúdo indevido no ar). Ligado, o banco de dados passa a:</p>
+                                <ul class="small mb-3 lockdown-locks">
+                                    <li>entregar matérias, autores, comentários e perfis públicos <strong>só para a equipe</strong> logada (com a verificação em duas etapas);</li>
+                                    <li>recusar comentários, denúncias, newsletter, favoritos e edição de perfil de quem não é da equipe;</li>
+                                    <li>suspender <strong>novos cadastros</strong> e a contagem de leituras;</li>
+                                    <li>mostrar a todos os outros uma tela de “site temporariamente fechado”, com o link de login para a equipe.</li>
+                                </ul>
+                                <form id="lockdown-form" method="post" novalidate>
+                                    <label class="form-label small fw-bold" for="lockdown-msg">Mensagem para o público (opcional)</label>
+                                    <textarea class="form-control mb-2" id="lockdown-msg" name="message" rows="2" maxlength="500" placeholder="Ex.: Estamos fazendo uma manutenção de segurança. Voltamos em breve."></textarea>
+                                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                                        <button class="btn btn-danger" type="submit" id="lockdown-toggle">Ligar o modo lockdown</button>
+                                        <small class="text-muted" id="lockdown-info"></small>
+                                    </div>
+                                </form>
+                                <div class="alert mt-3 mb-0" id="lockdown-alert" role="status" hidden></div>
+                            </div>
+                        </div>
                         <div class="col-lg-5">
                             <div class="panel-box mb-3">
                                 <div class="d-flex justify-content-between align-items-center gap-2 mb-2"><h2 class="h5 mb-0">Proteções</h2><button type="button" class="btn btn-sm btn-outline-dark" id="sec-recheck">Verificar de novo</button></div>
@@ -154,6 +185,7 @@
                                     <select class="form-select form-select-sm w-auto" id="audit-filter" aria-label="Filtrar a auditoria">
                                         <option value="">Tudo</option><option value="news">Matérias</option><option value="account">Contas e logins</option>
                                         <option value="role">Cargos</option><option value="comment">Moderação</option><option value="report">Denúncias</option><option value="author">Autores</option>
+                                        <option value="badge">Selos</option><option value="site">Lockdown</option>
                                     </select>
                                 </div>
                                 <p class="small text-muted">Gravada pelo próprio banco de dados (gatilhos): ninguém consegue editar ou apagar um registro pelo site.</p>

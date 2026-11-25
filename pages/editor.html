@@ -68,14 +68,29 @@
                             <button type="button" class="rte-btn" data-cmd="ul" aria-pressed="false" title="Lista" aria-label="Lista com marcadores"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/></svg></button>
                             <button type="button" class="rte-btn" data-cmd="ol" aria-pressed="false" title="Lista numerada" aria-label="Lista numerada"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 6h10M10 12h10M10 18h10"/><path d="M4 4h1.5v4M3.5 8h3M3.5 14.5a1.5 1.5 0 0 1 3 0c0 1.5-3 2-3 3.5h3" stroke-width="1.5"/></svg></button>
                             <span class="rte-sep" aria-hidden="true"></span>
+                            <button type="button" class="rte-btn rte-btn-text" data-cmd="image" title="Inserir imagem no texto" aria-label="Inserir imagem no texto" aria-controls="rte-img-panel" aria-expanded="false"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 17-5-5-9 8"/></svg><span class="rte-btn-label">Imagem</span></button>
+                            <span class="rte-sep" aria-hidden="true"></span>
                             <button type="button" class="rte-btn" data-cmd="clear" title="Limpar formatação" aria-label="Limpar formatação"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 5h12M12 5l-3 14M4 20l16-16" /></svg></button>
                             <button type="button" class="rte-btn" data-cmd="undo" title="Desfazer (Ctrl+Z)" aria-label="Desfazer"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
                             <button type="button" class="rte-btn" data-cmd="redo" title="Refazer (Ctrl+Shift+Z)" aria-label="Refazer"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/></svg></button>
                         </div>
+                        <div class="rte-img-panel" id="rte-img-panel" role="group" aria-labelledby="rte-img-title" hidden>
+                            <p class="fw-semibold small mb-2" id="rte-img-title">Imagem no meio do texto</p>
+                            <div class="row g-2">
+                                <div class="col-md-6"><label class="form-label small" for="rte-img-file">Enviar do computador</label><input type="file" class="form-control form-control-sm" id="rte-img-file" accept="image/*"></div>
+                                <div class="col-md-6"><label class="form-label small" for="rte-img-url">Ou cole o endereço (https://…)</label><input class="form-control form-control-sm" id="rte-img-url" type="url" placeholder="https://..."></div>
+                                <div class="col-12"><label class="form-label small" for="rte-img-cap">Legenda (também é o texto alternativo para leitores de tela)</label><input class="form-control form-control-sm" id="rte-img-cap" maxlength="300" placeholder="Ex.: Plenário da Câmara durante a votação. Foto: Agência X"></div>
+                            </div>
+                            <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+                                <button type="button" class="btn btn-sm btn-primary" id="rte-img-insert">Inserir no texto</button>
+                                <button type="button" class="btn btn-sm btn-outline-dark" id="rte-img-cancel">Cancelar</button>
+                                <small class="text-muted" id="rte-img-msg" role="status">A imagem entra logo depois do parágrafo onde está o cursor.</small>
+                            </div>
+                        </div>
                         <div class="rte article-body" id="f-body" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="body-label" aria-describedby="body-help editor-stats" data-placeholder="Escreva a matéria. Enter cria um parágrafo novo; selecione um trecho para formatar."></div>
                         <div class="invalid-feedback" id="body-error" hidden>Escreva o texto da matéria.</div>
                         <div class="editor-stats" id="editor-stats" aria-live="off"></div>
-                        <div class="form-text" id="body-help">Use <strong>T1</strong> para intertítulos e a citação para falas em destaque. Colar de outro editor (Word, Google Docs) mantém negrito, itálico, links, listas e intertítulos. <span id="body-help-qa" hidden>Em entrevistas, comece os parágrafos com <code>P:</code> (pergunta) e <code>R:</code> (resposta).</span></div>
+                        <div class="form-text" id="body-help">Use <strong>T1</strong> para intertítulos e a citação para falas em destaque. Colar de outro editor (Word, Google Docs) mantém negrito, itálico, links, listas e intertítulos. Em <strong>Imagem</strong> você monta a matéria em partes: texto, foto, mais texto. <span id="body-help-qa" hidden>Em entrevistas, comece os parágrafos com <code>P:</code> (pergunta) e <code>R:</code> (resposta).</span></div>
                     </section>
 
                     <section class="editor-panel live-editor" id="updates-box" hidden aria-labelledby="updates-title">
@@ -143,7 +158,19 @@
                             <div class="col-12" id="verdict-wrap" hidden><label class="form-label" for="f-verdict">Classificação da checagem</label><select class="form-select" id="f-verdict" name="verdict"><option value="">Escolha…</option></select><div class="invalid-feedback">Escolha a classificação.</div></div>
                             <div class="col-12" id="live-wrap" hidden><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="f-live" name="live"><label class="form-check-label" for="f-live">Cobertura em andamento (selo AO VIVO e atualização automática)</label></div></div>
                             <div class="col-12"><label class="form-label" for="f-author">Autor</label><input class="form-control" id="f-author" name="author" maxlength="120" placeholder="Redação JB" list="authors-list"><datalist id="authors-list"></datalist></div>
+                            <div class="col-12">
+                                <label class="form-label" for="f-coauthor">Coautores <span class="text-muted fw-normal small">(opcional)</span></label>
+                                <div class="d-flex gap-2"><input class="form-control" id="f-coauthor" maxlength="120" placeholder="Ex.: Núcleo de Verificação JB" list="authors-list" aria-describedby="coauthor-help"><button type="button" class="btn btn-outline-dark" id="coauthor-add">Adicionar</button></div>
+                                <ul class="chip-list" id="coauthor-chips" aria-label="Coautores adicionados"></ul>
+                                <div class="form-text" id="coauthor-help">Aparecem na assinatura: “Por Redação Investigativa JB e Núcleo de Verificação JB”. Até 10.</div>
+                            </div>
                         </div>
+                    </section>
+
+                    <section class="editor-panel" aria-labelledby="collab-title">
+                        <h2 id="collab-title">Colaboradores de edição</h2>
+                        <p class="small text-muted mb-2" id="collab-help">Jornalistas marcados aqui também podem editar esta matéria (até “Aprovada”). Coordenadores já editam todas.</p>
+                        <div id="collab-list" class="collab-list"></div>
                     </section>
 
                     <section class="editor-panel" aria-labelledby="img-title">

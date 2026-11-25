@@ -81,18 +81,21 @@ JB.ready.then(function () {
             c.map(x => '<li><strong>' + esc(util.fmtDate(x.date)) + ':</strong> ' + esc(x.text) + '</li>').join('') + '</ul>' +
             '<a class="small" href="institucional.html#correcoes">Conheça nossa política de correções</a></section>';
     }
+    // Um quadro por autor cadastrado da assinatura (autor principal e coautores)
     function authorBox() {
-        const a = Authors.get(n.author);
-        if (!a) return '';
-        return '<aside class="author-box">' + util.avatarHTML({ name: a.name, avatar: a.avatar ? util.imgSrc({ image: a.avatar }) : '' }, 'avatar-md') +
-            '<div><a class="fw-bold" href="' + esc(util.authorUrl(a.name)) + '">' + esc(a.name) + '</a>' + (a.role ? '<span class="d-block small opacity-75">' + esc(a.role) + '</span>' : '') +
-            (a.bio ? '<p class="small mb-0 mt-1">' + esc(a.bio) + '</p>' : '') + '</div></aside>';
+        return util.bylineNames(n).map(Authors.get).filter(Boolean).map(a => '<aside class="author-box">' + util.avatarHTML({ name: a.name, avatar: a.avatar ? util.imgSrc({ image: a.avatar }) : '' }, 'avatar-md') +
+            '<div><a class="fw-bold" href="' + esc(util.authorUrl(a.name)) + '">' + esc(a.name) + '</a> ' + util.officialSealHTML(a) + (a.role ? '<span class="d-block small opacity-75">' + esc(a.role) + '</span>' : '') +
+            (a.bio ? '<p class="small mb-0 mt-1">' + esc(a.bio) + '</p>' : '') + '</div></aside>').join('');
+    }
+    // Nome na assinatura: link para a página do autor + selo do JB (conta da redação ou perfil oficial)
+    function bylineName(name) {
+        const staff = Members.staffByName(name), a = Authors.get(name);
+        const seal = staff && util.isStaffRole(staff.role) ? ' <a href="' + esc(util.profileUrl(staff.id)) + '" class="text-decoration-none">' + util.sealHTML(staff.role) + '</a>'
+            : a && a.official ? ' ' + util.officialSealHTML(a) : '';
+        return '<a href="' + esc(util.authorUrl(name)) + '"><strong>' + esc(name) + '</strong></a>' + seal;
     }
     function meta() {
-        // Assinatura de alguém da redação com conta no portal: selo do JB + link para o perfil
-        const staff = Members.staffByName(n.author);
-        const seal = staff ? ' <a href="' + esc(util.profileUrl(staff.id)) + '" class="text-decoration-none">' + util.sealHTML(staff.role) + '</a>' : '';
-        return '<p class="meta-info">Por <a href="' + esc(util.authorUrl(n.author)) + '"><strong>' + esc(n.author) + '</strong></a>' + seal + ' • Publicado em ' + esc(util.fmtDate(n.date)) +
+        return '<p class="meta-info">Por ' + util.bylineHTML(n, bylineName) + ' • Publicado em ' + esc(util.fmtDate(n.date)) +
             (util.wasUpdated(n) ? ' • <span class="updated-at">Atualizado em ' + esc(util.fmtDate(n.updated_at)) + '</span>' : '') +
             ' • ' + util.readingTime(n) + ' min de leitura • ' + JB.Views.count(n.id) + ' leituras</p>';
     }
@@ -181,7 +184,7 @@ JB.ready.then(function () {
         const who = c => {
             if (!c.userId) return '<strong>' + esc(c.name) + '</strong>';
             const s = Members.staffById(c.userId);
-            return '<a class="comment-author" href="' + esc(util.profileUrl(c.userId)) + '"><strong>' + esc(c.name) + '</strong></a>' + (s ? ' ' + util.sealHTML(s.role) : '');
+            return '<a class="comment-author" href="' + esc(util.profileUrl(c.userId)) + '"><strong>' + esc(c.name) + '</strong></a>' + (s ? ' ' + util.sealHTML(s.role) + ' ' + util.profileBadgesHTML(s.badges) : '');
         };
         const actions = c => {
             const b = [];
@@ -218,23 +221,27 @@ JB.ready.then(function () {
         editing = null; renderComments();
         if (await JB.flush()) { document.getElementById('comment-msg').textContent = 'Comentário atualizado.'; const el = document.getElementById('c-' + cid); if (el) el.querySelector('[data-cedit]')?.focus(); }
     });
-    const form = document.getElementById('comment-form');
-    if (me) {   // logado: o comentário sai sempre com o nome da conta
-        form.elements.name.value = me.name; form.elements.name.readOnly = true;
-        document.getElementById('c-name-help').hidden = false;
-        // Conta ainda não liberada (idade ou verificação em duas etapas): o banco recusaria o comentário
-        if (!Auth.accountOk()) {
-            form.querySelectorAll('input, textarea, button').forEach(el => { el.disabled = true; });
-            form.insertAdjacentHTML('afterbegin', '<p class="alert alert-warning small">Para comentar, conclua a <a href="seguranca.html?next=noticia.html">verificação da sua conta</a>.</p>');
-        }
-    }
+    // Só quem tem conta comenta (o banco recusa visitantes): sempre com o nome da conta
+    const form = document.getElementById('comment-form'), gate = document.getElementById('comment-gate');
+    const here = encodeURIComponent('noticia.html?id=' + n.id);
     form.addEventListener('submit', e => {
         e.preventDefault();
         if (!form.checkValidity()) { form.classList.add('was-validated'); return; }
-        Comments.add(n.id, { name: form.elements.name.value.trim(), text: form.elements.text.value.trim() });
+        if (!Comments.add(n.id, { text: form.elements.text.value.trim() })) return;
         form.elements.text.value = ''; form.classList.remove('was-validated');
         renderComments();
     });
+    if (!me) {
+        gate.innerHTML = '<p class="mb-2">Para comentar, entre na sua conta. É de graça e leva um minuto.</p>' +
+            '<a class="btn btn-primary btn-sm" href="login.html?next=' + here + '">Entrar</a> <a class="btn btn-outline-dark btn-sm" href="cadastro.html">Criar conta</a>';
+        gate.hidden = false;
+    } else if (!Auth.accountOk()) {   // conta ainda não liberada (idade ou verificação em duas etapas)
+        gate.innerHTML = '<p class="mb-2">Para comentar, conclua a verificação da sua conta.</p><a class="btn btn-primary btn-sm" href="seguranca.html?next=' + here + '">Continuar</a>';
+        gate.hidden = false;
+    } else {
+        document.getElementById('c-as').innerHTML = 'Comentando como <strong>' + esc(me.name) + '</strong>.';
+        form.hidden = false;
+    }
     document.getElementById('comments-wrap').hidden = false;
     list.innerHTML = util.loadingHTML('Carregando comentários…');
     let commentsOk = false;

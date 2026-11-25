@@ -18,7 +18,10 @@ create table public.profiles (
                -- só data URL de imagem (o site recorta e reduz para JPEG 256 px); nada de URL externa ou SVG
                constraint profiles_avatar_format check (avatar = '' or avatar ~ '^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$'),
     created_at timestamptz not null default now(),
-    age_verified_at timestamptz   -- idade mínima confirmada (cadastro ou confirm_age); a data de nascimento não é guardada
+    age_verified_at timestamptz,  -- idade mínima confirmada (cadastro ou confirm_age); a data de nascimento não é guardada
+    -- Selos de perfil (independentes do cargo); só coordenador/admin mudam, por set_member_badges
+    badges     text[] not null default '{}'
+               constraint profiles_badges_check check (badges <@ array['colaborador', 'apoiador', 'ajudante', 'reporter']::text[] and cardinality(badges) <= 4)
 );
 
 -- Idade mínima para ter conta (supabase/08_seguranca.sql explica as regras de segurança)
@@ -58,6 +61,21 @@ returns boolean
 language sql stable security definer set search_path = public
 as $$ select coalesce(public.my_role() = 'admin', false) $$;
 
+-- ---------- Modo lockdown (aba Segurança do painel): estado do site ----------
+-- Com lockdown ligado, o banco só entrega conteúdo para a equipe (políticas "lockdown: ..." no fim).
+create table public.site_settings (
+    id               int primary key default 1 constraint site_settings_single check (id = 1),
+    lockdown         boolean not null default false,
+    lockdown_message text not null default '' check (char_length(lockdown_message) <= 500),
+    changed_at       timestamptz,
+    changed_by_name  text not null default ''
+);
+insert into public.site_settings (id) values (1) on conflict (id) do nothing;
+create or replace function public.site_locked()
+returns boolean
+language sql stable security definer set search_path = public
+as $$ select coalesce((select s.lockdown from public.site_settings s where s.id = 1), false) $$;
+
 
 -- Antes de criar a conta: confere a data de nascimento enviada pelo cadastro e a descarta.
 -- Sem data (Google, convite) a conta nasce sem idade confirmada e só grava algo depois de
@@ -68,6 +86,9 @@ language plpgsql security definer set search_path = public
 as $$
 declare b date;
 begin
+    if public.site_locked() then   -- modo lockdown: cadastros suspensos
+        raise exception 'JB: cadastros suspensos (modo lockdown)' using errcode = '42501';
+    end if;
     new.raw_user_meta_data := coalesce(new.raw_user_meta_data, '{}'::jsonb) - 'jb_age_ok';
     if new.raw_user_meta_data ? 'birth_date' then
         begin
@@ -157,6 +178,10 @@ create table public.news (
                 constraint news_video_format check (video = '' or video ~ '^[A-Za-z0-9_-]{11}$' or video ~ '^channel:UC[A-Za-z0-9_-]{22}$'),
     updated_at  timestamptz,                                -- definida só pelo banco (gatilho)
     created_by  uuid references public.profiles(id) on delete set null,   -- quem criou (gatilho news_set_creator)
+    coauthors   text[] not null default '{}'                -- coautores (aparecem na assinatura junto com author)
+                constraint news_coauthors_check check (cardinality(coauthors) <= 10 and array_position(coauthors, null) is null and char_length(array_to_string(coauthors, '')) <= 1200),
+    editors     uuid[] not null default '{}'                -- jornalistas que também podem editar (gatilho news_set_editors)
+                constraint news_editors_check check (cardinality(editors) <= 10 and array_position(editors, null) is null),
     constraint news_extras_check check (
         jsonb_typeof(sources) = 'array' and pg_column_size(sources) <= 20000
         and jsonb_typeof(corrections) = 'array' and pg_column_size(corrections) <= 20000
@@ -167,6 +192,7 @@ create table public.news (
 );
 create index news_status_date_idx on public.news (status, date desc);
 create index news_created_by_idx on public.news (created_by);
+create index news_editors_idx on public.news using gin (editors);
 
 -- ---------- Autores (jornalistas e colunistas) ----------
 create table public.authors (
@@ -177,6 +203,7 @@ create table public.authors (
     avatar     text not null default '' check (char_length(avatar) <= 2000)    -- URL https (Storage) ou caminho local
                constraint authors_avatar_format check (avatar = '' or avatar ~ '^(assets/img/[A-Za-z0-9_-][A-Za-z0-9._-]*|https://[^[:space:]"''<>\\]+)$'),
     columnist  boolean not null default false,
+    official   boolean not null default false,   -- perfil oficial da redação: ganha o selo do JB
     created_at timestamptz not null default now()
 );
 
@@ -198,17 +225,17 @@ language plpgsql security definer set search_path = public
 as $$
 begin
     if (new.title, new.subtitle, new.body, new.image, new.author, new.category, new.kind, new.verdict,
-        new.sources, new.timeline, new.people, new.chart, new.video)
+        new.sources, new.timeline, new.people, new.chart, new.video, new.coauthors)
        is distinct from
        (old.title, old.subtitle, old.body, old.image, old.author, old.category, old.kind, old.verdict,
-        old.sources, old.timeline, old.people, old.chart, old.video) then
+        old.sources, old.timeline, old.people, old.chart, old.video, old.coauthors) then
         insert into public.news_versions (news_id, replaced_by, snapshot)
         values (old.id,
                 coalesce((select left(p.name, 120) from public.profiles p where p.id = auth.uid()), ''),
                 jsonb_build_object('title', old.title, 'subtitle', old.subtitle, 'body', old.body, 'image', old.image,
                                    'author', old.author, 'category', old.category, 'kind', old.kind, 'verdict', old.verdict,
                                    'sources', old.sources, 'timeline', old.timeline, 'people', old.people, 'chart', old.chart,
-                                   'video', old.video));
+                                   'video', old.video, 'coauthors', to_jsonb(old.coauthors)));
         delete from public.news_versions
          where news_id = old.id
            and id not in (select id from public.news_versions where news_id = old.id order by replaced_at desc, id desc limit 20);
@@ -258,6 +285,26 @@ $$;
 create trigger news_set_creator
     before insert or update on public.news
     for each row execute function public.news_set_creator();
+
+-- Pela API, só quem criou a matéria (ou coordenador/admin) muda a lista de colaboradores de edição.
+-- (roda depois de news_set_creator: os gatilhos BEFORE seguem a ordem alfabética do nome)
+create or replace function public.news_set_editors()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+begin
+    if tg_op = 'UPDATE' and auth.uid() is not null and not public.is_editor()
+       and auth.uid() is distinct from old.created_by then
+        new.editors := old.editors;
+    end if;
+    new.editors := coalesce((select array_agg(distinct e) from unnest(new.editors) e
+                              where e is not null and e is distinct from new.created_by), '{}');
+    return new;
+end;
+$$;
+create trigger news_set_editors
+    before insert or update on public.news
+    for each row execute function public.news_set_editors();
 
 -- ---------- Comentários ----------
 create table public.comments (
@@ -310,6 +357,18 @@ create trigger comments_protect_update
     for each row execute function public.comments_protect_update();
 
 -- ---------- Denúncias / pautas ----------
+-- Anexos: [{path: "<uuid>/<uuid>.jpg|webp|png|pdf", name, size, type}] no bucket privado report-files (até 6)
+create or replace function public.report_attachments_ok(a jsonb)
+returns boolean
+language sql immutable set search_path = ''
+as $$
+    select case when a is null or jsonb_typeof(a) <> 'array' then false
+                else jsonb_array_length(a) <= 6 and pg_column_size(a) <= 6000
+                     and not exists (select 1 from jsonb_array_elements(a) e
+                                      where jsonb_typeof(e) <> 'object'
+                                         or coalesce(e ->> 'path', '') !~ '^[0-9a-f-]{36}/[0-9a-f-]{36}\.(jpg|webp|png|pdf)$'
+                                         or char_length(coalesce(e ->> 'name', '')) > 200) end;
+$$;
 create table public.reports (
     id         uuid primary key default gen_random_uuid(),
     subject    text not null check (char_length(trim(subject)) between 1 and 200),
@@ -317,7 +376,8 @@ create table public.reports (
     anonymous  boolean not null default false,
     name       text not null default '' check (char_length(name) <= 120),
     email      text not null default '' check (char_length(email) <= 200),
-    attachment jsonb check (attachment is null or (jsonb_typeof(attachment) = 'object' and pg_column_size(attachment) <= 1024)),  -- só metadados {name,size}
+    attachment jsonb check (attachment is null or (jsonb_typeof(attachment) = 'object' and pg_column_size(attachment) <= 1024)),  -- legado: só metadados {name,size}
+    attachments jsonb not null default '[]'::jsonb constraint reports_attachments_check check (public.report_attachments_ok(attachments)),
     date       timestamptz not null default now()
 );
 
@@ -349,7 +409,7 @@ returns void
 language sql security definer set search_path = public
 as $$
     insert into public.news_views (news_id, count)
-    select id, 1 from public.news where id = p_id and status = 'publicada' and date <= now()
+    select id, 1 from public.news where id = p_id and status = 'publicada' and date <= now() and not public.site_locked()
     on conflict (news_id) do update set count = public.news_views.count + 1;
 $$;
 
@@ -388,29 +448,33 @@ create index role_changes_at_idx on public.role_changes (changed_at desc);
 create index role_changes_target_idx on public.role_changes (target_id);
 create index role_changes_by_idx on public.role_changes (changed_by);
 
--- Perfil público: só nome, foto, bio, cargo e data de entrada (nunca e-mail, cidade ou interesses).
+-- Perfil público: só nome, foto, bio, cargo, selos e data de entrada (nunca e-mail, cidade ou
+-- interesses). Com o site em lockdown, só a equipe enxerga.
 create or replace function public.public_profile(p_id uuid)
-returns table (id uuid, name text, role text, bio text, avatar text, created_at timestamptz)
+returns table (id uuid, name text, role text, bio text, avatar text, created_at timestamptz, badges text[])
 language sql stable security definer set search_path = public
 as $$
-    select p.id, p.name, p.role, p.bio, p.avatar, p.created_at from public.profiles p where p.id = p_id;
+    select p.id, p.name, p.role, p.bio, p.avatar, p.created_at, p.badges
+      from public.profiles p
+     where p.id = p_id and (not public.site_locked() or public.is_staff());
 $$;
 
--- Equipe da redação (selo do JB): mesmos campos públicos.
+-- Equipe da redação (selo do JB) e contas com algum selo de perfil: mesmos campos públicos.
 create or replace function public.staff_profiles()
-returns table (id uuid, name text, role text, bio text, avatar text, created_at timestamptz)
+returns table (id uuid, name text, role text, bio text, avatar text, created_at timestamptz, badges text[])
 language sql stable security definer set search_path = public
 as $$
-    select p.id, p.name, p.role, p.bio, p.avatar, p.created_at
+    select p.id, p.name, p.role, p.bio, p.avatar, p.created_at, p.badges
       from public.profiles p
-     where p.role in ('admin', 'coordenador', 'jornalista')
-     order by case p.role when 'admin' then 0 when 'coordenador' then 1 else 2 end, p.name;
+     where (p.role in ('admin', 'coordenador', 'jornalista') or cardinality(p.badges) > 0)
+       and (not public.site_locked() or public.is_staff())
+     order by case p.role when 'admin' then 0 when 'coordenador' then 1 when 'jornalista' then 2 else 3 end, p.name;
 $$;
 
 -- Lista de contas para a aba Equipe do painel (só coordenador e admin). O e-mail serve para
 -- identificar a pessoa certa; a foto fica de fora (a lista seria pesada).
 create or replace function public.list_members(p_query text default '')
-returns table (id uuid, name text, email text, role text, created_at timestamptz)
+returns table (id uuid, name text, email text, role text, created_at timestamptz, badges text[])
 language plpgsql stable security definer set search_path = public
 as $$
 declare q text := '%' || replace(replace(replace(coalesce(trim(p_query), ''), '\', '\\'), '%', '\%'), '_', '\_') || '%';
@@ -419,11 +483,12 @@ begin
         raise exception 'sem permissão' using errcode = '42501';
     end if;
     return query
-        select p.id, p.name, u.email::text, p.role, p.created_at
+        select p.id, p.name, u.email::text, p.role, p.created_at, p.badges
           from public.profiles p
           join auth.users u on u.id = p.id
          where p.name ilike q or u.email ilike q
-         order by case p.role when 'admin' then 0 when 'coordenador' then 1 when 'jornalista' then 2 else 3 end, p.name
+         order by case p.role when 'admin' then 0 when 'coordenador' then 1 when 'jornalista' then 2 else 3 end,
+                  cardinality(p.badges) desc, p.name
          limit 200;
 end;
 $$;
@@ -518,25 +583,30 @@ create policy "news: equipe cria" on public.news
     for insert to authenticated with check (
         (select public.is_editor())
         or ((select public.my_role()) = 'jornalista' and created_by = (select auth.uid()) and status in ('rascunho', 'revisao', 'aprovada')));
+-- (jornalista também edita as matérias em que é colaborador: news.editors)
 create policy "news: equipe edita" on public.news
     for update to authenticated
     using (
         (select public.is_editor())
-        or ((select public.my_role()) = 'jornalista' and created_by = (select auth.uid()) and status in ('rascunho', 'revisao', 'aprovada')))
+        or ((select public.my_role()) = 'jornalista'
+            and (created_by = (select auth.uid()) or (select auth.uid()) = any (editors))
+            and status in ('rascunho', 'revisao', 'aprovada')))
     with check (
         (select public.is_editor())
-        or ((select public.my_role()) = 'jornalista' and created_by = (select auth.uid()) and status in ('rascunho', 'revisao', 'aprovada')));
+        or ((select public.my_role()) = 'jornalista'
+            and (created_by = (select auth.uid()) or (select auth.uid()) = any (editors))
+            and status in ('rascunho', 'revisao', 'aprovada')));
 create policy "news: editor exclui" on public.news
     for delete to authenticated using ((select public.is_editor()));
 
--- comments: lê os de matérias publicadas; qualquer um comenta em matéria publicada;
--- exclui o autor (se logado) ou coordenador/admin.
+-- comments: lê os de matérias publicadas; só quem tem conta comenta (em matéria publicada);
+-- exclui o autor ou coordenador/admin.
 create policy "comments: ler" on public.comments
     for select to anon, authenticated using (
         (select public.is_editor()) or exists (select 1 from public.news n where n.id = news_id and n.status = 'publicada' and n.date <= now()));
 create policy "comments: criar" on public.comments
-    for insert to anon, authenticated with check (
-        (user_id is null or user_id = (select auth.uid()))
+    for insert to authenticated with check (
+        user_id = (select auth.uid())
         and exists (select 1 from public.news n where n.id = news_id and n.status = 'publicada' and n.date <= now()));
 create policy "comments: excluir proprio ou editor" on public.comments
     for delete to authenticated using (user_id = (select auth.uid()) or (select public.is_editor()));
@@ -547,9 +617,9 @@ create policy "comments: autor edita" on public.comments
            and exists (select 1 from public.news n where n.id = news_id and n.status = 'publicada' and n.date <= now()))
     with check (user_id = (select auth.uid()));
 
--- reports: qualquer um envia; só coordenador/admin lê/exclui.
-create policy "reports: enviar" on public.reports
-    for insert to anon, authenticated with check (true);
+-- reports: quem tem conta (liberada) envia; só coordenador/admin lê/exclui.
+create policy "reports: conta envia" on public.reports
+    for insert to authenticated with check ((select public.account_ok()));
 create policy "reports: editor le" on public.reports
     for select to authenticated using ((select public.is_editor()));
 create policy "reports: editor exclui" on public.reports
@@ -579,11 +649,12 @@ create policy "authors: editor edita" on public.authors
 create policy "authors: editor exclui" on public.authors
     for delete to authenticated using ((select public.is_editor()));
 
--- news_versions: coordenador/admin; jornalista só das próprias matérias (quem grava é o gatilho news_track_changes).
+-- news_versions: coordenador/admin; jornalista só das próprias matérias e das que colabora (quem grava é o gatilho news_track_changes).
 create policy "versions: equipe le" on public.news_versions
     for select to authenticated using (
         (select public.is_editor())
-        or ((select public.is_staff()) and exists (select 1 from public.news n where n.id = news_versions.news_id and n.created_by = (select auth.uid()))));
+        or ((select public.is_staff()) and exists (select 1 from public.news n where n.id = news_versions.news_id
+                and (n.created_by = (select auth.uid()) or (select auth.uid()) = any (n.editors)))));
 create policy "versions: editor exclui" on public.news_versions
     for delete to authenticated using ((select public.is_editor()));
 
@@ -602,10 +673,10 @@ grant usage on schema public to anon, authenticated;
 grant select                                                   on public.news       to anon, authenticated;
 grant insert, update, delete                                   on public.news       to authenticated;
 grant select                                                   on public.comments   to anon, authenticated;
-grant insert (id, news_id, user_id, name, text)                on public.comments   to anon, authenticated;
+grant insert (id, news_id, user_id, name, text)                on public.comments   to authenticated;
 grant delete                                                   on public.comments   to authenticated;
 grant update (text)                                            on public.comments   to authenticated;   -- só o texto
-grant insert (id, subject, story, anonymous, name, email, attachment) on public.reports to anon, authenticated;
+grant insert (id, subject, story, anonymous, name, email, attachment, attachments) on public.reports to authenticated;
 grant select, delete                                           on public.reports    to authenticated;
 grant insert (email)                                           on public.newsletter to anon, authenticated;
 grant select                                                   on public.newsletter to authenticated;
@@ -615,8 +686,8 @@ grant update (name, bio, city, interests, avatar)              on public.profile
 grant select, delete                                           on public.favorites  to authenticated;
 grant insert (user_id, news_id)                                on public.favorites  to authenticated;
 grant select                                                   on public.authors    to anon, authenticated;
-grant insert (id, name, role, bio, avatar, columnist)          on public.authors    to authenticated;
-grant update (name, role, bio, avatar, columnist)              on public.authors    to authenticated;
+grant insert (id, name, role, bio, avatar, columnist, official) on public.authors   to authenticated;
+grant update (name, role, bio, avatar, columnist, official)    on public.authors    to authenticated;
 grant delete                                                   on public.authors    to authenticated;
 grant select, delete                                           on public.news_versions to authenticated;
 grant select                                                   on public.role_changes to authenticated;
@@ -692,10 +763,15 @@ begin
         if new.status is distinct from old.status then
             perform public.audit('news.status', 'news', new.id::text, new.title, jsonb_build_object('from', old.status, 'to', new.status));
         end if;
-        if (new.title, new.subtitle, new.body, new.image, new.author, new.category, new.kind, new.verdict, new.sources, new.timeline, new.people, new.chart, new.corrections, new.video)
+        if (new.title, new.subtitle, new.body, new.image, new.author, new.category, new.kind, new.verdict, new.sources, new.timeline, new.people, new.chart, new.corrections, new.video, new.coauthors)
            is distinct from
-           (old.title, old.subtitle, old.body, old.image, old.author, old.category, old.kind, old.verdict, old.sources, old.timeline, old.people, old.chart, old.corrections, old.video) then
+           (old.title, old.subtitle, old.body, old.image, old.author, old.category, old.kind, old.verdict, old.sources, old.timeline, old.people, old.chart, old.corrections, old.video, old.coauthors) then
             perform public.audit('news.edit', 'news', new.id::text, new.title, '{}'::jsonb);
+        end if;
+        if new.editors is distinct from old.editors then
+            perform public.audit('news.editors', 'news', new.id::text, new.title,
+                jsonb_build_object('count', cardinality(new.editors),
+                    'names', (select coalesce(jsonb_agg(p.name order by p.name), '[]'::jsonb) from public.profiles p where p.id = any (new.editors))));
         end if;
         if new.featured and not old.featured then
             perform public.audit('news.featured', 'news', new.id::text, new.title, '{}'::jsonb);
@@ -831,14 +907,14 @@ begin
             if n >= 5 then raise exception 'JB: muitos comentários seguidos; aguarde um minuto' using errcode = '54000'; end if;
         else
             select count(*) into n from public.comments where user_id is null and date > now() - interval '10 minutes';
-            if n >= 30 then raise exception 'JB: muitos comentários de visitantes; tente mais tarde' using errcode = '54000'; end if;
+            if n >= 150 then raise exception 'JB: muitos comentários de visitantes; tente mais tarde' using errcode = '54000'; end if;
         end if;
     elsif tg_table_name = 'reports' then
         select count(*) into n from public.reports where date > now() - interval '10 minutes';
-        if n >= 30 then raise exception 'JB: muitas denúncias em pouco tempo; tente mais tarde' using errcode = '54000'; end if;
+        if n >= 150 then raise exception 'JB: muitas denúncias em pouco tempo; tente mais tarde' using errcode = '54000'; end if;
     elsif tg_table_name = 'newsletter' then
         select count(*) into n from public.newsletter where created_at > now() - interval '10 minutes';
-        if n >= 30 then raise exception 'JB: muitas inscrições em pouco tempo; tente mais tarde' using errcode = '54000'; end if;
+        if n >= 150 then raise exception 'JB: muitas inscrições em pouco tempo; tente mais tarde' using errcode = '54000'; end if;
     end if;
     return new;
 end;
@@ -927,3 +1003,157 @@ grant execute on function public.security_overview() to authenticated;
 grant execute on function public.delete_my_account() to authenticated;
 grant execute on function public.min_age(), public.account_ok() to anon, authenticated;
 grant execute on function public.my_role(), public.is_staff(), public.is_editor(), public.is_admin() to anon, authenticated;
+
+-- =====================================================================
+-- Selos de perfil, modo lockdown e anexos das denúncias
+-- (igual a supabase/10_equipe_selos_lockdown.sql; detalhes no cabeçalho daquele arquivo)
+-- =====================================================================
+-- ---------- Selos: Colaborador, Apoiador Oficial, Ajudante do Jornal, Repórter ----------
+-- Coordenador: só em leitores e jornalistas. Admin: em qualquer conta, menos administradores.
+create or replace function public.set_member_badges(p_id uuid, p_badges text[])
+returns void
+language plpgsql security definer set search_path = public
+as $$
+declare
+    me  text := public.my_role();
+    cur text;
+    nb  text[];
+begin
+    if auth.uid() is null or me is null or me not in ('admin', 'coordenador') then
+        raise exception 'sem permissão' using errcode = '42501';
+    end if;
+    if p_id = auth.uid() then
+        raise exception 'não é possível alterar os próprios selos' using errcode = '42501';
+    end if;
+    select coalesce(array_agg(distinct b order by b), '{}') into nb
+      from unnest(coalesce(p_badges, '{}')) b where b is not null;
+    if not (nb <@ array['colaborador', 'apoiador', 'ajudante', 'reporter']::text[]) then
+        raise exception 'selo inválido' using errcode = '22023';
+    end if;
+    select role into cur from public.profiles where id = p_id for update;
+    if cur is null then
+        raise exception 'conta não encontrada' using errcode = 'P0002';
+    end if;
+    if cur = 'admin' then
+        raise exception 'administradores só podem ser alterados pelo SQL Editor' using errcode = '42501';
+    end if;
+    if me = 'coordenador' and cur not in ('leitor', 'jornalista') then
+        raise exception 'coordenadores só dão selos a leitores e jornalistas' using errcode = '42501';
+    end if;
+    update public.profiles set badges = nb where id = p_id;
+end;
+$$;
+
+create or replace function public.audit_profile_badges()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+begin
+    if new.badges is distinct from old.badges then
+        perform public.audit('badge.change', 'profile', new.id::text, new.name, jsonb_build_object('from', old.badges, 'to', new.badges));
+    end if;
+    return null;
+end;
+$$;
+drop trigger if exists audit_profile_badges on public.profiles;
+create trigger audit_profile_badges after update of badges on public.profiles
+    for each row execute function public.audit_profile_badges();
+
+-- ---------- Modo lockdown ----------
+alter table public.site_settings enable row level security;
+revoke all on public.site_settings from anon, authenticated;   -- só pelas funções abaixo
+
+create or replace function public.site_status()
+returns jsonb
+language sql stable security definer set search_path = public
+as $$
+    select jsonb_build_object('lockdown', s.lockdown, 'message', case when s.lockdown then s.lockdown_message else '' end,
+                              'since', case when s.lockdown then s.changed_at end)
+      from public.site_settings s where s.id = 1;
+$$;
+
+create or replace function public.set_lockdown(p_on boolean, p_message text default '')
+returns void
+language plpgsql security definer set search_path = public
+as $$
+declare msg text := left(coalesce(trim(p_message), ''), 500);
+begin
+    if not public.is_editor() then
+        raise exception 'sem permissão' using errcode = '42501';
+    end if;
+    update public.site_settings
+       set lockdown = coalesce(p_on, false), lockdown_message = msg, changed_at = now(),
+           changed_by_name = coalesce((select p.name from public.profiles p where p.id = auth.uid()), '')
+     where id = 1;
+    perform public.audit(case when coalesce(p_on, false) then 'site.lockdown_on' else 'site.lockdown_off' end,
+                         'site', '1', 'Modo lockdown', jsonb_build_object('message', left(msg, 200)));
+end;
+$$;
+
+-- Políticas RESTRITIVAS: valem junto com as outras. Com o site aberto não mudam nada; fechado,
+-- só a equipe (conta liberada) lê ou grava. Cadastros novos e leituras também param
+-- (check_signup_age e hit_news).
+create policy "lockdown: news" on public.news
+    as restrictive for select to anon, authenticated using (not (select public.site_locked()) or (select public.is_staff()));
+create policy "lockdown: comments" on public.comments
+    as restrictive for all to anon, authenticated
+    using (not (select public.site_locked()) or (select public.is_staff()))
+    with check (not (select public.site_locked()) or (select public.is_staff()));
+create policy "lockdown: reports" on public.reports
+    as restrictive for all to anon, authenticated
+    using (not (select public.site_locked()) or (select public.is_staff()))
+    with check (not (select public.site_locked()) or (select public.is_staff()));
+create policy "lockdown: newsletter" on public.newsletter
+    as restrictive for all to anon, authenticated
+    using (not (select public.site_locked()) or (select public.is_staff()))
+    with check (not (select public.site_locked()) or (select public.is_staff()));
+create policy "lockdown: favorites" on public.favorites
+    as restrictive for all to authenticated
+    using (not (select public.site_locked()) or (select public.is_staff()))
+    with check (not (select public.site_locked()) or (select public.is_staff()));
+create policy "lockdown: authors" on public.authors
+    as restrictive for all to anon, authenticated
+    using (not (select public.site_locked()) or (select public.is_staff()))
+    with check (not (select public.site_locked()) or (select public.is_staff()));
+create policy "lockdown: views" on public.news_views
+    as restrictive for select to anon, authenticated using (not (select public.site_locked()) or (select public.is_staff()));
+create policy "lockdown: profiles" on public.profiles
+    as restrictive for update to authenticated
+    using (not (select public.site_locked()) or (select public.is_staff()))
+    with check (not (select public.site_locked()) or (select public.is_staff()));
+
+-- ---------- Anexos das denúncias: bucket PRIVADO (só coordenador/admin abrem, por link temporário) ----------
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('report-files', 'report-files', false, 5242880, array['image/jpeg', 'image/png', 'image/webp', 'application/pdf'])
+on conflict (id) do update set public = false, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+-- Envio: conta liberada, site aberto (ou equipe) e no máximo 20 arquivos por conta a cada 10 minutos
+create or replace function public.report_upload_ok()
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+    select public.account_ok()
+       and (not public.site_locked() or public.is_staff())
+       and (select count(*) from storage.objects o
+             where o.bucket_id = 'report-files' and o.owner_id = (select auth.uid())::text
+               and o.created_at > now() - interval '10 minutes') < 20;
+$$;
+create policy "report-files: conta envia" on storage.objects
+    for insert to authenticated with check (bucket_id = 'report-files' and (select public.report_upload_ok()));
+create policy "report-files: editor le" on storage.objects
+    for select to authenticated using (bucket_id = 'report-files' and (select public.is_editor()));
+create policy "report-files: editor apaga" on storage.objects
+    for delete to authenticated using (bucket_id = 'report-files' and (select public.is_editor()));
+
+-- ---------- Privilégios ----------
+revoke all on function public.site_locked() from public;
+revoke all on function public.site_status() from public;
+revoke all on function public.set_lockdown(boolean, text) from public, anon;
+revoke all on function public.set_member_badges(uuid, text[]) from public, anon;
+revoke all on function public.audit_profile_badges() from public, anon, authenticated;
+revoke all on function public.news_set_editors() from public, anon, authenticated;
+revoke all on function public.report_upload_ok() from public, anon;
+grant execute on function public.site_locked(), public.site_status() to anon, authenticated;
+grant execute on function public.set_lockdown(boolean, text), public.set_member_badges(uuid, text[]) to authenticated;
+grant execute on function public.report_upload_ok() to authenticated;
+grant execute on function public.report_attachments_ok(jsonb) to anon, authenticated;

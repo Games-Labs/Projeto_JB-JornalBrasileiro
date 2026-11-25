@@ -177,10 +177,22 @@
         const banner = document.getElementById('lgpdBanner');
         const modalEl = document.getElementById('cookiesModal');
         const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-        // Enquanto o aviso está aberto, reserva espaço no fim da página para ele não cobrir o conteúdo (importante no celular)
+        // Enquanto o aviso está aberto, reserva espaço no fim da página para ele não cobrir o conteúdo
+        // (importante no celular). O espaço acompanha a altura real do aviso (fonte carregando, giro
+        // da tela) e some junto com ele: antes podia sobrar uma faixa vazia depois do rodapé.
+        let ro = null;
         const pad = () => { document.body.style.paddingBottom = banner.hidden ? '' : banner.offsetHeight + 'px'; };
-        const save = prefs => { Cookies.set(prefs); banner.hidden = true; pad(); modal.hide(); };
-        if (!Cookies.get()) { banner.hidden = false; pad(); window.addEventListener('resize', pad); }
+        const save = prefs => {
+            Cookies.set(prefs); banner.hidden = true;
+            if (ro) { ro.disconnect(); ro = null; }
+            window.removeEventListener('resize', pad);
+            pad(); modal.hide();
+        };
+        if (!Cookies.get()) {
+            banner.hidden = false; pad();
+            window.addEventListener('resize', pad);
+            if (window.ResizeObserver) { ro = new ResizeObserver(pad); ro.observe(banner); }
+        }
         document.getElementById('cookiesAll').onclick = () => save({ analytics: true });
         document.getElementById('cookiesEssential').onclick = () => save({ analytics: false });
         document.getElementById('cookiesSave').onclick = () => save({ analytics: document.getElementById('ckAnalytics').checked });
@@ -240,8 +252,59 @@
         main.prepend(box);
     }
 
+    // Páginas que continuam abertas no lockdown e com o código do app autenticador pendente
+    // (pelo nome do arquivo: o Cloudflare também serve as páginas sem ".html")
+    const ACCOUNT_FLOW = /(^|\/)(login|recuperar-senha|redefinir-senha|seguranca|offline)(\.html)?$/.test(location.pathname);
+    const nextParam = () => { const here = (location.pathname.split('/').pop() || '').replace(/^([\w-]+)$/, '$1.html'); return /^[\w-]+\.html$/.test(here) && here !== 'index.html' ? '?next=' + encodeURIComponent(here) : ''; };
+
+    /* ---------- Verificação em duas etapas pendente ---------- */
+    // Quem ATIVOU o app autenticador precisa digitar o código para usar a conta, qualquer que seja o
+    // cargo: até lá o login não terminou. Sem isso dava para sair de seguranca.html e mexer no perfil
+    // (o banco recusava, mas a tela fingia que tinha salvo).
+    function mfaGate() {
+        if (!Auth.current() || Auth.mfaState() !== 'challenge' || ACCOUNT_FLOW) return false;
+        location.replace(R + 'pages/seguranca.html' + nextParam());
+        return true;
+    }
+
+    /* ---------- Modo lockdown (ligado na aba Segurança do painel) ---------- */
+    // O banco já recusa o conteúdo para quem não é da equipe; aqui só a tela. A equipe vê um aviso.
+    function lockdown(st) {
+        if (!st || !st.lockdown || !main) return;
+        if (Auth.isStaff()) {
+            const box = document.createElement('div');
+            box.className = 'alert alert-danger lockdown-staff-note d-flex flex-wrap align-items-center justify-content-between gap-2';
+            box.setAttribute('role', 'status');
+            box.innerHTML = '<span><strong>Modo lockdown ligado:</strong> o site está fechado para o público; só a equipe vê o conteúdo.</span>' +
+                (Auth.isEditor() ? '<a class="btn btn-sm btn-dark" href="' + R + 'pages/admin.html#seguranca">Gerenciar</a>' : '');
+            main.prepend(box);
+            return;
+        }
+        if (ACCOUNT_FLOW) return;   // login (equipe), recuperação de senha e verificação da conta
+        const u = Auth.current(), staffPending = u && util.isStaffRole(u.role);
+        const screen = document.createElement('section');
+        screen.className = 'lockdown-screen';
+        screen.setAttribute('aria-labelledby', 'lockdown-title');
+        screen.innerHTML = '<div class="lockdown-card"><span class="logo-sigla" aria-hidden="true">JB</span>' +
+            '<p class="lockdown-kicker">Jornal Brasileiro</p><h1 id="lockdown-title">Site temporariamente fechado</h1>' +
+            '<p>' + esc(st.message || 'O Jornal Brasileiro está em modo de segurança (lockdown). O acesso foi limitado à equipe da redação por um tempo.') + '</p>' +
+            '<p class="small lockdown-muted">Tente de novo mais tarde. Leitores, comentários, denúncias e cadastros ficam suspensos até a redação reabrir o site.</p>' +
+            '<div class="d-flex flex-wrap justify-content-center gap-2">' +
+            (!u ? '<a class="btn btn-primary" href="' + R + 'pages/login.html' + nextParam() + '">Entrar (equipe da redação)</a>'
+                : staffPending ? '<a class="btn btn-primary" href="' + R + 'pages/seguranca.html' + nextParam() + '">Concluir a verificação da conta</a>' : '') +
+            (u ? '<button type="button" class="btn btn-outline-light" id="lockdown-logout">Sair da conta</button>' : '') + '</div></div>';
+        document.body.prepend(screen);
+        document.documentElement.classList.add('jb-lockdown');
+        document.title = 'Site temporariamente fechado — Jornal Brasileiro (JB)';
+        const out = document.getElementById('lockdown-logout');
+        if (out) out.addEventListener('click', async () => { out.disabled = true; await Auth.logout(); location.reload(); });
+        const f = screen.querySelector('a, button'); if (f) f.focus();
+    }
+
     /* ---------- Partes que dependem de dados ---------- */
     JB.authReady.then(() => {
+        if (mfaGate()) return;
+        JB.Site.status().then(lockdown, () => { });
         document.getElementById('userArea').innerHTML = userArea();
         accountNotice();
         const out = document.getElementById('jb-logout');

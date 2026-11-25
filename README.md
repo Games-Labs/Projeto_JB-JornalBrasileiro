@@ -18,7 +18,7 @@
 
 ### A) Arquitetura de Execução
 
-Aplicação **Multi-Page** com front-end estático (**HTML5, CSS3 e JavaScript nativo**, Bootstrap 5 para a interface), sem etapa de build, hospedada no **Cloudflare Pages** (*Pages Functions* completam o HTML com a prévia de cada página e matéria ao compartilhar o link, o `sitemap.xml` e o `robots.txt`). Os dados ficam no **Supabase**: banco Postgres (notícias, autores, versões das matérias, perfis, comentários, denúncias, favoritos, newsletter e contagem de leituras), **Supabase Auth** (contas, login e recuperação de senha) e **Supabase Storage** (imagens enviadas pelo painel). A segurança é garantida no banco, por **políticas RLS** e privilégios mínimos ([`supabase/01_schema.sql`](supabase/01_schema.sql)); o navegador usa apenas a chave pública (*anon/publishable*).
+Aplicação **Multi-Page** com front-end estático (**HTML5, CSS3 e JavaScript nativo**, Bootstrap 5 para a interface), sem etapa de build, hospedada no **Cloudflare Pages** (*Pages Functions* completam o HTML com a prévia de cada página e matéria ao compartilhar o link, o `sitemap.xml` e o `robots.txt`). Os dados ficam no **Supabase**: banco Postgres (notícias, autores, versões das matérias, perfis, comentários, denúncias, favoritos, newsletter e contagem de leituras), **Supabase Auth** (contas, login e recuperação de senha) e **Supabase Storage** (imagens enviadas pelo painel, público, e anexos das denúncias, privado). A segurança é garantida no banco, por **políticas RLS** e privilégios mínimos ([`supabase/01_schema.sql`](supabase/01_schema.sql)); o navegador usa apenas a chave pública (*anon/publishable*).
 
 **Público-alvo:** leitores em geral, avaliadores do projeto acadêmico e cidadãos interessados em simulações de portais de notícias e jornalismo investigativo.
 
@@ -32,17 +32,18 @@ Aplicação **Multi-Page** com front-end estático (**HTML5, CSS3 e JavaScript n
 2. Ticker rotativo no topo com as notícias mais recentes.
 3. Navegação entre **páginas HTML independentes**.
 4. Filtro de notícias por 12 editorias (Política, Economia, Esportes, Investigação, Tecnologia, Infraestrutura, Brasil, Mundo, Educação, Saúde, Meio Ambiente, Cultura), cada uma com página própria (destaque + descrição), busca por texto e **busca avançada** (autor, tipo de conteúdo, período e editoria).
-5. Formulário de denúncias / envio de pautas com opção de anonimato; só coordenadores e o administrador leem as denúncias.
+5. Formulário de denúncias / envio de pautas (com conta) com opção de anonimato e até **6 anexos** (imagens redesenhadas no navegador, sem metadados, e PDFs), guardados num bucket privado; só coordenadores e o administrador leem as denúncias e abrem os anexos.
 6. Cadastro, login (e-mail e senha ou **conta do Google**) e **recuperação de senha por e-mail** (Supabase Auth): o leitor digita o **código de verificação** que o Supabase envia e confere, ou abre o link do mesmo e-mail. Contas a partir de **16 anos**; senhas com 8+ caracteres, minúscula, maiúscula, número e símbolo; **CAPTCHA** (Cloudflare Turnstile) no login, cadastro e recuperação.
 7. Salvamento e edição do perfil, com página de **perfil público** (nome, foto e minibiografia).
 8. Área **Minhas Informações** para usuários autenticados.
 9. Painel Administrativo com **CRUD** de notícias (escritas no **editor de matérias** em página inteira: texto com negrito, itálico, links, intertítulos, citações e listas; vídeo ou live do YouTube; cinco tipos de gráfico; prévia do card e cópia automática no navegador), **fluxo editorial** (rascunho → em revisão → aprovada → publicada → arquivada), **agendamento**, **histórico de versões** com restauração, cadastro de **autores**, relatórios de **audiência**, dashboard, caixa de denúncias e moderação de comentários.
 10. **Hierarquia da redação** (administrador → coordenador → jornalista → leitor), com aba **Equipe e cargos** no painel, regras impostas pelo banco e registro de cada mudança de cargo.
-11. **Perfis públicos** (nome, foto, minibiografia e comentários) com **selo do JB** para a equipe da redação.
+11. **Perfis públicos** (nome, foto, minibiografia e comentários) com **selo do JB** para a equipe da redação e para os **perfis oficiais** da redação (autores marcados no painel), e **selos de perfil** dados pela coordenação: Colaborador, Apoiador Oficial, Ajudante do Jornal e Repórter.
 12. **Segurança da conta** (`seguranca.html`): **verificação em duas etapas** com app autenticador (obrigatória para a equipe da redação, opcional para leitores) e confirmação de idade; aba **Segurança** no painel com o estado das proteções, a equipe sem MFA e a **auditoria** (gravada pelo banco).
 13. Aviso e painel de consentimento de cookies, com referência à LGPD.
-14. Comentários: quem comentou com uma conta **edita ou exclui o próprio comentário** (fica marcado “editado”); a coordenação continua moderando pelo painel e pela matéria.
+14. Comentários **só com conta**: quem comentou **edita ou exclui o próprio comentário** (fica marcado “editado”); a coordenação continua moderando pelo painel e pela matéria.
 15. **Prévia ao compartilhar e SEO**: links de matéria mostram título, resumo e imagem da própria matéria no WhatsApp, X, Facebook e afins (e dados `NewsArticle` para buscadores); as demais páginas mostram o nome e a descrição da seção. O site tem `sitemap.xml` com todas as matérias publicadas, `robots.txt`, endereço canônico, dados da organização com as redes sociais, página 404 de verdade e `noindex` nas páginas de conta e do painel.
+15. **Modo lockdown** (aba Segurança do painel): numa emergência, a coordenação fecha o site; o banco passa a entregar o conteúdo só para a equipe logada (com a verificação em duas etapas), suspende comentários, denúncias, newsletter, favoritos, edição de perfil, cadastros e a contagem de leituras, e os outros visitantes veem uma tela de “site temporariamente fechado” com o login da equipe.
 16. **App instalável (PWA)**: o JB pode ser instalado no celular ou no computador e as matérias já abertas continuam legíveis sem internet (com internet, tudo vem sempre da rede). Ao voltar ao app depois de 5 minutos ou mais em segundo plano, as páginas de leitura se atualizam sozinhas (nunca com um comentário ou formulário sendo digitado).
 17. Redes sociais do JB (Instagram, TikTok e YouTube) no rodapé.
 18. Interface responsiva para celulares e desktops.
@@ -59,24 +60,24 @@ Aplicação **Multi-Page** com front-end estático (**HTML5, CSS3 e JavaScript n
 | **Opinião e análise** (`opiniao.html`) | Editoriais, colunas e análises, com a lista de **colunistas** |
 | **Entrevistas** (`entrevistas.html`) | Perguntas e respostas (linhas `P:` / `R:` no texto) |
 | **Arquivo** (`arquivo.html`) | Todas as publicações agrupadas por mês, com filtro por tipo e editoria |
-| **Equipe / autor** (`autor.html`) | Redação do JB (contas da equipe, com selo), colunistas e assinaturas; `autor.html?nome=...` mostra perfil e matérias de cada autor |
+| **Equipe / autor** (`autor.html`) | Coordenação e jornalistas do JB em seções separadas (contas com selo), colaboradores e apoiadores (selos de perfil), colunistas e assinaturas; `autor.html?nome=...` mostra perfil e matérias (inclusive em coautoria) de cada autor |
 | **Perfil público** (`perfil-publico.html?id=...`) | Nome, foto, minibiografia, cargo e comentários de qualquer conta; a equipe da redação ganha o selo do JB e a lista de matérias publicadas |
 | **Institucional** | Política editorial, política de correções, transparência e metodologia, expediente, termos e LGPD |
 
-**Em cada matéria:** texto com intertítulos, citações, listas, negrito, itálico e links; **vídeo ou live do YouTube** no topo (o player só carrega quando o leitor clica, pelo domínio `youtube-nocookie.com`); autor (com link para o perfil e **selo do JB** quando a assinatura é de alguém da redação), data de publicação e de **atualização**, tempo de leitura, leituras, fontes e referências, quadro de **correções**, gráfico (barras, colunas, linha, área ou rosca) sempre com os valores escritos e tabela equivalente, *Leia também*, comentários (o autor edita ou exclui o próprio), favoritar, compartilhar, imprimir e **modo leitura**.
+**Em cada matéria:** texto com intertítulos, citações, listas, negrito, itálico, links e **imagens com legenda no meio do texto**; assinatura com **coautores** (“Por Redação Investigativa JB e Núcleo de Verificação JB”); **vídeo ou live do YouTube** no topo (o player só carrega quando o leitor clica, pelo domínio `youtube-nocookie.com`); autor (com link para o perfil e **selo do JB** quando a assinatura é de alguém da redação), data de publicação e de **atualização**, tempo de leitura, leituras, fontes e referências, quadro de **correções**, gráfico (barras, colunas, linha, área ou rosca) sempre com os valores escritos e tabela equivalente, *Leia também*, comentários (o autor edita ou exclui o próprio), favoritar, compartilhar, imprimir e **modo leitura**.
 
 **Extras para o leitor:** **perfil público** com os próprios comentários, **Modo escuro**, **acessibilidade** (tamanho do texto e alto contraste, no rodapé e no menu lateral; link "Pular para o conteúdo"), **Minha Central** (favoritos, histórico e recomendações), ranking **Mais lidas**, newsletter demonstrativa e foto de perfil.
-**Extras para a redação:** **editor de matérias** em página inteira (`editor.html`: barra de formatação, atalhos Ctrl+B/I/K/S, colar do Word ou Google Docs mantendo a formatação, contador de palavras e tempo de leitura, aviso de título longo, prévia do card, cópia do texto guardada no navegador até salvar e aviso antes de sair sem salvar), seletor de imagem (galeria local, envio do computador com redução automática para WebP e envio ao Supabase Storage, ou URL), vídeo do YouTube, visualização prévia de matérias não publicadas ou agendadas, filtros da tabela por status/tipo e **“Só as minhas”**, selo **“Sua”** nas próprias matérias, publicação de atualizações ao vivo na hora, registro de correções, manchete da capa (coordenação) e aba **Equipe e cargos** com histórico das mudanças.
+**Extras para a redação:** **editor de matérias** em página inteira (`editor.html`: barra de formatação, imagens no meio do texto (texto, foto, mais texto), coautores na assinatura, **colaboradores de edição** (jornalistas que também podem editar a matéria; quem escolhe é quem criou ou a coordenação), atalhos Ctrl+B/I/K/S, colar do Word ou Google Docs mantendo a formatação, contador de palavras e tempo de leitura, aviso de título longo, prévia do card, cópia do texto guardada no navegador até salvar e aviso antes de sair sem salvar), seletor de imagem (galeria local, envio do computador com redução automática para WebP e envio ao Supabase Storage, ou URL), vídeo do YouTube, visualização prévia de matérias não publicadas ou agendadas, filtros da tabela por status/tipo e **“Só as minhas”**, selo **“Sua”** nas próprias matérias, publicação de atualizações ao vivo na hora, registro de correções, manchete da capa (coordenação), aba **Equipe e cargos** (mostra a equipe e quem tem selo; busca qualquer conta; botão **Remover da equipe**; selos de perfil) com histórico das mudanças e **modo lockdown** na aba Segurança. Quem perde o cargo com o painel ou o editor aberto perde o acesso em até 1 minuto (ou ao voltar para a aba).
 
 ### C) Usuários
 
 | Perfil | O que pode fazer |
 |--------|------------------|
-| **Visitante** | Navegar, ler notícias, filtrar, buscar, comentar, enviar denúncias e salvar favoritos no próprio navegador. |
-| **Leitor** (conta comum, 16+ anos) | Tudo acima + entrar (senha ou Google), editar perfil e foto, ter perfil público, favoritos na conta, comentar com o nome da conta, recuperar a senha e, se quiser, ativar a verificação em duas etapas. |
-| **Jornalista** ✓JB | Tudo do leitor + painel: cria e edita **as próprias** matérias e as leva até **“Aprovada”**; vê as matérias da redação só para leitura; audiência. Quem publica é o coordenador. |
-| **Coordenador** ✓JB | Publica, agenda, arquiva, corrige e exclui qualquer matéria; restaura versões; autores; denúncias; moderação de comentários; **coloca e tira jornalistas**. |
-| **Administrador** ✓JB | Tudo + **nomeia coordenadores**. |
+| **Visitante** | Navegar, ler notícias, filtrar, buscar e salvar favoritos no próprio navegador. Para comentar ou enviar denúncia, precisa entrar numa conta. |
+| **Leitor** (conta comum, 16+ anos) | Tudo acima + entrar (senha ou Google), editar perfil e foto, ter perfil público, favoritos na conta, comentar, enviar denúncias com anexos, recuperar a senha e, se quiser, ativar a verificação em duas etapas (depois de ativada, o código é pedido em todo login, qualquer que seja o cargo). |
+| **Jornalista** ✓JB | Tudo do leitor + painel: cria e edita **as próprias** matérias (e aquelas em que foi marcado como **colaborador**) e as leva até **“Aprovada”**; vê as matérias da redação só para leitura; audiência. Quem publica é o coordenador. |
+| **Coordenador** ✓JB | Publica, agenda, arquiva, corrige e exclui qualquer matéria; restaura versões; autores; denúncias; moderação de comentários; **coloca e tira jornalistas**; selos de perfil de leitores e jornalistas; **modo lockdown**. |
+| **Administrador** ✓JB | Tudo + **nomeia coordenadores** e dá selos a qualquer conta (menos administradores). |
 
 A equipe (jornalista, coordenador e administrador) só usa o painel com a **verificação em duas etapas** ativa e confirmada na sessão: sem ela, o banco trata a conta como se não tivesse cargo (função `my_role()` em [`supabase/08_seguranca.sql`](supabase/08_seguranca.sql)).
 
@@ -86,8 +87,8 @@ Na aba **Equipe e cargos** do painel, o administrador coloca qualquer conta como
 
 **Publicado:** siga o passo a passo de **[docs/DEPLOY.md](docs/DEPLOY.md)** (Supabase + Cloudflare Pages). Em resumo:
 
-1. Rode [`supabase/01_schema.sql`](supabase/01_schema.sql) (e, opcionalmente, `02_seed.sql` e `06_exemplos_secoes.sql`) no SQL Editor do Supabase. Projetos criados com versões anteriores rodam só as atualizações que faltam: [`04_auditoria_seguranca.sql`](supabase/04_auditoria_seguranca.sql), [`05_secoes_editoriais.sql`](supabase/05_secoes_editoriais.sql) e [`07_hierarquia.sql`](supabase/07_hierarquia.sql), [`08_seguranca.sql`](supabase/08_seguranca.sql) e [`09_editor_video_comentarios.sql`](supabase/09_editor_video_comentarios.sql).
-2. Cole a **Project URL**, a chave **anon/publishable** e a chave **do site** do Turnstile em [`assets/js/config.js`](assets/js/config.js). Nunca use a `service_role`.
+1. Rode [`supabase/01_schema.sql`](supabase/01_schema.sql) (e, opcionalmente, `02_seed.sql` e `06_exemplos_secoes.sql`) no SQL Editor do Supabase. Projetos criados com versões anteriores rodam só as atualizações que faltam: [`04_auditoria_seguranca.sql`](supabase/04_auditoria_seguranca.sql), [`05_secoes_editoriais.sql`](supabase/05_secoes_editoriais.sql) e [`07_hierarquia.sql`](supabase/07_hierarquia.sql), [`08_seguranca.sql`](supabase/08_seguranca.sql), [`09_editor_video_comentarios.sql`](supabase/09_editor_video_comentarios.sql) e [`10_equipe_selos_lockdown.sql`](supabase/10_equipe_selos_lockdown.sql). O banco do JB publicado já está com todas elas (a 10 foi aplicada em 25/11/2026).
+2. Cole a **Project URL**, a chave **anon/publishable** e a chave **do site** do Turnstile em [`assets/js/config.js`](assets/js/config.js). Nunca use a `service_role`. As demais credenciais (SMTP, Google, chave secreta do Turnstile e as variáveis opcionais do Cloudflare) têm um modelo em [`exemplosecret.env`](exemplosecret.env): copie-o para `.env` (ignorado pelo git), preencha a cópia e cadastre cada valor onde o arquivo indica.
 3. Publique a pasta no Cloudflare Pages (sem build), configure no Supabase as URLs de redirecionamento, o SMTP, o CAPTCHA, o MFA, o login com o Google e a política de senha, e crie o primeiro administrador.
 
 **Teste local:** sirva a pasta por HTTP (`npx serve .` ou Live Server); o login do Supabase não é confiável em `file://`.
@@ -139,8 +140,9 @@ JB/
 │   ├── pages/[[path]].js · index.js # Prévia das demais páginas e da capa (dados da organização)
 │   ├── sitemap.xml.js · robots.txt.js
 │   └── _lib/seo.js            # Peças comuns (não é rota)
-├── supabase/                  # Schema + RLS, seed, promoção de admin, atualizações (04, 05, 07, 08, 09) e exemplos (06)
+├── supabase/                  # Schema + RLS, seed, promoção de admin, atualizações (04, 05, 07, 08, 09, 10) e exemplos (06)
 ├── docs/                      # DEPLOY.md e capturas de tela
+├── exemplosecret.env          # Modelo das credenciais (sem segredos); a cópia preenchida é o .env
 ├── LICENSE
 └── README.md
 ```
@@ -149,7 +151,7 @@ JB/
 
 | Onde | O quê |
 |------|-------|
-| **Supabase (banco)** | Notícias (com tipo, veredito, texto com formatação, vídeo do YouTube (só o identificador), fontes, correções, atualizações ao vivo, cronologia, personagens, gráfico e quem criou), autores, versões anteriores das matérias (só a redação lê), perfis (nome, foto, bio e cargo são públicos; e-mail, cidade e interesses, não), registro de mudanças de cargo e **auditoria** (só coordenação), data em que a idade foi confirmada (a data de nascimento não é guardada), comentários (com a data da última edição pelo autor), denúncias, favoritos de quem tem conta, newsletter e contagem de leituras |
+| **Supabase (banco)** | Notícias (com tipo, veredito, texto com formatação, vídeo do YouTube (só o identificador), fontes, correções, atualizações ao vivo, cronologia, personagens, gráfico e quem criou), autores, versões anteriores das matérias (só a redação lê), perfis (nome, foto, bio, cargo e selos são públicos; e-mail, cidade e interesses, não), coautores e colaboradores de edição das matérias, estado do modo lockdown, registro de mudanças de cargo e **auditoria** (só coordenação), data em que a idade foi confirmada (a data de nascimento não é guardada), comentários (com a data da última edição pelo autor), denúncias (com a lista dos anexos), favoritos de quem tem conta, newsletter e contagem de leituras |
 | **Supabase Auth** | Contas e senhas (o Supabase guarda a senha apenas como hash), vínculo com a conta do Google e os apps autenticadores da verificação em duas etapas |
 | **Cloudflare Turnstile** | Verificação anti-robô nas páginas de login, cadastro, recuperação e troca de senha (o token vai para o Supabase, que confere com a chave secreta) |
 | **YouTube** | Só quando o leitor clica para assistir a um vídeo: o player vem de `youtube-nocookie.com`. Antes do clique, a página carrega apenas a imagem de capa do vídeo |
@@ -224,7 +226,9 @@ Não foram encontradas falhas de XSS (todo HTML dinâmico passa por `JB.util.esc
 ### Pendências e riscos conhecidos
 
 - Configurar **SMTP próprio**, as **Redirect URLs** e o **modelo do e-mail "Reset Password" com `{{ .Token }}`** no Supabase (ver [docs/DEPLOY.md](docs/DEPLOY.md)); sem isso, leitores não recebem o e-mail de recuperação nem o de confirmação, e o e-mail não mostra o código.
-- O CAPTCHA protege só as rotas de autenticação (é o que o Supabase oferece). Comentários anônimos, denúncias e newsletter têm limite por minuto no banco (`throttle_inserts`), mas não CAPTCHA; o contador de leituras não tem limite.
+- O CAPTCHA protege só as rotas de autenticação (é o que o Supabase oferece). Comentários e denúncias exigem conta; eles, a newsletter e os anexos de denúncia (20 arquivos por conta a cada 10 min) têm limite no banco, mas não CAPTCHA; o contador de leituras não tem limite.
+- Denúncia anônima não guarda nome nem e-mail, mas o Storage registra qual conta enviou cada anexo (`owner_id`), visível para a coordenação. Anexo enviado de uma denúncia que depois falhou fica órfão no bucket `report-files`.
+- Imagem do meio do texto removida durante a edição continua no bucket `news-images` (as versões anteriores ainda podem usá-la); ela só é apagada quando a matéria é excluída.
 - Quem perde o celular da verificação em duas etapas precisa que o administrador remova o fator no painel do Supabase (**Authentication → Users**).
 - Notícias sem paginação (adequado para dezenas ou poucas centenas de matérias).
 - Proteção contra senhas vazadas (HaveIBeenPwned) só existe no plano Pro do Supabase.
@@ -236,7 +240,7 @@ O repositório pode ser público sem expor o portal:
 
 - **`assets/js/config.js`** contém só a *Project URL*, a chave **publishable** do Supabase e a chave **do site** do Turnstile (pública; a secreta fica só no Supabase). Ela é pública por natureza (qualquer visitante a vê no navegador) e não dá acesso além do que as políticas RLS permitem.
 - **Quem protege os dados é o banco:** RLS e privilégios por coluna em todas as tabelas ([`supabase/01_schema.sql`](supabase/01_schema.sql)); só coordenadores e administradores leem denúncias e a lista da newsletter, só a redação grava notícias e imagens (o jornalista, só as próprias e sem publicar) e o cargo só muda pela função `set_member_role`, que segue a hierarquia. Os avisos de segurança do Supabase que restam são intencionais (funções que o site chama de propósito, como `hit_news`, `delete_my_account`, `public_profile` e as de cargo, que checam permissão por dentro) ou exigem o plano Pro (proteção contra senhas vazadas).
-- **Nunca vão para o repositório:** a chave `service_role` / *secret*, a senha do banco, e-mails ou IDs de contas reais. Os scripts SQL usam apenas marcadores (`TROQUE-PELO-SEU-EMAIL@exemplo.com`).
+- **Nunca vão para o repositório:** a chave `service_role` / *secret*, a senha do banco, o `.env` com as credenciais pessoais (só o modelo `exemplosecret.env`, com marcadores, é versionado), e-mails ou IDs de contas reais. Os scripts SQL usam apenas marcadores (`TROQUE-PELO-SEU-EMAIL@exemplo.com`).
 - O administrador de exemplo do **modo de demonstração local** existe só no `localStorage` de quem abre o site sem Supabase; não é uma conta do portal publicado.
 
 ## 🧰 Tecnologias

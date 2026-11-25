@@ -3,6 +3,9 @@ JB.authReady.then(function () {
     'use strict';
     const me = JB.Auth.current();
     if (!me) { location.replace('login.html?next=perfil.html'); return; }
+    // Conta ainda não liberada (código do app autenticador, idade ou MFA obrigatório da equipe):
+    // o banco recusaria qualquer alteração. Antes dava para editar bio e foto sem digitar o código.
+    if (!JB.Auth.accountOk()) { location.replace('seguranca.html?next=perfil.html'); return; }
     document.getElementById('profile-loading').hidden = true;
     document.getElementById('profile-content').hidden = false;
 
@@ -18,7 +21,7 @@ JB.authReady.then(function () {
             '<div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" id="i-' + k + '" value="' + k + '"' + ((u.interests || []).includes(k) ? ' checked' : '') + '>' +
             '<label class="form-check-label" for="i-' + k + '">' + JB.util.esc(JB.CATEGORIES[k].label) + '</label></div>').join('');
         document.getElementById('role-badge').textContent = JB.util.isStaffRole(u.role) ? JB.util.roleLabel(u.role) + ' do JB' : 'Leitor cadastrado';
-        document.getElementById('role-seal').innerHTML = JB.util.sealHTML(u.role);
+        document.getElementById('role-seal').innerHTML = JB.util.sealHTML(u.role) + ' ' + JB.util.profileBadgesHTML(u.badges);
         document.getElementById('since').textContent = new Date(u.created).toLocaleDateString('pt-BR');
         document.getElementById('admin-link').hidden = !JB.util.isStaffRole(u.role);
         document.getElementById('public-link').href = JB.util.profileUrl(u.id);

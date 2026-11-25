@@ -101,7 +101,12 @@
 .cat-opiniao { --cat: var(--cat-opiniao); --cat-text: var(--cat-opiniao); }
 
 /* 2. Base ------------------------------------------------ */
+/* Fundo da página atrás do <body>: o mesmo do rodapé. Qualquer sobra depois do rodapé (página curta,
+   rolagem elástica do celular, barra do navegador que some) fica da cor do rodapé, não uma faixa clara. */
+html { background-color: var(--jb-bar); }
 body { background-color: var(--jb-paper); color: var(--jb-text); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+/* Palavras longas (e-mails, links) quebram em vez de alargar a página no celular com fonte grande */
+main { overflow-wrap: break-word; }
 a { text-decoration: none; color: var(--jb-accent); }
 a:hover { color: var(--jb-accent-hover); }
 h1, h2, h3, h4, h5, .logo-sigla { font-family: var(--font-serif); color: var(--jb-ink); }
@@ -502,6 +507,10 @@ a.category-tag:hover { color: var(--cat-text); text-decoration: underline; text-
 
 /* Alinha a altura de busca, tema e usuário no cabeçalho */
 .site-header .btn-user { min-height: 36px; display: inline-flex; align-items: center; }
+/* Nome no botão da conta: cortado com reticências; entre 1400 e 1599 px (menu aberto em linha, cabeçalho
+   apertado) só o avatar aparece. Antes, logado, o cabeçalho passava da tela em 1400 px. */
+.site-header .btn-user > span { max-width: 12ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (min-width: 1400px) and (max-width: 1599.98px) { .site-header .btn-user > span { display: none; } }
 .site-header .search-box { min-height: 36px; }
 .search-box input { -webkit-appearance: none; appearance: none; border-radius: 0; }
 /* Largura fixa só no menu de desktop; no menu recolhido (celular/tablet) a busca ocupa a linha toda */
@@ -848,7 +857,7 @@ h1 .jb-seal { font-size: .85rem; padding: 4px 9px 4px 6px; position: relative; t
 .team-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--jb-rule); flex-wrap: wrap; }
 .team-row:last-child { border-bottom: 0; }
 .team-who { flex: 1 1 200px; min-width: 0; }
-.team-ctl { display: flex; gap: 6px; align-items: center; }
+.team-ctl { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .team-ctl .form-select { width: auto; min-width: 150px; }
 .role-ladder { padding-left: 1.2rem; }
 .role-ladder li { margin-bottom: 6px; }
@@ -865,3 +874,62 @@ h1 .jb-seal { font-size: .85rem; padding: 4px 9px 4px 6px; position: relative; t
     .team-ctl .form-select { flex: 1 1 auto; }
     .profile-hero { gap: 14px; }
 }
+
+/* ---------- Selos de perfil (Colaborador, Apoiador Oficial, Ajudante do Jornal, Repórter) ---------- */
+/* Contorno na cor da marca: não se confunde com o selo cheio da equipe da redação */
+.jb-badge { display: inline-flex; align-items: center; gap: 3px; vertical-align: middle; border: 1px solid currentColor; color: var(--jb-accent); background: var(--jb-card);
+    font-family: var(--font-sans); font-size: .64rem; font-weight: 700; line-height: 1; padding: 2px 7px 2px 5px; border-radius: 999px; white-space: nowrap; }
+.jb-badge svg { flex-shrink: 0; }
+.profile-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+.profile-badges .jb-badge { font-size: .78rem; padding: 4px 10px 4px 7px; }
+.team-card-badges { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.team-badges summary { cursor: pointer; color: var(--jb-muted); width: fit-content; }
+.team-badges[open] summary { color: var(--jb-text); }
+
+/* ---------- Imagem no meio do texto (bloco "![legenda](endereço)") ---------- */
+.body-figure { margin: 1.6em 0; position: relative; }
+.body-figure img { display: block; width: 100%; height: auto; max-height: 640px; object-fit: contain; background: var(--jb-soft); border-radius: 6px; }
+.body-figure figcaption { font-family: var(--font-sans); font-size: .86rem; color: var(--jb-muted); margin-top: 6px; padding-left: 10px; border-left: 3px solid var(--jb-rule); }
+.rte .body-figure { cursor: default; outline: 1px dashed var(--jb-rule); outline-offset: 4px; user-select: none; }
+.rte .body-figure:focus-within, .rte .body-figure:hover { outline-color: var(--jb-accent); }
+.body-figure-tools { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; z-index: 1; font-family: var(--font-sans); }
+.body-figure-tools .btn { box-shadow: var(--jb-shadow); }
+.rte-btn-label { margin-left: 5px; font-weight: 600; font-size: .82rem; }
+.rte-img-panel { background: var(--jb-card); border: 1px solid var(--jb-rule); border-radius: 8px; padding: 12px; margin: 8px 0; }
+@media (max-width: 575.98px) { .rte-btn-label { display: none; } }
+
+/* ---------- Editor: coautores e colaboradores ---------- */
+.chip-list { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-list:empty { display: none; }
+.chip { display: inline-flex; align-items: center; gap: 4px; background: var(--jb-soft); border: 1px solid var(--jb-rule); border-radius: 999px; padding: 2px 4px 2px 10px; font-size: .86rem; max-width: 100%; overflow-wrap: anywhere; }
+.chip-del { border: 0; background: transparent; color: var(--jb-text); width: 28px; height: 28px; border-radius: 50%; font-size: 1.1rem; line-height: 1; flex-shrink: 0; }
+.chip-del:hover, .chip-del:focus-visible { background: var(--jb-rule); }
+.collab-list { max-height: 220px; overflow-y: auto; }
+.collab-list .form-check { margin-bottom: 4px; }
+
+/* ---------- Denúncias: anexos no painel ---------- */
+.report-files { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.report-file { display: flex; align-items: center; gap: 8px; max-width: 260px; padding: 6px; border: 1px solid var(--jb-rule); border-radius: 8px; color: var(--jb-text); background: var(--jb-paper); }
+.report-file:hover { border-color: var(--jb-accent); color: var(--jb-text); }
+.report-file.is-missing { opacity: .6; pointer-events: none; }
+.report-thumb { flex-shrink: 0; width: 64px; height: 64px; border-radius: 6px; overflow: hidden; background: var(--jb-soft); display: flex; align-items: center; justify-content: center; }
+.report-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.report-thumb-pdf { font-family: var(--font-sans); font-weight: 800; font-size: .8rem; color: var(--jb-accent); border: 1px solid var(--jb-rule); }
+.report-file-name { font-size: .82rem; min-width: 0; overflow-wrap: anywhere; }
+
+/* ---------- Modo lockdown ---------- */
+.lockdown-panel { border-left: 4px solid var(--jb-rule); }
+.lockdown-panel.is-on { border-left-color: var(--jb-accent-fill); }
+.lockdown-locks { padding-left: 1.2rem; margin-bottom: 12px; }
+/* Tela para quem não é da equipe: o resto da página some (o banco já não entrega o conteúdo) */
+html.jb-lockdown body { min-height: 100vh; padding-bottom: 0 !important; }
+html.jb-lockdown #site-top, html.jb-lockdown main, html.jb-lockdown #site-bottom, html.jb-lockdown .skip-link { display: none !important; }
+.lockdown-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; background: var(--jb-bar); color: var(--jb-on-bar); }
+.lockdown-card { max-width: 560px; text-align: center; border-top: 4px solid var(--jb-accent-fill); padding-top: 28px; }
+.lockdown-card .logo-sigla { display: inline-flex; margin-bottom: 12px; }
+.lockdown-card h1 { font-family: var(--font-serif); font-size: clamp(1.6rem, 5vw, 2.3rem); margin-bottom: 14px; color: var(--jb-on-bar); }
+.lockdown-card p { color: var(--jb-on-bar); overflow-wrap: anywhere; }
+.lockdown-kicker { font-family: var(--font-sans); font-size: .74rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; margin-bottom: 6px; }
+.lockdown-card .lockdown-muted, .lockdown-kicker { color: var(--jb-on-bar-muted) !important; }
+.lockdown-card .btn-outline-light { --bs-btn-color: var(--jb-on-bar); --bs-btn-border-color: var(--jb-on-bar-muted); --bs-btn-hover-bg: var(--jb-on-bar); --bs-btn-hover-color: var(--jb-bar); }
+.lockdown-staff-note { margin-top: 12px; }

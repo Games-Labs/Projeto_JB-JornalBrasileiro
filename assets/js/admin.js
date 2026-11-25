@@ -146,7 +146,7 @@ JB.authReady.then(function () {
                 return '<div class="panel-box mb-3"><div class="d-flex flex-wrap justify-content-between gap-2"><span class="small">Substituída em <strong>' + esc(util.fmtDate(v.replacedAt)) + '</strong>' + (v.replacedBy ? ' por ' + esc(v.replacedBy) : '') + '</span>' +
                     (Auth.canEditNews(n) ? '<button class="btn btn-sm btn-outline-dark" data-restore="' + esc(v.id) + '">Restaurar esta versão</button>' : '') + '</div>' +
                     '<h3 class="h6 mt-2 mb-1">' + esc(s.title) + '</h3><p class="small mb-1">' + esc(s.subtitle) + '</p>' +
-                    '<p class="small opacity-75 mb-0">' + esc(KINDS[s.kind] || '') + ' · ' + esc(util.catLabel(s.category)) + ' · ' + esc(s.author) + ' · ' + (s.body || []).length + ' blocos de texto' + (s.video ? ' · com vídeo' : '') + '</p>' +
+                    '<p class="small opacity-75 mb-0">' + esc(KINDS[s.kind] || '') + ' · ' + esc(util.catLabel(s.category)) + ' · ' + util.bylineHTML(s) + ' · ' + (s.body || []).length + ' blocos de texto' + (s.video ? ' · com vídeo' : '') + '</p>' +
                     '<details class="small mt-1"><summary>Ver texto</summary><div class="article-body version-body">' + util.bodyHTML(s.body || []) + '</div></details></div>';
             }).join('') || '<p class="text-muted">Nenhuma versão anterior: esta matéria ainda não foi editada depois de criada.</p>');
     }
@@ -156,7 +156,8 @@ JB.authReady.then(function () {
         if (!v || !confirm('Restaurar esta versão? O conteúdo atual será guardado como versão anterior.')) return;
         const patch = Object.assign({ id: versionsOf }, v.snapshot);
         // Campo que não existia na versão antiga volta vazio (inclui video = '')
-        JB.VERSIONED.forEach(k => { if (!(k in patch)) patch[k] = k === 'chart' || k === 'verdict' ? null : (k === 'body' || k === 'sources' || k === 'timeline' || k === 'people' ? [] : ''); });
+        JB.VERSIONED.forEach(k => { if (!(k in patch)) patch[k] = k === 'chart' || k === 'verdict' ? null : (k === 'body' || k === 'sources' || k === 'timeline' || k === 'people' || k === 'coauthors' ? [] : ''); });
+        if (!Array.isArray(patch.coauthors)) patch.coauthors = [];
         News.save(patch);
         const ok = await JB.flush();
         versionsModal.hide(); renderNews();
@@ -173,7 +174,7 @@ JB.authReady.then(function () {
         $('author-rows').innerHTML = list.map(a => '<div class="panel-box mb-3 d-flex gap-3 align-items-start">' + util.avatarHTML({ name: a.name, avatar: a.avatar ? util.imgSrc({ image: a.avatar }) : '' }, 'avatar-md') +
             '<div class="flex-grow-1"><div class="d-flex flex-wrap justify-content-between gap-2"><a class="fw-bold" href="' + esc(util.authorUrl(a.name)) + '">' + esc(a.name) + '</a>' +
             '<div class="d-flex gap-1"><button class="btn btn-sm btn-outline-dark" data-aedit="' + esc(a.id) + '">Editar</button><button class="btn btn-sm btn-outline-primary" data-adel="' + esc(a.id) + '">Excluir</button></div></div>' +
-            '<small class="d-block">' + esc(a.role) + (a.columnist ? ' · Colunista' : '') + ' · ' + News.everything().filter(n => n.author === a.name).length + ' matérias</small>' +
+            '<small class="d-block">' + esc(a.role) + (a.columnist ? ' · Colunista' : '') + (a.official ? ' · Perfil oficial ' + util.officialSealHTML(a) : '') + ' · ' + News.everything().filter(n => n.author === a.name || (n.coauthors || []).includes(a.name)).length + ' matérias</small>' +
             (a.bio ? '<p class="small mb-0 mt-1">' + esc(a.bio) + '</p>' : '') + '</div></div>').join('') || '<p class="text-muted">Nenhum autor cadastrado.</p>';
     }
     function resetAuthor() { aform.reset(); af('authorId').value = ''; af('avatar').value = ''; $('author-form-title').textContent = 'Novo autor'; $('au-avatar-msg').textContent = ''; aform.classList.remove('was-validated'); avatarPrev(); }
@@ -194,10 +195,15 @@ JB.authReady.then(function () {
         if (!aform.checkValidity()) { aform.classList.add('was-validated'); return; }
         const id = af('authorId').value;
         const before = id ? (Authors.all().find(a => a.id === id) || {}).name : null;
-        const r = Authors.save({ id: id || undefined, name: af('name').value.trim(), role: af('role').value.trim(), bio: af('bio').value.trim(), avatar: af('avatar').value, columnist: af('columnist').checked });
+        const r = Authors.save({ id: id || undefined, name: af('name').value.trim(), role: af('role').value.trim(), bio: af('bio').value.trim(), avatar: af('avatar').value, columnist: af('columnist').checked, official: af('official').checked });
         if (!r.ok) { note(r.error, 'danger'); return; }
-        // Renomeou: as matérias assinadas com o nome antigo passam para o novo
-        if (before && before !== r.author.name) News.everything().filter(n => n.author === before).forEach(n => News.save({ id: n.id, author: r.author.name }));
+        // Renomeou: as matérias assinadas (ou coassinadas) com o nome antigo passam para o novo
+        if (before && before !== r.author.name) News.everything().filter(n => n.author === before || (n.coauthors || []).includes(before)).forEach(n => {
+            const patch = { id: n.id };
+            if (n.author === before) patch.author = r.author.name;
+            if ((n.coauthors || []).includes(before)) patch.coauthors = n.coauthors.map(c => c === before ? r.author.name : c);
+            News.save(patch);
+        });
         const ok = await JB.flush();
         if (ok) { note(id ? 'Autor atualizado.' : 'Autor cadastrado.'); resetAuthor(); }
         renderAuthors(); renderNews();
@@ -207,7 +213,7 @@ JB.authReady.then(function () {
         const ed = e.target.closest('[data-aedit]'), del = e.target.closest('[data-adel]');
         if (ed) {
             const a = Authors.all().find(x => x.id === ed.dataset.aedit); if (!a) return;
-            af('authorId').value = a.id; af('name').value = a.name; af('role').value = a.role || ''; af('bio').value = a.bio || ''; af('avatar').value = a.avatar || ''; af('columnist').checked = !!a.columnist;
+            af('authorId').value = a.id; af('name').value = a.name; af('role').value = a.role || ''; af('bio').value = a.bio || ''; af('avatar').value = a.avatar || ''; af('columnist').checked = !!a.columnist; af('official').checked = !!a.official;
             $('author-form-title').textContent = 'Editar autor'; avatarPrev(); aform.scrollIntoView({ behavior: 'smooth' });
         }
         if (del && confirm('Excluir este autor? As matérias continuam assinadas com o nome dele.')) { Authors.remove(del.dataset.adel); renderAuthors(); if (await JB.flush()) note('Autor excluído.', 'warning'); }
@@ -251,6 +257,34 @@ JB.authReady.then(function () {
         renderStats();
     }
 
+    // Anexos: imagens em miniatura e PDFs como link. Os arquivos ficam num bucket privado; os links
+    // são temporários (1 h) e só saem para coordenador/admin.
+    const kb = n => Math.max(1, Math.round((Number(n) || 0) / 1024)) + ' KB';
+    function attachmentsHTML(r) {
+        const files = r.attachments || [];
+        const legacy = r.attachment && r.attachment.name && !files.length
+            ? '<small class="d-block mt-1 text-muted">📎 ' + esc(r.attachment.name) + ' (' + kb(r.attachment.size) + ') — enviado antes dos anexos reais: só o nome do arquivo foi guardado.</small>' : '';
+        if (!files.length) return legacy;
+        return '<div class="report-files" data-report-files="' + esc(r.id) + '">' + files.map((a, i) =>
+            '<a class="report-file" data-file-i="' + i + '" target="_blank" rel="noopener noreferrer" aria-label="Abrir anexo ' + esc(a.name) + '">' +
+            (/^image\//.test(a.type) ? '<span class="report-thumb" aria-hidden="true"></span>' : '<span class="report-thumb report-thumb-pdf" aria-hidden="true">PDF</span>') +
+            '<span class="report-file-name">' + esc(a.name) + '<small class="d-block opacity-75">' + kb(a.size) + '</small></span></a>').join('') + '</div>';
+    }
+    async function fillAttachments(list) {
+        const all = list.reduce((acc, r) => acc.concat(r.attachments || []), []);
+        if (!all.length) return;
+        const urls = await Reports.fileUrls(all);
+        list.forEach(r => {
+            const box = document.querySelector('[data-report-files="' + CSS.escape(r.id) + '"]'); if (!box) return;
+            (r.attachments || []).forEach((a, i) => {
+                const link = box.querySelector('[data-file-i="' + i + '"]'), url = urls && urls[a.path];
+                if (!link) return;
+                if (!url) { link.classList.add('is-missing'); link.title = urls === null ? 'Não foi possível gerar o link agora.' : 'Arquivo não encontrado.'; return; }
+                link.href = url;
+                if (/^image\//.test(a.type)) { const img = document.createElement('img'); img.src = url; img.alt = ''; img.loading = 'lazy'; link.querySelector('.report-thumb').appendChild(img); }
+            });
+        });
+    }
     function renderReports() {
         const list = Reports.all();
         $('reports-count').textContent = list.length;
@@ -258,14 +292,14 @@ JB.authReady.then(function () {
             '<div class="panel-box mb-3"><div class="d-flex justify-content-between gap-2"><strong>' + esc(r.subject) + '</strong>' +
             '<button class="btn btn-sm btn-outline-primary" data-rdel="' + esc(r.id) + '">Excluir</button></div>' +
             '<small class="text-muted">' + esc(util.fmtDate(r.date)) + ' • ' + (r.anonymous ? 'Anônimo' : esc(r.name || '—') + ' (' + esc(r.email || 'sem e-mail') + ')') + '</small>' +
-            '<p class="mb-1 mt-2" style="white-space:pre-wrap">' + esc(r.story) + '</p>' +
-            (r.attachment && r.attachment.name ? '<small>📎 ' + esc(r.attachment.name) + ' (' + Math.round((Number(r.attachment.size) || 0) / 1024) + ' KB)</small>' : '') + '</div>').join('') ||
+            '<p class="mb-1 mt-2" style="white-space:pre-wrap">' + esc(r.story) + '</p>' + attachmentsHTML(r) + '</div>').join('') ||
             '<p class="text-muted">Nenhuma denúncia recebida.</p>';
+        fillAttachments(list);
         renderStats();
     }
     $('report-rows').addEventListener('click', e => {
         const b = e.target.closest('[data-rdel]');
-        if (b && confirm('Excluir esta denúncia?')) { Reports.remove(b.dataset.rdel); renderReports(); }
+        if (b && confirm('Excluir esta denúncia? Os anexos dela também são apagados.')) { Reports.remove(b.dataset.rdel); renderReports(); }
     });
     $('comment-rows').addEventListener('click', e => {
         const b = e.target.closest('[data-cdel]');
@@ -278,21 +312,31 @@ JB.authReady.then(function () {
     // As regras valem no banco (set_member_role); a tela só oferece o que o cargo permite.
     const teamMsg = (t, type) => { const m = $('team-msg'); m.className = 'alert alert-' + (type || 'success'); m.textContent = t; m.hidden = false; };
     $('team-rules').textContent = Auth.role() === 'admin'
-        ? 'Como administrador, você coloca qualquer conta como leitor, jornalista ou coordenador. Administradores só mudam pelo SQL do Supabase, e ninguém muda o próprio cargo.'
-        : 'Como coordenador, você coloca ou tira jornalistas. Coordenadores são definidos pelo administrador, e ninguém muda o próprio cargo.';
+        ? 'Como administrador, você coloca qualquer conta como leitor, jornalista ou coordenador e dá selos de perfil. Administradores só mudam pelo SQL do Supabase, e ninguém muda o próprio cargo nem os próprios selos.'
+        : 'Como coordenador, você coloca ou tira jornalistas e dá selos de perfil a leitores e jornalistas. Coordenadores são definidos pelo administrador, e ninguém muda o próprio cargo nem os próprios selos.';
+    $('badge-legend').innerHTML = Object.keys(JB.BADGES).map(b => '<li class="mb-1">' + util.profileBadgesHTML([b]) + ' <span class="text-muted">' + esc(JB.BADGES[b].desc) + '</span></li>').join('');
+    // Sem busca, a aba mostra só a equipe e quem tem selo: quem volta a leitor sai da lista.
+    let teamQuery = '';
+    const inTeamView = m => teamQuery || util.isStaffRole(m.role) || (m.badges || []).length;
     function renderTeam() {
-        $('team-rows').innerHTML = Members.list().map(m => {
+        $('team-scope').textContent = teamQuery ? 'Resultado da busca por “' + teamQuery + '” (todas as contas).' : 'Mostrando a equipe e quem tem selo. Busque um nome ou e-mail para achar qualquer conta.';
+        $('team-rows').innerHTML = Members.list().filter(inTeamView).map(m => {
             const roles = Auth.assignableRoles(m);
             const ctl = roles.length
                 ? '<select class="form-select form-select-sm" data-role-for="' + esc(m.id) + '" aria-label="Cargo de ' + esc(m.name) + '">' +
                   roles.map(r => '<option value="' + r + '"' + (r === m.role ? ' selected' : '') + '>' + esc(util.roleLabel(r)) + '</option>').join('') + '</select>' +
-                  '<button class="btn btn-sm btn-primary" type="button" data-role-save="' + esc(m.id) + '">Salvar</button>'
+                  '<button class="btn btn-sm btn-primary" type="button" data-role-save="' + esc(m.id) + '">Salvar</button>' +
+                  (util.isStaffRole(m.role) && roles.includes('leitor') ? '<button class="btn btn-sm btn-outline-danger" type="button" data-role-remove="' + esc(m.id) + '">Remover da equipe</button>' : '')
                 : '<span class="small text-muted">' + (m.id === me.id ? 'Você' : m.role === 'admin' ? 'Só pelo SQL do Supabase' : 'Definido pelo administrador') + '</span>';
+            const badges = Auth.canGiveBadges(m)
+                ? '<details class="team-badges"><summary class="small">Selos (' + (m.badges || []).length + ')</summary><div class="d-flex flex-wrap gap-2 align-items-center mt-2">' +
+                  Object.keys(JB.BADGES).map(b => '<label class="form-check form-check-inline small mb-0"><input class="form-check-input" type="checkbox" data-badge-of="' + esc(m.id) + '" value="' + b + '"' + ((m.badges || []).includes(b) ? ' checked' : '') + '> ' + esc(JB.BADGES[b].label) + '</label>').join('') +
+                  '<button class="btn btn-sm btn-outline-dark" type="button" data-badge-save="' + esc(m.id) + '">Salvar selos</button></div></details>' : '';
             return '<div class="team-row">' + util.avatarHTML({ name: m.name }, 'avatar-sm') +
-                '<div class="team-who"><a href="' + esc(util.profileUrl(m.id)) + '">' + esc(m.name) + '</a> ' + util.sealHTML(m.role) +
-                '<small class="d-block text-muted text-break">' + esc(m.email || '') + ' · ' + esc(util.roleLabel(m.role)) + '</small></div>' +
+                '<div class="team-who"><a href="' + esc(util.profileUrl(m.id)) + '">' + esc(m.name) + '</a> ' + util.sealHTML(m.role) + ' ' + util.profileBadgesHTML(m.badges) +
+                '<small class="d-block text-muted text-break">' + esc(m.email || '') + ' · ' + esc(util.roleLabel(m.role)) + '</small>' + badges + '</div>' +
                 '<div class="team-ctl">' + ctl + '</div></div>';
-        }).join('') || '<p class="text-muted mb-0">Nenhuma conta encontrada.</p>';
+        }).join('') || '<p class="text-muted mb-0">' + (teamQuery ? 'Nenhuma conta encontrada.' : 'Ninguém na equipe além de você. Busque uma conta para dar um cargo ou selo.') + '</p>';
     }
     function renderTeamLog() {
         $('team-log').innerHTML = Members.log().slice(0, 15).map(l => '<li><span><strong>' + esc(l.targetName || 'Conta removida') + '</strong>: ' + esc(util.roleLabel(l.oldRole)) + ' → ' + esc(util.roleLabel(l.newRole)) +
@@ -304,17 +348,31 @@ JB.authReady.then(function () {
         const [ok] = await Promise.all([Members.load(q), Members.loadLog().then(renderTeamLog)]);
         if (ok) renderTeam(); else $('team-rows').innerHTML = util.errorHTML('Não foi possível carregar as contas agora.');
     }
-    $('team-search').addEventListener('submit', e => { e.preventDefault(); $('team-msg').hidden = true; loadTeam(e.target.elements.q.value); });
+    $('team-search').addEventListener('submit', e => { e.preventDefault(); $('team-msg').hidden = true; teamQuery = e.target.elements.q.value.trim(); loadTeam(teamQuery); });
     $('team-rows').addEventListener('click', async e => {
-        const b = e.target.closest('[data-role-save]'); if (!b) return;
-        const m = Members.list().find(x => x.id === b.dataset.roleSave); if (!m) return;
+        const bs = e.target.closest('[data-badge-save]');
+        if (bs) {
+            const m = Members.list().find(x => x.id === bs.dataset.badgeSave); if (!m) return;
+            const picked = Array.prototype.filter.call($('team-rows').querySelectorAll('[data-badge-of="' + CSS.escape(m.id) + '"]'), c => c.checked).map(c => c.value);
+            bs.disabled = true;
+            const r = await Members.setBadges(m.id, picked);
+            if (r.ok) teamMsg(picked.length ? m.name + ' agora tem: ' + picked.map(b => JB.BADGES[b].label).join(', ') + '.' : 'Selos de ' + m.name + ' removidos.');
+            else teamMsg(r.error, 'danger');
+            renderTeam();
+            return;
+        }
+        const rm = e.target.closest('[data-role-remove]');
+        const b = rm || e.target.closest('[data-role-save]'); if (!b) return;
+        const m = Members.list().find(x => x.id === (rm ? rm.dataset.roleRemove : b.dataset.roleSave)); if (!m) return;
         const sel = $('team-rows').querySelector('[data-role-for="' + CSS.escape(m.id) + '"]');
-        const role = sel.value;
+        const role = rm ? 'leitor' : sel.value;
         if (role === m.role) { teamMsg(m.name + ' já é ' + util.roleLabel(role).toLowerCase() + '.', 'secondary'); return; }
-        if (!confirm('Mudar o cargo de ' + m.name + ' de ' + util.roleLabel(m.role) + ' para ' + util.roleLabel(role) + '?')) { sel.value = m.role; return; }
+        const ask = rm ? 'Remover ' + m.name + ' da equipe? A conta volta a ser de leitor e perde o acesso ao painel na hora (as matérias dela continuam).'
+            : 'Mudar o cargo de ' + m.name + ' de ' + util.roleLabel(m.role) + ' para ' + util.roleLabel(role) + '?';
+        if (!confirm(ask)) { sel.value = m.role; return; }
         b.disabled = sel.disabled = true;
         const r = await Members.setRole(m.id, role);
-        if (r.ok) { teamMsg(m.name + ' agora é ' + util.roleLabel(role).toLowerCase() + '.'); await Members.loadLog(); renderTeamLog(); }
+        if (r.ok) { teamMsg(rm ? m.name + ' saiu da equipe (agora é leitor).' : m.name + ' agora é ' + util.roleLabel(role).toLowerCase() + '.'); await Members.loadLog(); renderTeamLog(); }
         else teamMsg(r.error, 'danger');
         renderTeam();
     });
@@ -327,13 +385,18 @@ JB.authReady.then(function () {
         'comment.moderate': 'apagou um comentário em', 'report.delete': 'apagou a denúncia', 'author.create': 'cadastrou o autor', 'author.edit': 'editou o autor', 'author.delete': 'excluiu o autor',
         'role.change': 'mudou o cargo de', 'account.login': 'entrou na conta', 'account.mfa.enabled': 'ativou a verificação em duas etapas', 'account.mfa.disabled': 'removeu um app autenticador',
         'account.mfa.verified': 'confirmou o código do app autenticador', 'account.password.changed': 'trocou a senha', 'account.age_confirmed': 'confirmou a idade',
-        'account.underage_deleted': 'teve a conta apagada (menor de ' + JB.MIN_AGE + ' anos)', 'account.deleted': 'excluiu a própria conta'
+        'account.underage_deleted': 'teve a conta apagada (menor de ' + JB.MIN_AGE + ' anos)', 'account.deleted': 'excluiu a própria conta',
+        'badge.change': 'mudou os selos de', 'news.editors': 'mudou os colaboradores de', 'site.lockdown_on': 'LIGOU o', 'site.lockdown_off': 'desligou o'
     };
+    const badgeList = l => (l || []).map(b => JB.BADGES[b] ? JB.BADGES[b].label : b).join(', ') || 'nenhum';
     function auditDetail(a) {
         const d = a.details || {};
         if (a.action === 'news.status') return (STATUS[d.from] || d.from) + ' → ' + (STATUS[d.to] || d.to);
         if (a.action === 'role.change') return util.roleLabel(d.from) + ' → ' + util.roleLabel(d.to);
         if (a.action === 'comment.moderate') return 'comentário de ' + (d.autor || '?');
+        if (a.action === 'badge.change') return badgeList(d.from) + ' → ' + badgeList(d.to);
+        if (a.action === 'news.editors') return (d.names || []).length ? 'agora: ' + d.names.join(', ') : 'sem colaboradores';
+        if (a.action === 'site.lockdown_on' && d.message) return 'mensagem: ' + d.message;
         if (a.action === 'account.login' || a.action === 'account.mfa.verified') return d.aal === 'aal2' ? 'com verificação em duas etapas' : 'só com a senha';
         return '';
     }
@@ -370,8 +433,36 @@ JB.authReady.then(function () {
         $('sec-staff').innerHTML = ov === null ? failed('a lista da equipe') : staff.map(s => '<div class="d-flex justify-content-between gap-2 border-bottom py-1 small"><span>' + esc(s.name) + ' <span class="opacity-75">(' + esc(util.roleLabel(s.role)) + ')</span></span>' +
             '<span>' + (s.mfa ? '<span class="badge bg-success">MFA ativo</span>' : '<span class="badge bg-danger">Sem MFA</span>') + (s.age_ok ? '' : ' <span class="badge bg-secondary">idade pendente</span>') + '</span></div>').join('') || '<p class="small text-muted mb-0">Sem equipe cadastrada.</p>';
     }
+    /* ---------- Modo lockdown ---------- */
+    let lockOn = false;
+    const lockAlert = (t, type) => { const m = $('lockdown-alert'); m.className = 'alert mt-3 mb-0 alert-' + (type || 'success'); m.textContent = t; m.hidden = false; };
+    function paintLockdown(st) {
+        lockOn = !!(st && st.lockdown);
+        $('lockdown-panel').classList.toggle('is-on', lockOn);
+        $('lockdown-state').className = 'badge ' + (lockOn ? 'bg-danger' : 'bg-success');
+        $('lockdown-state').textContent = lockOn ? 'LIGADO: site fechado ao público' : 'Desligado: site aberto';
+        $('lockdown-toggle').className = 'btn ' + (lockOn ? 'btn-success' : 'btn-danger');
+        $('lockdown-toggle').textContent = lockOn ? 'Desligar e reabrir o site' : 'Ligar o modo lockdown';
+        if (lockOn) $('lockdown-msg').value = st.message || '';
+        $('lockdown-info').textContent = lockOn && st.since ? 'Ligado desde ' + util.fmtDate(st.since) + '.' : JB.mode === 'local' ? 'Demonstração local: só muda a tela deste navegador.' : '';
+    }
+    $('lockdown-form').addEventListener('submit', async e => {
+        e.preventDefault();
+        const on = !lockOn, text = $('lockdown-msg').value.trim();
+        if (!confirm(on ? 'Ligar o modo lockdown? O site fecha AGORA para todo mundo que não é da equipe (leitores, comentários, denúncias e cadastros param).' : 'Desligar o modo lockdown e reabrir o site para o público?')) return;
+        const btn = $('lockdown-toggle'); btn.disabled = true;
+        const r = await JB.Site.setLockdown(on, text);
+        btn.disabled = false;
+        if (!r.ok) { lockAlert(r.error, 'danger'); return; }
+        paintLockdown({ lockdown: on, message: text, since: new Date().toISOString() });
+        lockAlert(on ? 'Modo lockdown ligado. Só a equipe (com a verificação em duas etapas) acessa o conteúdo.' : 'Site reaberto ao público.', on ? 'warning' : 'success');
+        if (securityLoaded) loadAudit();
+    });
+    if (editor) JB.Site.status().then(paintLockdown, () => paintLockdown(null));
+
     let securityLoaded = false;
-    document.querySelector('[data-bs-target="#tab-security"]').addEventListener('shown.bs.tab', () => { if (!securityLoaded) { securityLoaded = true; loadSecurity(); loadAudit(); } });
+    const openSecurity = () => { if (!securityLoaded) { securityLoaded = true; loadSecurity(); loadAudit(); } };
+    document.querySelector('[data-bs-target="#tab-security"]').addEventListener('shown.bs.tab', openSecurity);
     $('sec-recheck').addEventListener('click', loadSecurity);
     $('audit-filter').addEventListener('change', () => loadAudit());
     $('audit-more').addEventListener('click', () => loadAudit(true));
@@ -385,10 +476,22 @@ JB.authReady.then(function () {
         JB.Newsletter.load().then(ok => { loaded.newsletter = ok; renderStats(); });
     }
 
+    // Cargo trocado (ou conta removida da equipe) por outra pessoa enquanto o painel está aberto:
+    // confere de novo ao voltar para a aba e a cada minuto, e fecha o painel se perdeu o acesso.
+    const recheck = async () => {
+        if (document.hidden) return;
+        await Auth.refresh();
+        if (!Auth.isStaff() || Auth.isEditor() !== editor) location.reload();
+    };
+    window.addEventListener('focus', recheck);
+    setInterval(recheck, 60000);
+
     JB.ready.then(() => {
         $('admin-loading').hidden = true;
         if (JB.loadError) { $('gate').hidden = true; $('admin-error').innerHTML = util.errorHTML(); return; }
         $('panel').hidden = false;
+        // Link "Gerenciar" do aviso de lockdown (admin.html#seguranca)
+        if (editor && location.hash === '#seguranca') bootstrap.Tab.getOrCreateInstance(document.querySelector('[data-bs-target="#tab-security"]')).show();
         resetAuthor();
         renderNews(); renderAuthors();
         if (editor) JB.Comments.load().then(ok => { loaded.comments = ok; if (ok) renderComments(); else $('comment-rows').innerHTML = failed('os comentários'); });

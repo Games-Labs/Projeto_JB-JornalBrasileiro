@@ -28,19 +28,24 @@
     // Colunas da migração supabase/09_editor_video_comentarios.sql (news.video, comments.edited_at).
     // Se o site novo for publicado antes da migração, o banco responde 42703 (coluna inexistente):
     // o site volta para as colunas antigas e continua no ar, só sem vídeo e sem edição de comentário.
-    const schema = { news: true, comments: true };
-    const newsCols = () => schema.news ? NEWS_COLS_V8 + ',video' : NEWS_COLS_V8;
+    // Colunas da migração supabase/10_equipe_selos_lockdown.sql (news.coauthors/editors, authors.official,
+    // reports.attachments): mesma ideia, um nível a mais. schema.x = quantos níveis de colunas novas o banco tem.
+    const schema = { news: 2, comments: 1, authors: 1, reports: 1 };
+    const newsCols = () => NEWS_COLS_V8 + (schema.news >= 1 ? ',video' : '') + (schema.news >= 2 ? ',coauthors,editors' : '');
     const commentCols = () => schema.comments ? COMMENT_COLS_V8 + ',edited_at' : COMMENT_COLS_V8;
+    const AUTHOR_COLS_V9 = 'id,name,role,bio,avatar,columnist,created_at';
+    const authorCols = () => schema.authors ? AUTHOR_COLS_V9 + ',official' : AUTHOR_COLS_V9;
+    const REPORT_COLS_V9 = 'id,subject,story,anonymous,name,email,attachment,date';
+    const reportCols = () => schema.reports ? REPORT_COLS_V9 + ',attachments' : REPORT_COLS_V9;
     async function compat(key, build) {
-        const r = await build();
-        if (r && r.error && r.error.code === '42703' && schema[key]) {
-            schema[key] = false;
-            console.warn('O banco ainda não tem a migração supabase/09_editor_video_comentarios.sql (' + key + '). Usando as colunas antigas.');
-            return build();
+        let r = await build();
+        while (r && r.error && r.error.code === '42703' && schema[key] > 0) {
+            schema[key]--;
+            console.warn('O banco ainda não tem todas as migrações de supabase/ (' + key + '). Usando as colunas antigas.');
+            r = await build();
         }
         return r;
     }
-    const AUTHOR_COLS = 'id,name,role,bio,avatar,columnist,created_at';
     const TIMEOUT_MS = 15000, UPLOAD_TIMEOUT_MS = 60000;
 
     // Dados que vieram de versões antigas do modo local não valem mais aqui (e alguns são
@@ -159,13 +164,16 @@
     let googleCheck = null;
 
     /* ---------- Carga inicial (em paralelo) ---------- */
-    const toUser = (p, u) => ({ id: p.id, name: p.name, email: u.email, role: p.role, bio: p.bio, city: p.city, interests: p.interests || [], avatar: p.avatar || '', created: p.created_at, ageVerified: p.age_verified_at || null });
-    const toAuthor = a => ({ id: a.id, name: a.name, role: a.role, bio: a.bio, avatar: a.avatar || '', columnist: !!a.columnist, created: a.created_at });
+    const toUser = (p, u) => ({ id: p.id, name: p.name, email: u.email, role: p.role, bio: p.bio, city: p.city, interests: p.interests || [], avatar: p.avatar || '', created: p.created_at, ageVerified: p.age_verified_at || null, badges: p.badges || [] });
+    const toAuthor = a => ({ id: a.id, name: a.name, role: a.role, bio: a.bio, avatar: a.avatar || '', columnist: !!a.columnist, official: !!a.official, created: a.created_at });
 
+    const PROFILE_COLS = 'id,name,role,bio,city,interests,avatar,created_at,age_verified_at';
+    let profileBadges = true;   // false = banco sem a migração 10 (sem profiles.badges)
     async function loadMe(user) {
         C.me = null;
         if (!user) return;
-        const p = await get(() => sb.from('profiles').select('id,name,role,bio,city,interests,avatar,created_at,age_verified_at').eq('id', user.id).maybeSingle(), null);
+        const q = () => sb.from('profiles').select(PROFILE_COLS + (profileBadges ? ',badges' : '')).eq('id', user.id).maybeSingle();
+        const p = await get(async () => { let r = await q(); if (r.error && r.error.code === '42703' && profileBadges) { profileBadges = false; r = await q(); } return r; }, null);
         if (p) C.me = toUser(p, user);
     }
     // Nível da sessão (aal1 = só senha/Google; aal2 = passou pelo app autenticador) e se a conta tem
@@ -185,9 +193,15 @@
 
     const session = sb ? sb.auth.getSession().then(r => (r.data && r.data.session) || null, e => { console.error(e); return null; }) : Promise.resolve(null);
     const authReady = session.then(s => Promise.all([loadMe(s && s.user), refreshAal()]));
+    // Modo lockdown: estado público do site (sem a migração 10, o site fica sempre aberto)
+    const siteReady = sb ? sb.rpc('site_status').then(r => {
+        if (r.error) { if (r.error.code !== 'PGRST202') console.warn(r.error); return { lockdown: false, message: '', since: null }; }
+        const d = r.data || {};
+        return { lockdown: !!d.lockdown, message: String(d.message || ''), since: d.since || null };
+    }, e => { console.error(e); return { lockdown: false, message: '', since: null }; }) : Promise.resolve({ lockdown: false, message: '', since: null });
     const dataReady = Promise.all([
         get(() => compat('news', () => sb.from('news').select(newsCols()).order('date', { ascending: false })), [], true).then(rows => { C.news = rows.map(JB.util.withDefaults); }),
-        get(() => sb.from('authors').select(AUTHOR_COLS).order('name'), []).then(rows => { C.authors = rows.map(toAuthor); }),
+        get(() => compat('authors', () => sb.from('authors').select(authorCols()).order('name')), []).then(rows => { C.authors = rows.map(toAuthor); }),
         get(() => sb.from('news_views').select('news_id,count'), []).then(rows => { C.views = {}; rows.forEach(v => { C.views[v.news_id] = Number(v.count); }); }),
         session.then(s => loadFavs(s && s.user))
     ]);
@@ -203,7 +217,8 @@
         save(item) {
             const i = C.news.findIndex(x => x.id === item.id);
             delete item.updated_at;   // definida só pelo banco (gatilho news_track_changes)
-            if (!schema.news) delete item.video;   // banco sem a migração 09
+            if (schema.news < 1) delete item.video;   // banco sem a migração 09
+            if (schema.news < 2) { delete item.coauthors; delete item.editors; }   // banco sem a migração 10
             if (i >= 0) {
                 const before = Object.assign({}, C.news[i]);
                 const change = JB.util.changeKind(before, item);
@@ -234,7 +249,12 @@
             C.news = C.news.filter(x => x.id !== id);
             C.comments = C.comments.filter(c => c.newsId !== id);
             run(() => sb.from('news').delete().eq('id', id), 'excluir a notícia', () => { C.news = before.news; C.comments = before.comments; })
-                .then(ok => { if (ok && gone) removeImage(gone.image); });
+                .then(ok => {
+                    if (!ok || !gone) return;
+                    removeImage(gone.image);
+                    // imagens do meio do texto enviadas pelo editor (as versões também foram apagadas)
+                    (gone.body || []).map(JB.util.blockOf).filter(b => b.type === 'img').forEach(b => removeImage(b.src));
+                });
         }
     });
 
@@ -247,6 +267,7 @@
         save(a) {
             if (C.authors.some(x => x.name.toLowerCase() === a.name.trim().toLowerCase() && x.id !== a.id)) return { ok: false, error: 'Já existe um autor com esse nome.' };
             const row = { name: a.name.trim(), role: a.role || '', bio: a.bio || '', avatar: a.avatar || '', columnist: !!a.columnist };
+            if (schema.authors) row.official = !!a.official;   // banco sem a migração 10 não tem a coluna
             const i = C.authors.findIndex(x => x.id === a.id);
             if (i >= 0) {
                 const before = Object.assign({}, C.authors[i]);
@@ -340,11 +361,14 @@
             }, 'editar o comentário', () => { Object.assign(c, before); });
             return true;
         },
+        // Só quem tem conta liberada comenta. O banco grava o nome e a autoria da própria conta
+        // (gatilho comments_set_author) e recusa visitantes (RLS). false = não enviado.
         add(id, c) {
-            // Logado: o banco grava o nome e a autoria da própria conta (gatilho comments_set_author).
-            const row = { id: uuid(), news_id: id, user_id: C.me ? C.me.id : null, name: C.me ? C.me.name : c.name, text: c.text };
+            if (!C.me || !Auth.accountOk()) return false;
+            const row = { id: uuid(), news_id: id, user_id: C.me.id, name: C.me.name, text: c.text };
             C.comments.push({ id: row.id, newsId: id, userId: row.user_id, name: row.name, text: c.text, date: nowIso() });
             run(() => sb.from('comments').insert(row), 'publicar o comentário', () => { C.comments = C.comments.filter(x => x.id !== row.id); });
+            return true;
         },
         remove(newsId, cid) {
             const before = C.comments;
@@ -353,22 +377,60 @@
         }
     });
 
-    /* ---------- Denúncias (qualquer um envia; só coordenador/admin lê) ---------- */
+    /* ---------- Denúncias (quem tem conta envia; só coordenador/admin lê) ---------- */
+    // Anexos no bucket PRIVADO report-files: "<pasta aleatória>/<uuid>.<ext>". Só coordenador/admin
+    // abrem, por links temporários (createSignedUrls).
+    const REPORT_BUCKET = 'report-files';
+    const EXT = { 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/png': 'png', 'application/pdf': 'pdf' };
     Object.assign(Reports, {
         async load() {
             if (!Auth.isEditor()) return true;
-            const rows = await get(() => sb.from('reports').select('id,subject,story,anonymous,name,email,attachment,date').order('date', { ascending: false }), null);
-            if (rows) C.reports = rows;
+            const rows = await get(() => compat('reports', () => sb.from('reports').select(reportCols()).order('date', { ascending: false })), null);
+            if (rows) C.reports = rows.map(r => Object.assign({ attachments: [] }, r));
             return !!rows;
         },
         all() { return C.reports.slice().sort(byDateDesc); },
+        // null = sem conta liberada (o banco recusaria)
         add(r) {
+            if (!C.me || !Auth.accountOk()) return null;
             const row = { id: uuid(), subject: r.subject, story: r.story, anonymous: !!r.anonymous, name: r.name || '', email: r.email || '', attachment: r.attachment || null };
-            if (Auth.isEditor()) C.reports.push(Object.assign({ date: nowIso() }, row));
+            const files = (r.attachments || []).map(a => ({ path: a.path, name: a.name, size: a.size, type: a.type }));
+            if (files.length) row.attachments = files;
+            if (Auth.isEditor()) C.reports.push(Object.assign({ date: nowIso(), attachments: [] }, row));
             run(() => sb.from('reports').insert(row), 'enviar a denúncia', () => { C.reports = C.reports.filter(x => x.id !== row.id); });
             return row;
         },
-        remove(id) { const before = C.reports; C.reports = C.reports.filter(r => r.id !== id); run(() => sb.from('reports').delete().eq('id', id), 'excluir a denúncia', () => { C.reports = before; }); }
+        remove(id) {
+            const before = C.reports, gone = C.reports.find(r => r.id === id);
+            C.reports = C.reports.filter(r => r.id !== id);
+            run(() => sb.from('reports').delete().eq('id', id), 'excluir a denúncia', () => { C.reports = before; })
+                .then(ok => { if (ok && gone) Reports.removeFiles(gone.attachments); });
+        },
+        // Envia um anexo (já reduzido, se for imagem). folder: a mesma pasta para os arquivos de uma denúncia.
+        async upload(blob, name, folder) {
+            if (!sb) throw new Error('Sem conexão com o servidor.');
+            const ext = EXT[blob.type];
+            if (!ext) throw new Error('Formato não aceito: envie imagens (JPG, PNG, WebP) ou PDF.');
+            const path = folder + '/' + uuid() + '.' + ext;
+            const { error } = await sb.storage.from(REPORT_BUCKET).upload(path, blob, { contentType: blob.type, upsert: false });
+            if (error) { console.error(error); throw new Error('Não foi possível enviar o anexo “' + name + '”. Verifique a conexão (e se a sua conta está liberada) e tente de novo.'); }
+            return { path, name: String(name || 'anexo').slice(0, 200), size: blob.size, type: blob.type };
+        },
+        newFolder: () => uuid(),
+        // { path: link temporário (1 h) } dos anexos, para o painel
+        async fileUrls(list) {
+            const paths = (list || []).map(a => a && a.path).filter(Boolean);
+            if (!paths.length || !sb) return {};
+            const { data, error } = await sb.storage.from(REPORT_BUCKET).createSignedUrls(paths, 3600);
+            if (error) { console.error(error); return null; }
+            const o = {};
+            (data || []).forEach(d => { if (d.signedUrl) o[d.path] = d.signedUrl; });
+            return o;
+        },
+        removeFiles(list) {
+            const paths = (list || []).map(a => a && a.path).filter(Boolean);
+            return paths.length ? run(() => sb.storage.from(REPORT_BUCKET).remove(paths)) : Promise.resolve(true);
+        }
     });
 
     /* ---------- Newsletter (assíncrona: true = inscrito/já inscrito, null = erro) ---------- */
@@ -392,12 +454,13 @@
 
     /* ---------- Membros: cargos (painel), equipe com selo e perfis públicos ---------- */
     // As regras da hierarquia ficam no banco (set_member_role / list_members); aqui só chamamos.
-    const toPublic = p => ({ id: p.id, name: p.name, role: p.role, bio: p.bio || '', avatar: p.avatar || '', created: p.created_at });
+    const toPublic = p => ({ id: p.id, name: p.name, role: p.role, bio: p.bio || '', avatar: p.avatar || '', created: p.created_at, badges: p.badges || [] });
     const roleError = e => {
         const m = (e && e.message) || '';
         if (e && (e.name === 'AuthRetryableFetchError' || e.name === 'AbortError' || /fetch|network/i.test(m))) return 'Falha de conexão. Verifique sua internet e tente novamente.';
         if (/sem permissão/i.test(m)) return 'Você não tem permissão para essa mudança de cargo.';
-        if (/próprio cargo|administradores|coordenadores só|cargo inválido|não encontrada/i.test(m)) return m.charAt(0).toUpperCase() + m.slice(1) + '.';
+        if (/próprio cargo|próprios selos|administradores|coordenadores só|cargo inválido|selo inválido|não encontrada/i.test(m)) return m.charAt(0).toUpperCase() + m.slice(1) + '.';
+        if (e && e.code === 'PGRST202') return 'O banco ainda não tem a migração supabase/10_equipe_selos_lockdown.sql.';
         return 'Não foi possível mudar o cargo agora. Tente novamente.';
     };
     Object.assign(Members, {
@@ -405,8 +468,20 @@
             if (!Auth.isEditor()) { C.members = []; return true; }
             const rows = await get(() => sb.rpc('list_members', { p_query: String(q || '').trim() }), null);
             if (!rows) return false;
-            C.members = rows.map(m => ({ id: m.id, name: m.name, email: m.email, role: m.role, created: m.created_at }));
+            C.members = rows.map(m => ({ id: m.id, name: m.name, email: m.email, role: m.role, created: m.created_at, badges: m.badges || [] }));
             return true;
+        },
+        // Selos de perfil (regras em set_member_badges, no banco)
+        async setBadges(id, badges) {
+            if (!sb) return { ok: false, error: 'Sem conexão com o servidor.' };
+            const list = [...new Set((badges || []).filter(b => JB.BADGES[b]))].sort();
+            try {
+                const { error } = await sb.rpc('set_member_badges', { p_id: id, p_badges: list });
+                if (error) { console.error(error); return { ok: false, error: roleError(error).replace('mudar o cargo', 'mudar os selos') }; }
+            } catch (e) { console.error(e); return { ok: false, error: roleError(e) }; }
+            const m = C.members.find(x => x.id === id); if (m) m.badges = list;
+            C.staffLoaded = null;
+            return { ok: true };
         },
         list() { return C.members.slice(); },
         async setRole(id, role) {
@@ -586,9 +661,24 @@
             if (!C.me) return null;
             const row = {}, before = Object.assign({}, C.me);
             ['name', 'bio', 'city', 'interests', 'avatar'].forEach(k => { if (k in patch) row[k] = patch[k]; });
+            // Conta ainda não liberada (idade ou código do app autenticador pendente): o banco recusaria.
+            if (!Auth.accountOk()) { notify('Conclua a verificação da sua conta (Segurança da conta) antes de editar o perfil.'); syncError('salvar o perfil'); return null; }
             Object.assign(C.me, row);
-            run(() => sb.from('profiles').update(row).eq('id', C.me.id), 'salvar o perfil', () => { if (C.me) Object.assign(C.me, before); });
+            // O RLS não dá erro quando recusa um update: só não altera nenhuma linha. Por isso confere o retorno.
+            run(async () => {
+                const r = await sb.from('profiles').update(row).eq('id', C.me.id).select('id');
+                return !r.error && !(r.data && r.data.length) ? { error: new Error('perfil não atualizado (conta não liberada)') } : r;
+            }, 'salvar o perfil', () => { if (C.me) Object.assign(C.me, before); });
             return C.me;
+        },
+        // Relê o perfil e o nível da sessão (ex.: o cargo foi trocado por um coordenador)
+        async refresh() {
+            if (!sb) return false;
+            const { data } = await sb.auth.getSession().catch(() => ({ data: null }));
+            const user = data && data.session && data.session.user;
+            if (!user) { C.me = null; return true; }
+            await Promise.all([loadMe(user), refreshAal()]);
+            return true;
         },
         // Confere a senha atual (novo login, com CAPTCHA). Quem tem MFA digita o código de novo,
         // porque o Supabase só troca a senha de uma conta com MFA numa sessão aal2.
@@ -742,11 +832,25 @@
         googleEnabled: () => Auth.googleAvailable()
     };
 
+    /* ---------- Modo lockdown (aba Segurança): o banco fecha o site para quem não é da equipe ---------- */
+    JB.Site = {
+        status: () => siteReady,
+        async setLockdown(on, message) {
+            if (!sb) return { ok: false, error: 'Sem conexão com o servidor.' };
+            const { error } = await sb.rpc('set_lockdown', { p_on: !!on, p_message: String(message || '').slice(0, 500) });
+            if (error) {
+                console.error(error);
+                return { ok: false, error: error.code === 'PGRST202' ? 'O banco ainda não tem a migração supabase/10_equipe_selos_lockdown.sql.' : /sem permissão/i.test(error.message || '') ? 'Só coordenadores e administradores (com a verificação em duas etapas) ligam o modo lockdown.' : 'Não foi possível mudar o modo lockdown agora.' };
+            }
+            return { ok: true };
+        }
+    };
+
     JB.storageOk = () => true;
     JB.mode = 'supabase';
     if (!sb) JB.loadError = new Error('supabase-js não carregou');
     JB.authReady = authReady.catch(e => { console.error(e); });
-    JB.ready = Promise.all([JB.authReady, dataReady]).catch(e => { console.error(e); JB.loadError = JB.loadError || e; }).then(() => {
+    JB.ready = Promise.all([JB.authReady, dataReady, siteReady]).catch(e => { console.error(e); JB.loadError = JB.loadError || e; }).then(() => {
         if (JB.loadError) notify('Não foi possível conectar ao servidor. Algumas informações podem não aparecer.', 'warning');
     });
 })();

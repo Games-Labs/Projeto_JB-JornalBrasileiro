@@ -8,8 +8,8 @@ O **Cloudflare Pages** só serve os arquivos estáticos.
 ## 1. Supabase
 
 1. Crie uma conta em <https://supabase.com> e um **New project** (guarde a *Database password* num gerenciador de senhas; o site não usa).
-2. Abra **SQL Editor → New query**, cole o conteúdo de [`supabase/01_schema.sql`](../supabase/01_schema.sql) e clique **Run**. Ele cria tabelas, RLS, privilégios mínimos e o bucket de imagens `news-images` do Storage.
-   - **Projeto criado com uma versão anterior?** Não rode o 01 de novo: rode só as atualizações que faltam, nesta ordem (todas idempotentes, não apagam dados): [`supabase/04_auditoria_seguranca.sql`](../supabase/04_auditoria_seguranca.sql) (auditoria de segurança) [`supabase/05_secoes_editoriais.sql`](../supabase/05_secoes_editoriais.sql) (tipos de conteúdo, ao vivo, checagem, agendamento, autores e versões) [`supabase/07_hierarquia.sql`](../supabase/07_hierarquia.sql) (cargos coordenador/jornalista, perfis públicos e selo) e [`supabase/08_seguranca.sql`](../supabase/08_seguranca.sql) (MFA obrigatório para a equipe, idade mínima, auditoria, limites contra spam e formatos de imagem) e [`supabase/09_editor_video_comentarios.sql`](../supabase/09_editor_video_comentarios.sql) (vídeo do YouTube nas matérias e edição do próprio comentário). Sem o 09 o site continua no ar, mas sem vídeo e sem edição de comentário (o console avisa). Sem o 05 e o 07, o site novo não carrega as notícias. **Atenção ao 08:** depois dele, toda a equipe (inclusive o administrador) só tem os poderes da redação depois de confirmar a idade e ativar a verificação em duas etapas pelo site novo (`pages/seguranca.html`).
+2. Abra **SQL Editor → New query**, cole o conteúdo de [`supabase/01_schema.sql`](../supabase/01_schema.sql) e clique **Run**. Ele cria tabelas, RLS, privilégios mínimos, o bucket público de imagens `news-images` e o bucket **privado** `report-files` (anexos das denúncias) do Storage.
+   - **Projeto criado com uma versão anterior?** Não rode o 01 de novo: rode só as atualizações que faltam, nesta ordem (todas idempotentes, não apagam dados): [`supabase/04_auditoria_seguranca.sql`](../supabase/04_auditoria_seguranca.sql) (auditoria de segurança) [`supabase/05_secoes_editoriais.sql`](../supabase/05_secoes_editoriais.sql) (tipos de conteúdo, ao vivo, checagem, agendamento, autores e versões) [`supabase/07_hierarquia.sql`](../supabase/07_hierarquia.sql) (cargos coordenador/jornalista, perfis públicos e selo) e [`supabase/08_seguranca.sql`](../supabase/08_seguranca.sql) (MFA obrigatório para a equipe, idade mínima, auditoria, limites contra spam e formatos de imagem) e [`supabase/09_editor_video_comentarios.sql`](../supabase/09_editor_video_comentarios.sql) (vídeo do YouTube nas matérias e edição do próprio comentário) e [`supabase/10_equipe_selos_lockdown.sql`](../supabase/10_equipe_selos_lockdown.sql) (selos de perfil, perfis oficiais da redação, coautores e colaboradores de edição, modo lockdown, comentários e denúncias só com conta e anexos reais nas denúncias, no bucket privado `report-files`). Sem o 10 o site continua no ar sem essas funções (o console avisa); **com o site novo publicado antes do 10, visitantes ainda conseguem comentar e denunciar sem conta pelo banco**, então rode o 10 junto com o deploy. Sem o 09 o site continua no ar, mas sem vídeo e sem edição de comentário (o console avisa). Sem o 05 e o 07, o site novo não carrega as notícias. **Atenção ao 08:** depois dele, toda a equipe (inclusive o administrador) só tem os poderes da redação depois de confirmar a idade e ativar a verificação em duas etapas pelo site novo (`pages/seguranca.html`).
 3. (Opcional) Faça o mesmo com [`supabase/02_seed.sql`](../supabase/02_seed.sql) para carregar as 17 notícias de demonstração e com [`supabase/06_exemplos_secoes.sql`](../supabase/06_exemplos_secoes.sql) para os autores e as matérias de exemplo das seções (ao vivo, editorial, opinião, análise, entrevista e checagens).
 4. **Authentication → Sign In / Providers → Email**:
    - Para um trabalho acadêmico é mais simples **desligar "Confirm email"**; assim o cadastro já entra logado.
@@ -68,7 +68,7 @@ Faça nesta ordem: **publique o site novo primeiro** e só depois ligue o CAPTCH
 2. **Verificação em duas etapas (MFA)** — **Authentication → Multi-Factor**: deixe **TOTP (App Authenticator)** com *Enroll* e *Verify* ligados. Obrigatória para a equipe (o banco recusa as ações da redação sem uma sessão verificada) e opcional para leitores, em `pages/seguranca.html`. Se alguém perder o aparelho: **Authentication → Users → (pessoa) → remover o fator**, e ela ativa de novo.
 3. **Login com o Google** — no [Google Cloud Console](https://console.cloud.google.com/apis/credentials): *Create credentials → OAuth client ID → Web application*; em **Authorized redirect URIs** coloque `https://SEU-PROJETO.supabase.co/auth/v1/callback` (aparece na tela do provedor no Supabase). Copie *Client ID* e *Client secret* para **Authentication → Sign In / Providers → Google** e ligue. As **Redirect URLs** do passo 7 precisam incluir o site (o Google volta para `pages/login.html`). O botão "Entrar com o Google" só aparece quando o provedor está ligado. Quem entra pelo Google confirma a idade no primeiro acesso.
 4. **Senhas** — **Authentication → Sign In / Providers → Email**: *Minimum password length* **8** e *Password requirements* **Lowercase, uppercase letters, digits and symbols** (as mesmas regras do site, em `PASSWORD_MIN`/`util.passwordIssues` de `storage.js`). No plano Pro, ligue também **Leaked password protection**.
-5. **Limites de tentativas** — **Authentication → Rate Limits**: o Supabase limita por IP os logins/cadastros, as verificações de código e os e-mails. O site soma uma espera crescente depois de 5 senhas erradas seguidas, e o banco limita comentários (5 por minuto por conta), denúncias e newsletter (30 a cada 10 minutos).
+5. **Limites de tentativas** — **Authentication → Rate Limits**: o Supabase limita por IP os logins/cadastros, as verificações de código e os e-mails. O site soma uma espera crescente depois de 5 senhas erradas seguidas, e o banco limita comentários (5 por minuto por conta), denúncias, newsletter e comentários de visitantes (150 de cada a cada 10 minutos, somando o site inteiro).
 6. **Idade mínima (16 anos)** — imposta pelo banco (`check_signup_age` e `confirm_age`); não há configuração no painel. Para mudar, altere `min_age()` no SQL e `MIN_AGE` em `storage.js`.
 
 ### Criar o primeiro administrador/editor
@@ -86,7 +86,7 @@ Depois de ter um administrador, os outros cargos são dados pelo próprio site: 
 | Cargo | O que faz | Quem dá o cargo |
 |---|---|---|
 | **Administrador** | Tudo | Só o SQL Editor (`03_promover_admin.sql`) |
-| **Coordenador** | Publica, arquiva, corrige e exclui matérias; denúncias, comentários e autores; coloca e tira jornalistas | Administrador |
+| **Coordenador** | Publica, arquiva, corrige e exclui matérias; denúncias, comentários e autores; coloca e tira jornalistas; selos de perfil de leitores e jornalistas; modo lockdown | Administrador |
 | **Jornalista** | Cria e edita as próprias matérias até “Aprovada” (quem publica é o coordenador) | Administrador ou coordenador |
 | **Leitor** | Conta comum | Padrão do cadastro |
 
@@ -106,7 +106,7 @@ As regras valem no banco (RLS e a função `set_member_role`), não só na tela;
    | Build output directory | `/` |
 
 4. **Save and Deploy**. Cada `git push` na `main` publica sozinho. O endereço é `https://NOME.pages.dev`.
-   A pasta [`functions/`](../functions) é publicada junto (Pages Functions, sem configuração): `functions/pages/noticia.js` coloca título, resumo e imagem de cada matéria no HTML para a prévia de links (WhatsApp, X, Facebook). Ela usa a mesma URL e chave **pública** do `config.js`; se trocar de projeto Supabase, troque também ali (ou defina as variáveis `SUPABASE_URL` e `SUPABASE_ANON_KEY` em **Settings → Variables**). As outras Functions completam a prévia das demais páginas (`pages/[[path]].js`, `index.js`) e geram `/sitemap.xml` e `/robots.txt` com o endereço real do site; as peças comuns ficam em `functions/_lib/seo.js`. Teste com o *Sharing Debugger* do Facebook ou colando o link no WhatsApp. **O WhatsApp e o Facebook guardam a prévia de cada link por dias:** um link compartilhado antes do deploy continua com a prévia antiga; para conferir, use um link novo (outra matéria, ou acrescente `&v=2` ao endereço) ou peça "Scrape Again" no Sharing Debugger. Use o endereço de produção (`NOME.pages.dev`), não o de uma prévia de branch. O plano gratuito do Cloudflare inclui 100 mil execuções de Functions por dia (só as páginas HTML passam por elas; imagens, CSS e JS não).
+   A pasta [`functions/`](../functions) é publicada junto (Pages Functions, sem configuração): `functions/pages/noticia.js` coloca título, resumo e imagem de cada matéria no HTML para a prévia de links (WhatsApp, X, Facebook). Ela usa a mesma URL e chave **pública** do `config.js`; se trocar de projeto Supabase, troque também ali (ou defina as variáveis `SUPABASE_URL` e `SUPABASE_ANON_KEY` em **Settings → Variables and Secrets**). O modelo [`exemplosecret.env`](../exemplosecret.env) lista essas variáveis e as credenciais que vão no painel do Supabase (SMTP, Google, chave secreta do Turnstile): copie-o para `.env` (ignorado pelo git), preencha a cópia e nunca faça commit dela. As outras Functions completam a prévia das demais páginas (`pages/[[path]].js`, `index.js`) e geram `/sitemap.xml` e `/robots.txt` com o endereço real do site; as peças comuns ficam em `functions/_lib/seo.js`. Teste com o *Sharing Debugger* do Facebook ou colando o link no WhatsApp. **O WhatsApp e o Facebook guardam a prévia de cada link por dias:** um link compartilhado antes do deploy continua com a prévia antiga; para conferir, use um link novo (outra matéria, ou acrescente `&v=2` ao endereço) ou peça "Scrape Again" no Sharing Debugger. Use o endereço de produção (`NOME.pages.dev`), não o de uma prévia de branch. O plano gratuito do Cloudflare inclui 100 mil execuções de Functions por dia (só as páginas HTML passam por elas; imagens, CSS e JS não).
 
    **Buscadores:** cadastre o site no [Google Search Console](https://search.google.com/search-console) e envie `https://NOME.pages.dev/sitemap.xml`.
 
@@ -150,7 +150,7 @@ No painel do Supabase, **Table Editor**: todas as tabelas devem mostrar *RLS ena
 No SQL Editor:
 
 ```sql
-drop table if exists public.audit_log, public.role_changes, public.favorites, public.news_views, public.newsletter, public.reports,
+drop table if exists public.site_settings, public.audit_log, public.role_changes, public.favorites, public.news_views, public.newsletter, public.reports,
                      public.news_versions, public.authors, public.comments, public.news, public.profiles cascade;
 drop trigger if exists on_auth_user_created on auth.users;
 drop trigger if exists check_signup_age on auth.users;
@@ -160,19 +160,24 @@ drop function if exists public.hit_news(uuid), public.delete_my_account(), publi
                         public.news_set_creator(), public.public_profile(uuid), public.staff_profiles(), public.list_members(text),
                         public.set_member_role(uuid, text), public.confirm_age(date), public.log_account_event(text), public.security_overview(),
                         public.audit(text, text, text, text, jsonb), public.audit_news(), public.audit_comment_delete(), public.audit_report_delete(),
-                        public.audit_authors(), public.audit_profile_role(), public.throttle_inserts() cascade;
+                        public.audit_authors(), public.audit_profile_role(), public.throttle_inserts(), public.site_locked(), public.site_status(),
+                        public.set_lockdown(boolean, text), public.set_member_badges(uuid, text[]), public.audit_profile_badges(), public.news_set_editors(),
+                        public.report_attachments_ok(jsonb), public.report_upload_ok() cascade;
 drop policy if exists "news-images: admin lista" on storage.objects;
 drop policy if exists "news-images: admin envia" on storage.objects;
 drop policy if exists "news-images: admin troca" on storage.objects;
 drop policy if exists "news-images: admin apaga" on storage.objects;
+drop policy if exists "report-files: conta envia" on storage.objects;
+drop policy if exists "report-files: editor le" on storage.objects;
+drop policy if exists "report-files: editor apaga" on storage.objects;
 ```
 
-Esvazie e apague o bucket `news-images` em **Storage** (o SQL não apaga arquivos) e rode o `01_schema.sql` de novo.
+Esvazie e apague os buckets `news-images` e `report-files` em **Storage** (o SQL não apaga arquivos) e rode o `01_schema.sql` de novo.
 
 ## Limites conhecidos (versão acadêmica)
 
 - Fotos de perfil (256 px) continuam salvas como texto (data URL) na tabela `profiles`; só o dono baixa a própria foto. Notícias antigas com imagem em data URL continuam funcionando; novos envios vão para o Storage.
-- O CAPTCHA do Supabase cobre só login, cadastro e recuperação. Comentários anônimos, denúncias e newsletter têm limite por minuto no banco (global para visitantes, então um robô insistente pode travar os comentários anônimos por alguns minutos); o contador de leituras não tem limite. Para produção: uma Edge Function que confira o Turnstile antes de gravar.
+- O CAPTCHA do Supabase cobre só login, cadastro e recuperação. Comentários e denúncias exigem conta (migração 10); eles e a newsletter têm limite por minuto no banco, e os anexos de denúncia, 20 arquivos por conta a cada 10 minutos; o contador de leituras não tem limite. Para produção: uma Edge Function que confira o Turnstile antes de gravar.
 - Todas as notícias publicadas são baixadas de uma vez (sem paginação). Adequado para dezenas/poucas centenas de matérias; acima disso, paginar a listagem.
 - Histórico de leitura e favoritos de visitantes sem conta ficam só no navegador (favoritos vão para a conta no login).
 - Imagem enviada e descartada antes de salvar a notícia fica órfã no bucket (dá para apagar em **Storage**).

@@ -27,11 +27,10 @@
             <h2 class="section-title">Comentários (<span id="comment-count">0</span>)</h2>
             <p class="small text-muted">Os comentários são públicos e moderados pelo editor. Não publique dados pessoais. Com uma conta, você pode editar ou excluir os seus.</p>
             <p class="small visually-hidden" id="comment-msg" role="status"></p>
-            <form id="comment-form" class="panel-box mb-3" novalidate>
-                <div class="row g-3">
-                    <div class="col-md-4"><label class="form-label" for="c-name">Nome</label><input class="form-control" id="c-name" name="name" maxlength="60" required><div class="form-text" id="c-name-help" hidden>Você está logado: o comentário usa o nome da sua conta.</div><div class="invalid-feedback">Informe seu nome.</div></div>
-                    <div class="col-md-8"><label class="form-label" for="c-text">Comentário</label><textarea class="form-control" id="c-text" name="text" rows="2" maxlength="500" required></textarea><div class="invalid-feedback">Escreva o comentário.</div></div>
-                </div>
+            <div id="comment-gate" class="panel-box mb-3" hidden></div>
+            <form id="comment-form" class="panel-box mb-3" method="post" novalidate hidden>
+                <p class="small mb-2" id="c-as"></p>
+                <label class="form-label" for="c-text">Comentário</label><textarea class="form-control" id="c-text" name="text" rows="2" maxlength="500" required></textarea><div class="invalid-feedback">Escreva o comentário.</div>
                 <button class="btn btn-primary btn-sm mt-3" type="submit">Comentar</button>
             </form>
             <div id="comment-list"></div>

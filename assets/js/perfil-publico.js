@@ -20,15 +20,18 @@ JB.ready.then(async function () {
     const own = !!me && me.id === p.id;
     const since = p.created ? new Date(p.created).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) : '';
     // Matérias publicadas criadas por esta conta ou assinadas com o nome dela
-    const news = staff ? News.all().filter(n => n.created_by === p.id || n.author === p.name) : [];
+    const news = staff ? News.all().filter(n => n.created_by === p.id || n.author === p.name || (n.coauthors || []).includes(p.name)) : [];
+    const badges = (p.badges || []).filter(b => JB.BADGES[b]);
 
     box.innerHTML =
         '<header class="profile-hero' + (staff ? ' is-staff' : '') + '">' + util.avatarHTML(p, 'avatar-lg') +
         '<div class="min-w-0"><h1 class="page-title border-0 mb-1">' + esc(p.name) + (staff ? ' ' + util.sealHTML(p.role) : '') + '</h1>' +
-        '<p class="mb-2 fw-semibold profile-role">' + (staff ? esc(util.roleLabel(p.role)) + ' do Jornal Brasileiro' : 'Leitor do Jornal Brasileiro') + '</p>' +
+        (badges.length ? '<p class="mb-2 profile-badges">' + util.profileBadgesHTML(badges) + '</p>' : '') +
+        '<p class="mb-2 fw-semibold profile-role">' + (staff ? esc(util.roleLabel(p.role)) + ' do Jornal Brasileiro' : (badges.length ? 'Membro do Jornal Brasileiro' : 'Leitor do Jornal Brasileiro')) + '</p>' +
         (p.bio ? '<p class="mb-2 profile-bio">' + esc(p.bio) + '</p>' : (own ? '<p class="mb-2 small text-muted">Você ainda não escreveu uma minibiografia.</p>' : '')) +
         '<p class="small text-muted mb-0">' + (since ? 'Membro desde ' + esc(since) : '') + (own ? ' · <a href="perfil.html">Editar meu perfil</a>' : '') + '</p></div></header>' +
         (staff ? '<p class="seal-note small">' + util.sealHTML(p.role) + ' O selo identifica contas da equipe da redação do Jornal Brasileiro. Ele é dado pelo próprio jornal e não pode ser solicitado.</p>' : '') +
+        (badges.length ? '<ul class="seal-note small list-unstyled">' + badges.map(b => '<li>' + util.profileBadgesHTML([b]) + ' ' + esc(JB.BADGES[b].desc) + '</li>').join('') + '<li class="text-muted">Selos de perfil são dados pela coordenação do JB e não dão acesso à redação.</li></ul>' : '') +
         (staff ? '<section class="mb-4"><h2 class="section-title">Matérias publicadas</h2><div class="row g-4">' +
             (news.map(n => '<div class="col-md-6 col-lg-4">' + util.newsCard(n) + '</div>').join('') || '<div class="col-12"><p class="text-muted mb-0">Nenhuma matéria publicada ainda.</p></div>') +
             '</div></section>' : '') +
