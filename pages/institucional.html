@@ -16,6 +16,7 @@
     <link rel="preload" href="../assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="../assets/vendor/bootstrap/bootstrap.min.css">
     <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="../assets/css/motion.css">
     <script>try{var d=document.documentElement,s=localStorage;if(s.getItem('jb_theme')==='dark')d.setAttribute('data-bs-theme','dark');var a=JSON.parse(s.getItem('jb_a11y')||'{}')||{};if(a.font>0&&a.font<4)d.setAttribute('data-font',String(a.font|0));if(a.contrast)d.setAttribute('data-contrast','high')}catch(e){}</script>
 </head>
 <body data-root="../" data-page="institucional">
@@ -107,11 +108,20 @@
                         <li><strong>Só no seu navegador:</strong> a sessão de login, o tema claro/escuro, suas escolhas de cookies, o histórico de leitura, os favoritos de quem navega sem conta e uma cópia das páginas e matérias públicas já abertas, para ler sem internet (nada da sua conta entra nessa cópia). Apagar os dados do site no navegador remove essas informações.</li>
                         <li><strong>Data de nascimento:</strong> usada só para conferir a idade mínima de 16 anos no cadastro (ou no primeiro acesso pelo Google). Ela não é guardada: fica registrado apenas que a idade foi confirmada.</li>
                         <li><strong>Segurança:</strong> as páginas de login, cadastro e recuperação de senha usam o Cloudflare Turnstile (verificação anti-robô, que analisa sinais do navegador sem rastrear para publicidade). Quem entra com o Google compartilha com o JB só nome e e-mail. A verificação em duas etapas guarda no Supabase apenas a chave do seu app autenticador. Ações da redação e eventos de conta (login, troca de senha, ativação da verificação em duas etapas) ficam num registro de auditoria visível só para a coordenação, sem e-mail nem endereço IP.</li>
-                        <li>A contagem de leituras de cada matéria é anônima: não guarda quem leu.</li>
-                        <li>Não usamos ferramentas de publicidade nem de rastreamento de terceiros; a opção de métricas de audiência é demonstrativa. As fontes tipográficas são servidas pelo próprio portal. Vídeos do YouTube nas matérias só são carregados quando você clica para assistir (pelo domínio youtube-nocookie.com); a partir daí, o YouTube pode registrar dados da visita conforme a política dele.</li>
+                        <li>A contagem de leituras de cada matéria e de páginas vistas é anônima: não guarda quem leu. Visitantes diferentes por dia só são contados com o seu consentimento em “Estatísticas”, guardando neste navegador apenas a data da última visita.</li>
+                        <li><strong>Serviços (tempo, cotações, futebol e Hoje na História):</strong> os dados vêm do Open-Meteo, AwesomeAPI, TheSportsDB e da Wikipédia por meio do servidor do JB, então esses serviços não recebem o seu endereço IP. A cidade da previsão só é estimada pela sua conexão (Cloudflare, sem GPS) com o seu consentimento em “Localização aproximada”, e não é guardada no servidor. Escudos dos times e fotos da Wikipédia só são carregados com “Conteúdo de terceiros”.</li>
+                        <li><strong>Notificações:</strong> as matérias que você segue e os seus avisos ficam na sua conta. Se você ativar as notificações com o site fechado, o JB guarda o endereço de entrega do seu navegador (fornecido pelo Google, Mozilla, Apple ou Microsoft), que é apagado quando você desativa ou quando o navegador o recusa.</li>
+                        <li>Não usamos ferramentas de publicidade nem de rastreamento de terceiros. As fontes tipográficas são servidas pelo próprio portal. Vídeos do YouTube nas matérias só são carregados quando você clica para assistir (pelo domínio youtube-nocookie.com); a partir daí, o YouTube pode registrar dados da visita conforme a política dele.</li>
                         <li>Você pode alterar suas preferências a qualquer momento em <button type="button" class="btn btn-link p-0 align-baseline" data-open-cookies>Preferências de Cookies</button>.</li>
                         <li>Você pode editar seu perfil ou excluir sua conta em <a href="perfil.html">Minhas Informações</a>.</li>
                     </ul>
+                </section>
+
+                <section id="cookies" class="mb-5">
+                    <h2 class="section-title">Cookies e armazenamento no navegador</h2>
+                    <p>O JB não usa cookies de publicidade nem rastreadores. Abaixo está tudo o que o site pode guardar no seu navegador, separado por finalidade. Só o necessário funciona antes da sua escolha; ao desligar uma opção, o que dependia dela é apagado na hora.</p>
+                    <div data-cookie-table></div>
+                    <p class="mt-3 mb-0"><button type="button" class="btn btn-primary btn-sm" data-open-cookies>Mudar minhas escolhas</button></p>
                 </section>
             </div>
             <aside class="col-lg-4">
@@ -130,5 +140,6 @@
     <script src="../assets/js/storage.js"></script>
     <script src="../assets/js/supabase-backend.js"></script>
     <script src="../assets/js/layout.js"></script>
+    <script src="../assets/js/motion.js"></script>
 </body>
 </html>

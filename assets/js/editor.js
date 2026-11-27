@@ -7,7 +7,7 @@
    matéria de outro é o banco (RLS); esconder opções aqui é só interface. */
 JB.authReady.then(function () {
     'use strict';
-    const { News, Authors, Auth, Members, Drafts, CATEGORIES, KINDS, VERDICTS, IMAGES, STATUS, CHART_TYPES, util } = JB;
+    const { News, Authors, Auth, Members, Drafts, Tags, Badges, DIVISIONS, VERDICTS, IMAGES, STATUS, CHART_TYPES, util } = JB;
     const { esc } = util;
     const $ = id => document.getElementById(id);
     const form = $('news-form');
@@ -40,11 +40,32 @@ JB.authReady.then(function () {
     const hhmm = () => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
     field('status').innerHTML = allowedStatuses.map(s => '<option value="' + s + '">' + esc(STATUS[s]) + '</option>').join('');
-    $('status-help').textContent = editor ? 'Você pode publicar, agendar e arquivar.' : 'Jornalistas levam a matéria até “Aprovada”; quem publica é um coordenador.';
+    const professor = Auth.role() === 'professor';
+    $('status-help').textContent = editor ? 'Você pode publicar, agendar e arquivar.' : (professor ? 'Professores' : 'Jornalistas') + ' levam o conteúdo até “Aprovada”; quem publica é um coordenador.';
     $('feat-wrap').hidden = !editor;
-    field('category').innerHTML = opts(CATEGORIES, c => c.label);
-    field('kind').innerHTML = opts(KINDS);
     field('verdict').innerHTML += opts(VERDICTS, v => v.label);
+
+    /* ---------- Divisão (Jornal Brasileiro, JB Educa…): cada uma tem as suas editorias e tipos ----------
+       Professores só escrevem no JB Educa (o banco também confere). */
+    const divisions = Auth.divisions();
+    field('division').innerHTML = divisions.map(d => '<option value="' + d + '">' + esc(DIVISIONS[d].name) + '</option>').join('');
+    $('division-wrap').hidden = divisions.length < 2;
+    const divisionFromUrl = new URLSearchParams(location.search).get('divisao');
+    const defaultDivision = divisions.includes(divisionFromUrl) ? divisionFromUrl : divisions[0];
+    function syncDivision() {
+        const key = DIVISIONS[field('division').value] ? field('division').value : 'jb', d = DIVISIONS[key];
+        const cat = field('category').value, kind = field('kind').value;
+        field('category').innerHTML = opts(d.categories, c => c.label);
+        field('kind').innerHTML = opts(d.kinds);
+        field('category').value = d.categories[cat] ? cat : d.defaultCategory;
+        field('kind').value = d.kinds[kind] ? kind : d.defaultKind;
+        $('cat-label').textContent = key === 'educa' ? 'Disciplina' : 'Editoria';
+        $('division-help').textContent = d.desc;
+        $('rte-ex-btn').hidden = key !== 'educa';
+        form.dataset.division = key;
+        if (typeof syncKind === 'function') syncKind();
+    }
+    field('division').addEventListener('change', () => { syncDivision(); if (!field('image').value) setImage(''); renderCard(); });
     field('chartType').innerHTML = opts(CHART_TYPES);
 
     /* =====================================================================
@@ -59,6 +80,11 @@ JB.authReady.then(function () {
     const isBlock = n => n.nodeType === 1 && BLOCK_RE.test(n.nodeName);
     const hasBlockInside = n => n.nodeType === 1 && typeof n.querySelector === 'function' && !!n.querySelector(BLOCK_SEL);
     const escInline = s => s.replace(/([\\*[\]])/g, '\\$1');
+    // Fórmulas (MathML gerado por util.texToMathML): voltam a ser o LaTeX guardado na <annotation>.
+    // As barras são dobradas, como no resto do texto (util.blockOf/inlineHTML desfazem).
+    const isMath = n => n.nodeType === 1 && String(n.nodeName).toLowerCase() === 'math';
+    const mathTex = m => { const a = m.querySelector('annotation'); return String(a ? a.textContent : m.textContent).replace(/[$\n\r]+/g, ' ').trim().slice(0, 500); };
+    const escTex = s => s.replace(/\\/g, '\\\\');
     const URL_ESC = { '(': '%28', ')': '%29', ' ': '%20', '*': '%2A' };
     const wrapWith = (s, mark) => { const x = /^(\s*)([\s\S]*?)(\s*)$/.exec(s); return x[2] ? x[1] + mark + x[2] + mark + x[3] : s; };
     const wrapLink = (s, href) => { const x = /^(\s*)([\s\S]*?)(\s*)$/.exec(s); return x[2] && !/\n/.test(x[2]) ? x[1] + '[' + x[2] + '](' + href.replace(/[()\s*]/g, c => URL_ESC[c] || '') + ')' + x[3] : s; };
@@ -68,6 +94,7 @@ JB.authReady.then(function () {
         let out = '';
         Array.prototype.forEach.call(nodes, c => {
             if (c.nodeType === 3) { out += escInline(c.nodeValue.replace(/[\s\u00A0]+/g, ' ')); return; }
+            if (isMath(c)) { const tex = mathTex(c); if (tex) out += '$$' + escTex(tex) + '$$'; return; }   // f\u00F3rmula no meio da frase
             if (c.nodeType !== 1 || SKIP_RE.test(c.nodeName)) return;
             if (c.nodeName === 'BR') { out += '\n'; return; }
             const style = (c.getAttribute('style') || '').toLowerCase();
@@ -103,6 +130,13 @@ JB.authReady.then(function () {
                 if (util.blockOf(b).type === 'img') out.push(b);
                 return;
             }
+            // Fórmula em destaque ("$$ tex") e exercício ("?? enunciado\n=> resposta"), gerados por util.bodyHTML
+            if (t === 'DIV' && c.classList.contains('body-math')) {
+                const m = c.querySelector('math'), tex = m ? mathTex(m) : '';
+                if (tex) out.push('$$ ' + escTex(tex));
+                return;
+            }
+            if (t === 'DIV' && c.classList.contains('body-exercise')) { const b = exerciseOf(c); if (b) out.push(b); return; }
             if (t === 'UL' || t === 'OL') {
                 let i = 0;
                 Array.prototype.forEach.call(c.childNodes, li => {
@@ -125,6 +159,14 @@ JB.authReady.then(function () {
         });
         flush();
     }
+    // Partes de um exercício do texto: {q, a} em marcação (negrito, fórmulas…)
+    function exerciseParts(el) {
+        const q = el.querySelector('.exercise-q'), a = el.querySelector('.exercise-a > div');
+        const qNodes = q ? Array.prototype.filter.call(q.childNodes, x => !(x.nodeType === 1 && x.classList.contains('exercise-n'))) : [];
+        return { q: clean(inlineOf(qNodes)), a: a ? clean(inlineOf(a.childNodes)) : '' };
+    }
+    const exerciseBlock = (q, a) => q ? '?? ' + q + (a ? '\n=> ' + a : '') : '';
+    const exerciseOf = el => { const p = exerciseParts(el); return exerciseBlock(p.q, p.a); };
     const domToBlocks = root => { const out = []; walk(root, out); return out; };
     const readBody = () => domToBlocks(rte);
     function setBody(blocks) {
@@ -141,7 +183,133 @@ JB.authReady.then(function () {
             tools.innerHTML = '<button type="button" class="btn btn-sm btn-light" data-fig="caption">Legenda</button><button type="button" class="btn btn-sm btn-light" data-fig="remove">Remover</button>';
             fig.prepend(tools);
         });
+        // Fórmula em destaque e exercício: também blocos fechados, com "Editar" e "Remover"
+        rte.querySelectorAll('div.body-math:not([data-ed]), div.body-exercise:not([data-ed])').forEach(el => {
+            el.setAttribute('data-ed', ''); el.contentEditable = 'false';
+            const tools = document.createElement('span');
+            tools.className = 'body-figure-tools';
+            tools.innerHTML = '<button type="button" class="btn btn-sm btn-light" data-blk="edit">Editar</button><button type="button" class="btn btn-sm btn-light" data-blk="remove">Remover</button>';
+            el.prepend(tools);
+        });
+        // Fórmula no meio da frase: não se digita dentro (clique para editar)
+        rte.querySelectorAll('p math, li math, h2 math, h3 math, blockquote math').forEach(m => { if (m.getAttribute('contenteditable') !== 'false') m.setAttribute('contenteditable', 'false'); });
+        rte.querySelectorAll('.body-exercise .exercise-n').forEach((s, i) => { s.textContent = 'Exercício ' + (i + 1); });
     }
+    // Coloca um bloco novo (imagem, fórmula, exercício) depois do parágrafo `anchor` e põe o cursor na linha seguinte
+    function placeBlock(el, anchor) {
+        let after;
+        if (anchor && anchor.parentNode === rte && anchor.nodeName === 'P' && !anchor.textContent.trim() && !anchor.querySelector('math')) { anchor.before(el); after = anchor; }
+        else {
+            after = document.createElement('p'); after.appendChild(document.createElement('br'));
+            if (anchor && anchor.parentNode === rte) anchor.after(el, after); else rte.append(el, after);
+        }
+        decorateFigures();
+        rte.focus();
+        const r = document.createRange(); r.setStart(after, 0); r.collapse(true);
+        const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+        onBodyInput();
+    }
+    const blockEl = raw => { const tpl = document.createElement('template'); tpl.innerHTML = util.bodyHTML([raw]); return tpl.content.firstElementChild; };   // gerado por nós, já escapado
+    const topAnchor = () => {
+        const s = getSelection();
+        let top = s.rangeCount && rte.contains(s.anchorNode) ? s.anchorNode : null;
+        while (top && top.parentNode !== rte) top = top.parentNode;
+        return top && top !== rte ? top : null;
+    };
+    const setExpanded = (cmd, on) => { const b = $('rte-toolbar').querySelector('[data-cmd="' + cmd + '"]'); if (b) b.setAttribute('aria-expanded', on ? 'true' : 'false'); };
+
+    /* ---------- Painel "Fórmula" ---------- */
+    let mathAnchor = null, mathRange = null, mathEditing = null;
+    const mathMsg = t => { $('rte-math-msg').textContent = t; };
+    function mathPreview() {
+        const tex = $('rte-math-tex').value.trim();
+        $('rte-math-preview').innerHTML = tex ? util.texToMathML(tex, !$('rte-math-inline').checked) : '';   // tudo escapado em texToMathML
+        mathMsg(/\$/.test(tex) ? 'Tire o símbolo $ da fórmula.' : '');
+    }
+    function openMathPanel(editing) {
+        closePanels('math');
+        mathEditing = editing || null;
+        mathAnchor = topAnchor();
+        const s = getSelection();
+        mathRange = !editing && s.rangeCount && rte.contains(s.anchorNode) ? s.getRangeAt(0).cloneRange() : null;
+        $('rte-math-tex').value = editing ? mathTex(isMath(editing) ? editing : editing.querySelector('math')) : '';
+        $('rte-math-inline').checked = editing ? isMath(editing) : false;
+        $('rte-math-inline').disabled = !!editing;
+        $('rte-math-insert').textContent = editing ? 'Atualizar fórmula' : 'Inserir no texto';
+        mathPreview();
+        $('rte-math-panel').hidden = false; setExpanded('math', true);
+        $('rte-math-tex').focus();
+    }
+    function closeMathPanel() { $('rte-math-panel').hidden = true; setExpanded('math', false); mathEditing = null; }
+    $('rte-math-tex').addEventListener('input', mathPreview);
+    $('rte-math-inline').addEventListener('change', mathPreview);
+    $('rte-math-cancel').addEventListener('click', () => { closeMathPanel(); rte.focus(); });
+    $('rte-math-insert').addEventListener('click', () => {
+        const tex = $('rte-math-tex').value.replace(/[\r\n]+/g, ' ').trim();
+        if (!tex) { mathMsg('Escreva a fórmula.'); $('rte-math-tex').focus(); return; }
+        if (/\$/.test(tex)) { mathMsg('Tire o símbolo $ da fórmula.'); return; }
+        const inline = $('rte-math-inline').checked;
+        if (mathEditing) {
+            if (isMath(mathEditing)) {
+                const tpl = document.createElement('template'); tpl.innerHTML = util.inlineHTML('$$' + escTex(tex) + '$$');
+                const m = tpl.content.firstElementChild; if (m) mathEditing.replaceWith(m);
+            } else { const el = blockEl('$$ ' + escTex(tex)); if (el) mathEditing.replaceWith(el); }
+            closeMathPanel(); decorateFigures(); onBodyInput(); return;
+        }
+        closeMathPanel();
+        if (inline) {
+            rte.focus();
+            if (mathRange) { const s = getSelection(); s.removeAllRanges(); s.addRange(mathRange); }
+            exec('insertHTML', util.inlineHTML('$$' + escTex(tex) + '$$') + '&nbsp;');
+            decorateFigures(); onBodyInput();
+        } else { const el = blockEl('$$ ' + escTex(tex)); if (el) placeBlock(el, mathAnchor); }
+    });
+
+    /* ---------- Painel "Exercício" (JB Educa) ---------- */
+    let exAnchor = null, exEditing = null;
+    const mapMath = (v, f) => v.replace(/\$\$([^$\n]{1,500}?)\$\$/g, (m, t) => '$$' + f(t) + '$$');
+    function openExPanel(editing) {
+        closePanels('exercise');
+        exEditing = editing || null;
+        exAnchor = topAnchor();
+        const p = editing ? exerciseParts(editing) : { q: '', a: '' };
+        // Na caixa de texto as fórmulas aparecem com as barras simples (como a pessoa digita)
+        const plainTex = v => mapMath(v, t => t.replace(/\\\\/g, '\\'));
+        $('rte-ex-q').value = plainTex(p.q); $('rte-ex-a').value = plainTex(p.a);
+        $('rte-ex-insert').textContent = editing ? 'Atualizar exercício' : 'Inserir no texto';
+        $('rte-ex-msg').textContent = '';
+        $('rte-ex-panel').hidden = false; setExpanded('exercise', true);
+        $('rte-ex-q').focus();
+    }
+    function closeExPanel() { $('rte-ex-panel').hidden = true; setExpanded('exercise', false); exEditing = null; }
+    $('rte-ex-cancel').addEventListener('click', () => { closeExPanel(); rte.focus(); });
+    $('rte-ex-insert').addEventListener('click', () => {
+        // Texto digitado é marcação (negrito, itálico…); dentro das fórmulas as barras são dobradas
+        const prep = v => mapMath(v.replace(/\r/g, '').split('\n').map(l => l.trim()).filter(Boolean).join('\n'), t => t.replace(/\\/g, '\\\\')).replace(/^=>/gm, '= >');
+        const q = prep($('rte-ex-q').value), a = prep($('rte-ex-a').value);
+        if (!q) { $('rte-ex-msg').textContent = 'Escreva o enunciado.'; $('rte-ex-q').focus(); return; }
+        const el = blockEl(exerciseBlock(q, a));
+        if (!el) return;
+        if (exEditing) { exEditing.replaceWith(el); closeExPanel(); decorateFigures(); onBodyInput(); return; }
+        closeExPanel(); placeBlock(el, exAnchor);
+    });
+    function closePanels(except) {
+        if (except !== 'image' && !$('rte-img-panel').hidden) closeImgPanel();
+        if (except !== 'math' && !$('rte-math-panel').hidden) closeMathPanel();
+        if (except !== 'exercise' && !$('rte-ex-panel').hidden) closeExPanel();
+    }
+    rte.addEventListener('click', e => {
+        const b = e.target.closest('[data-blk]');
+        if (b) {
+            e.preventDefault();
+            const el = b.closest('.body-math, .body-exercise');
+            if (b.dataset.blk === 'remove') { if (confirm(el.classList.contains('body-math') ? 'Remover esta fórmula?' : 'Remover este exercício?')) { el.remove(); onBodyInput(); } return; }
+            if (el.classList.contains('body-math')) openMathPanel(el); else openExPanel(el);
+            return;
+        }
+        const m = e.target.closest && e.target.closest('math');
+        if (m && !m.closest('.body-math, .body-exercise')) { e.preventDefault(); openMathPanel(m); }
+    });
     const figureEl = (src, caption) => {
         const tpl = document.createElement('template');
         tpl.innerHTML = util.bodyHTML([util.imgBlock(src, caption)]);   // gerado por nós, já escapado
@@ -163,10 +331,8 @@ JB.authReady.then(function () {
     let imgAnchor = null;
     const imgMsg = t => { $('rte-img-msg').textContent = t; };
     function openImgPanel() {
-        const s = getSelection();
-        let top = s.rangeCount && rte.contains(s.anchorNode) ? s.anchorNode : null;
-        while (top && top.parentNode !== rte) top = top.parentNode;
-        imgAnchor = top && top !== rte ? top : null;
+        closePanels('image');
+        imgAnchor = topAnchor();
         $('rte-img-file').value = ''; $('rte-img-url').value = ''; $('rte-img-cap').value = '';
         imgMsg(imgAnchor ? 'A imagem entra logo depois do parágrafo onde está o cursor.' : 'A imagem entra no fim do texto.');
         $('rte-img-panel').hidden = false;
@@ -195,17 +361,8 @@ JB.authReady.then(function () {
         const fig = figureEl(src, cap);
         if (!fig) { imgMsg('Endereço de imagem não aceito.'); return; }
         if (!cap && !confirm('Inserir sem legenda? Sem ela, quem usa leitor de tela não sabe o que a imagem mostra.')) return;
-        let after;
-        if (imgAnchor && imgAnchor.parentNode === rte && imgAnchor.nodeName === 'P' && !imgAnchor.textContent.trim()) { imgAnchor.before(fig); after = imgAnchor; }
-        else {
-            after = document.createElement('p'); after.appendChild(document.createElement('br'));
-            if (imgAnchor && imgAnchor.parentNode === rte) imgAnchor.after(fig, after); else rte.append(fig, after);
-        }
-        decorateFigures(); closeImgPanel();
-        rte.focus();
-        const r = document.createRange(); r.setStart(after, 0); r.collapse(true);
-        const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
-        onBodyInput();
+        closeImgPanel();
+        placeBlock(fig, imgAnchor);
     });
     const paintEmpty = () => { rte.classList.toggle('is-empty', !rte.textContent.trim() && !rte.querySelector('li')); };
 
@@ -248,7 +405,9 @@ JB.authReady.then(function () {
         ul: () => exec('insertUnorderedList'), ol: () => exec('insertOrderedList'),
         clear: () => { exec('removeFormat'); exec('unlink'); if (closestIn(['H2', 'H3'])) exec('formatBlock', 'p'); const q = closestIn(['BLOCKQUOTE']); if (q) unwrap(q); },
         undo: () => exec('undo'), redo: () => exec('redo'),
-        image: () => { if ($('rte-img-panel').hidden) openImgPanel(); else closeImgPanel(); }
+        image: () => { if ($('rte-img-panel').hidden) openImgPanel(); else closeImgPanel(); },
+        math: () => { if ($('rte-math-panel').hidden) openMathPanel(); else closeMathPanel(); },
+        exercise: () => { if ($('rte-ex-panel').hidden) openExPanel(); else closeExPanel(); }
     };
     $('rte-toolbar').addEventListener('mousedown', e => { if (e.target.closest('.rte-btn')) e.preventDefault(); });   // não tira a seleção do texto
     $('rte-toolbar').addEventListener('click', e => {
@@ -525,26 +684,34 @@ JB.authReady.then(function () {
             id: currentId || 'previa', title: field('title').value.trim() || 'Título da matéria', subtitle: field('subtitle').value.trim() || 'Resumo da matéria',
             category: field('category').value, kind: field('kind').value, verdict: field('verdict').value || null, live: field('live').checked,
             video: util.parseVideo(field('video').value), image: field('image').value, author: field('author').value.trim() || 'Redação JB', coauthors: formCoauthors.slice(),
+            division: field('division').value, tags: formTags.slice(), badges: formBadges.slice(), edit_credits: formEditCredits.slice(),
             date: field('pubdate').value ? new Date(field('pubdate').value).toISOString() : nowIso(), body: []
         });
         $('card-preview').innerHTML = util.newsCard(fake);
     }
 
     /* ---------- Estado do formulário, alterações e rascunho no navegador ---------- */
-    const STATE_FIELDS = ['title', 'subtitle', 'kind', 'category', 'verdict', 'author', 'status', 'pubdate', 'image', 'video', 'sources', 'timeline', 'people', 'chartType', 'chartTitle', 'chartUnit', 'chartSource', 'chartItems', 'correction'];
+    const STATE_FIELDS = ['title', 'subtitle', 'division', 'kind', 'category', 'verdict', 'author', 'status', 'pubdate', 'image', 'video', 'sources', 'timeline', 'people', 'chartType', 'chartTitle', 'chartUnit', 'chartSource', 'chartItems', 'correction'];
     function formState() {
         const s = {};
         STATE_FIELDS.forEach(k => { s[k] = field(k).value; });
         s.live = field('live').checked; s.featured = field('featured').checked;
         s.body = readBody();
         s.coauthors = formCoauthors.slice(); s.editors = formEditors.slice();
+        s.editCredits = formEditCredits.slice(); s.tags = formTags.slice(); s.badges = formBadges.slice();
         return s;
     }
     function applyState(s) {
-        STATE_FIELDS.forEach(k => { if (k in s && field(k)) field(k).value = s[k]; });
+        // A divisão vem antes: ela define as opções de editoria e de tipo
+        if (s.division && divisions.includes(s.division)) field('division').value = s.division;
+        syncDivision();
+        STATE_FIELDS.forEach(k => { if (k in s && field(k) && k !== 'division') field(k).value = s[k]; });
         field('live').checked = !!s.live; field('featured').checked = !!s.featured;
         formCoauthors = Array.isArray(s.coauthors) ? s.coauthors.slice() : []; renderCoauthors();
         if (Array.isArray(s.editors)) formEditors = s.editors.slice();
+        formEditCredits = Array.isArray(s.editCredits) ? s.editCredits.slice() : []; renderEditCredits();
+        formTags = Array.isArray(s.tags) ? s.tags.slice() : []; renderTags();
+        formBadges = Array.isArray(s.badges) ? s.badges.slice() : []; renderBadgePicks();
         renderCollab();
         setBody(s.body || []);
         setImage(s.image || '');
@@ -591,28 +758,120 @@ JB.authReady.then(function () {
         $('draft-note').hidden = true;
     });
 
-    /* ---------- Coautores (assinatura) ---------- */
-    let formCoauthors = [];
-    function renderCoauthors() {
-        $('coauthor-chips').innerHTML = formCoauthors.map((c, i) => '<li class="chip">' + esc(c) +
-            '<button type="button" class="chip-del" data-co-del="' + i + '" aria-label="Tirar ' + esc(c) + ' dos coautores">×</button></li>').join('');
+    /* ---------- Créditos: autor, coautores (assinatura) e edição ----------
+       Nomes conferidos sem diferenciar maiúsculas com os autores cadastrados e a equipe: "games" vira
+       "Games" (o nome da conta) e não aparece como uma pessoa a mais. Núcleos da redação ("Redação
+       Investigativa JB", "Núcleo de Verificação JB") são autores oficiais ou nomes livres. A lista de
+       quem pode EDITAR a matéria é outra (Colaboradores de edição): crédito não dá permissão. */
+    const DESK_RE = /\b(reda[cç][aã]o|n[uú]cleo|equipe|mesa|editoria|desk|central|ag[eê]ncia)\b/i;
+    function people() {
+        const out = [];
+        Authors.all().forEach(a => out.push({ name: a.name, official: !!a.official, author: true }));
+        Members.staff().filter(p => util.isStaffRole(p.role)).forEach(p => {
+            const o = out.find(x => util.sameName(x.name, p.name));
+            if (o) { o.role = p.role; o.id = p.id; } else out.push({ name: p.name, role: p.role, id: p.id });
+        });
+        return out;
     }
-    function addCoauthor() {
-        const inp = $('f-coauthor'), v = inp.value.replace(/\s+/g, ' ').trim();
-        if (!v) return;
-        const fail = t => { note(t, 'warning'); inp.focus(); };
-        if (v === field('author').value.trim()) return fail(v + ' já é o autor principal.');
-        if (formCoauthors.includes(v)) return fail(v + ' já está nos coautores.');
-        if (formCoauthors.length >= 10) return fail('No máximo 10 coautores.');
-        if (formCoauthors.join('').length + v.length > 1200) return fail('Os nomes dos coautores passaram do limite.');
-        formCoauthors.push(v); inp.value = ''; renderCoauthors(); changed(); renderCard();
+    const personOf = name => people().find(p => util.sameName(p.name, name)) || null;
+    const canonName = v => { const p = personOf(v); return p ? p.name : v; };
+    function creditKind(name) {
+        const p = personOf(name);
+        if (p && p.role) return util.roleLabel(p.role) + ' ' + util.sealHTML(p.role);
+        if (p && p.official) return 'Perfil oficial ' + util.officialSealHTML({ official: true });
+        if (p) return 'Autor cadastrado';
+        return DESK_RE.test(name) ? 'Núcleo / equipe' : 'Nome livre';
     }
-    $('coauthor-add').addEventListener('click', addCoauthor);
-    $('f-coauthor').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addCoauthor(); } });
-    $('coauthor-chips').addEventListener('click', e => {
-        const b = e.target.closest('[data-co-del]'); if (!b) return;
-        formCoauthors.splice(Number(b.dataset.coDel), 1); renderCoauthors(); changed(); renderCard();
-        $('f-coauthor').focus();
+    function paintAuthorKind() {
+        const v = field('author').value.trim() || 'Redação JB';
+        $('author-kind').innerHTML = esc('Aparece como: ') + creditKind(v);
+    }
+    field('author').addEventListener('change', () => {
+        const v = field('author').value.replace(/\s+/g, ' ').trim();
+        if (v) field('author').value = canonName(v);
+        paintAuthorKind(); renderCard();
+    });
+    field('author').addEventListener('input', paintAuthorKind);
+    function fillCreditNames() {
+        $('credit-names').innerHTML = people().map(p => '<option value="' + esc(p.name) + '">' + esc(p.role ? util.roleLabel(p.role) : p.official ? 'Perfil oficial' : 'Autor') + '</option>').join('');
+    }
+
+    // Lista de "chips" com campo + botão "Adicionar" (coautores, edição, tags)
+    function chipField(o) {
+        const label = c => o.text ? o.text(c) : c;
+        const render = () => {
+            $(o.list).innerHTML = o.get().map((c, i) => '<li class="chip"><span>' + esc(label(c)) + '</span>' + (o.meta ? '<small class="chip-kind">' + o.meta(c) + '</small>' : '') +
+                '<button type="button" class="chip-del" data-del="' + i + '" aria-label="Tirar ' + esc(label(c)) + ' de ' + esc(o.noun) + '">×</button></li>').join('');
+        };
+        let busy = false;
+        async function add() {
+            const inp = $(o.input), raw = inp.value.replace(/\s+/g, ' ').trim();
+            if (!raw || busy) return;
+            const fail = t => { note(t, 'warning'); inp.focus(); };
+            const list = o.get();
+            if (list.length >= o.max) return fail('No máximo ' + o.max + ' em ' + o.noun + '.');
+            busy = true;
+            let v;
+            try { v = await o.canon(raw); } finally { busy = false; }
+            if (!v) { inp.focus(); return; }
+            if (list.some(x => util.sameName(x, v))) return fail(label(v) + ' já está em ' + o.noun + '.');
+            const err = o.check ? o.check(v, list) : '';
+            if (err) return fail(err);
+            o.set(list.concat([v])); inp.value = ''; render(); changed(); renderCard();
+        }
+        $(o.button).addEventListener('click', add);
+        $(o.input).addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+        $(o.list).addEventListener('click', e => {
+            const b = e.target.closest('[data-del]'); if (!b) return;
+            const l = o.get(); l.splice(Number(b.dataset.del), 1); o.set(l); render(); changed(); renderCard();
+            $(o.input).focus();
+        });
+        return render;
+    }
+    let formCoauthors = [], formEditCredits = [], formTags = [], formBadges = [];
+    const nameLimit = (list, v) => list.join('').length + v.length > 1200 ? 'Os nomes passaram do limite.' : '';
+    const renderCoauthors = chipField({
+        input: 'f-coauthor', button: 'coauthor-add', list: 'coauthor-chips', noun: 'coautores', max: 10,
+        get: () => formCoauthors.slice(), set: l => { formCoauthors = l; }, canon: v => canonName(v), meta: creditKind,
+        check: (v, list) => util.sameName(v, field('author').value.trim() || 'Redação JB') ? v + ' já é o autor principal.' : nameLimit(list, v)
+    });
+    const renderEditCredits = chipField({
+        input: 'f-editcredit', button: 'editcredit-add', list: 'editcredit-chips', noun: 'edição', max: 10,
+        get: () => formEditCredits.slice(), set: l => { formEditCredits = l; }, canon: v => canonName(v), meta: creditKind,
+        check: nameLimit
+    });
+
+    /* ---------- Tags (criadas na hora) e selos da matéria ---------- */
+    const fillTagList = () => { $('tags-list').innerHTML = Tags.all().map(t => '<option value="' + esc(t.name) + '">').join(''); };
+    const renderTags = chipField({
+        input: 'f-tag', button: 'tag-add', list: 'tag-chips', noun: 'tags', max: 10,
+        get: () => formTags.slice(), set: l => { formTags = l; }, text: s => { const t = Tags.get(s); return '#' + (t ? t.name : s); },
+        canon: async v => {
+            const found = Tags.find(v); if (found) return found.slug;
+            if (!util.slugify(v)) { note('Use letras ou números no nome da tag.', 'warning'); return ''; }
+            if (!confirm('A tag “' + v + '” ainda não existe. Criar agora?')) return '';
+            const r = await Tags.save({ name: v });
+            if (!r.ok) { note(r.error, 'danger'); return ''; }
+            fillTagList();
+            if (!r.existed) note('Tag “' + r.tag.name + '” criada.', 'info');
+            return r.tag.slug;
+        }
+    });
+    function renderBadgePicks() {
+        // Selos liberados para matérias + os já marcados (mesmo se a coordenação desativou depois)
+        const list = Badges.forNews().concat(formBadges.filter(s => !Badges.forNews().some(b => b.slug === s) && JB.BADGES[s]).map(s => JB.BADGES[s]));
+        $('badge-picks').innerHTML = list.length ? list.map(b => '<label class="form-check badge-pick"><input class="form-check-input" type="checkbox" data-badge value="' + esc(b.slug) + '"' + (formBadges.includes(b.slug) ? ' checked' : '') + '> ' +
+            util.badgeSpan(b) + (b.desc ? ' <small class="text-muted">' + esc(b.desc) + '</small>' : '') + (b.forNews && b.active ? '' : ' <small class="text-danger">(não disponível: sai ao salvar)</small>') + '</label>').join('')
+            : '<p class="small text-muted mb-0">Nenhum selo liberado para matérias.</p>';
+    }
+    $('badge-picks').addEventListener('change', e => {
+        const c = e.target.closest('[data-badge]'); if (!c) return;
+        formBadges = formBadges.filter(s => s !== c.value);
+        if (c.checked) {
+            if (formBadges.length >= 3) { c.checked = false; note('No máximo 3 selos por matéria.', 'warning'); return; }
+            formBadges.push(c.value);
+        }
+        changed(); renderCard();
     });
 
     /* ---------- Colaboradores de edição (jornalistas que também editam a matéria) ---------- */
@@ -646,7 +905,7 @@ JB.authReady.then(function () {
     const toLocalInput = iso => { if (!iso) return ''; const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
     let editingDate = null;
     function afterFill() {
-        syncKind(); renderChartPreview(); renderVideo(); renderStats(); counts();
+        syncKind(); paintAuthorKind(); renderChartPreview(); renderVideo(); renderStats(); counts();
         grow(field('title')); grow(field('subtitle'));
         renderCard();
     }
@@ -654,12 +913,15 @@ JB.authReady.then(function () {
         form.reset();
         field('newsId').value = ''; currentId = ''; editingDate = null;
         field('status').value = defaultStatus;
+        field('division').value = defaultDivision; syncDivision();
         field('chartType').value = 'bar';
         if (!editor) field('author').value = me.name;   // jornalista assina com o próprio nome (pode trocar)
         formCoauthors = []; formEditors = []; renderCoauthors(); renderCollab();
+        formEditCredits = []; formTags = []; formBadges = []; renderEditCredits(); renderTags(); renderBadgePicks();
         formUpdates = []; formCorrections = []; renderUpdates(); renderCorrections();
         setBody([]); setImage('');
-        $('form-title').textContent = 'Nova matéria'; document.title = 'Nova matéria — Jornal Brasileiro (JB)';
+        const newLabel = field('division').value === 'educa' ? 'Novo material do JB Educa' : 'Nova matéria';
+        $('form-title').textContent = newLabel; document.title = newLabel + ' — Jornal Brasileiro (JB)';
         $('preview-link').hidden = true;
         $('chart-box').open = false; $('extras').open = false;
         afterFill();
@@ -667,6 +929,7 @@ JB.authReady.then(function () {
     function fillNews(n) {
         form.reset();
         currentId = n.id; field('newsId').value = n.id;
+        field('division').value = util.divisionOf(n); syncDivision();
         field('title').value = n.title; field('subtitle').value = n.subtitle; field('category').value = n.category; field('author').value = n.author;
         field('status').value = n.status || 'publicada'; field('kind').value = n.kind || 'noticia'; field('verdict').value = n.verdict || ''; field('live').checked = !!n.live;
         field('pubdate').value = toLocalInput(n.date); editingDate = n.date;
@@ -682,6 +945,8 @@ JB.authReady.then(function () {
         $('extras').open = !!((n.sources || []).length || (n.timeline || []).length || (n.people || []).length);
         formUpdates = (n.updates || []).slice(); formCorrections = (n.corrections || []).slice(); renderUpdates(); renderCorrections();
         formCoauthors = (n.coauthors || []).slice(); formEditors = (n.editors || []).slice(); renderCoauthors(); renderCollab();
+        formEditCredits = (n.edit_credits || []).slice(); formTags = (n.tags || []).slice(); formBadges = (n.badges || []).slice();
+        renderEditCredits(); renderTags(); renderBadgePicks();
         setBody(n.body); setImage(n.image || '');
         $('form-title').textContent = 'Editar matéria'; document.title = 'Editar: ' + n.title + ' — Jornal Brasileiro (JB)';
         $('preview-link').href = util.articleUrl(n); $('preview-link').hidden = false;
@@ -710,6 +975,7 @@ JB.authReady.then(function () {
         if (!validate()) return;
         const current = currentId ? News.get(currentId) : null;
         if (current && !Auth.canEditNews(current)) { note('Você não pode editar esta matéria (só as suas e as em que é colaborador, até “Aprovada”).', 'danger'); return; }
+        if (!divisions.includes(field('division').value)) { note('Seu cargo não permite publicar nessa divisão.', 'danger'); return; }
         if (!allowedStatuses.includes(field('status').value)) { note('Seu cargo não permite esse status. Jornalistas levam a matéria até “Aprovada”; quem publica é um coordenador.', 'danger'); return; }
         const kind = field('kind').value, pub = field('pubdate').value, correction = field('correction').value.trim();
         if (correction) formCorrections.push({ date: nowIso(), text: correction });
@@ -720,7 +986,9 @@ JB.authReady.then(function () {
             kind, verdict: kind === 'checagem' ? (field('verdict').value || null) : null, live: kind === 'aovivo' && field('live').checked,
             sources: readSources(), timeline: parseLines(field('timeline').value, 'when', 'text'), people: parseLines(field('people').value, 'name', 'role'),
             chart: chartState().chart, updates: kind === 'aovivo' ? formUpdates.slice() : [], corrections: formCorrections.slice(),
-            coauthors: formCoauthors.filter(c => c !== (field('author').value.trim() || 'Redação JB'))
+            coauthors: formCoauthors.filter(c => !util.sameName(c, field('author').value.trim() || 'Redação JB')),
+            edit_credits: formEditCredits.slice(), tags: formTags.slice(), badges: formBadges.slice(),
+            division: divisions.includes(field('division').value) ? field('division').value : defaultDivision
         };
         // Colaboradores: só quem criou a matéria ou coordenador/admin (o banco ignora os outros)
         if (Auth.canManageEditors(current)) item.editors = formEditors.slice();
@@ -781,12 +1049,12 @@ JB.authReady.then(function () {
     JB.ready.then(() => {
         $('ed-loading').hidden = true;
         if (JB.loadError) { $('ed-error').innerHTML = util.errorHTML(); return; }
-        $('authors-list').innerHTML = Authors.all().map(a => '<option value="' + esc(a.name) + '">').join('');
+        fillCreditNames(); fillTagList();
         if (currentId) {
             const n = News.get(currentId);
             if (!n) { $('ed-error').innerHTML = '<div class="alert alert-warning">Matéria não encontrada. <a href="admin.html">Voltar ao painel</a> ou <a href="editor.html">criar uma nova</a>.</div>'; return; }
             if (!Auth.canEditNews(n)) {
-                $('ed-error').innerHTML = '<div class="alert alert-warning">Você não pode editar esta matéria' + (Auth.role() === 'jornalista' ? ' (jornalistas editam só as próprias e as em que são colaboradores, até “Aprovada”)' : '') +
+                $('ed-error').innerHTML = '<div class="alert alert-warning">Você não pode editar esta matéria' + (Auth.role() === 'jornalista' ? ' (jornalistas editam só as próprias e as em que são colaboradores, até “Aprovada”)' : professor ? ' (professores editam só os próprios materiais do JB Educa, até “Aprovada”)' : '') +
                     '. <a href="' + esc(util.articleUrl(n)) + '">Ler a matéria</a> · <a href="admin.html">Voltar ao painel</a></div>';
                 return;
             }
@@ -795,7 +1063,7 @@ JB.authReady.then(function () {
         form.hidden = false;
         ready = true;
         markClean(); offerDraft();
-        Members.loadStaff().then(() => { staffReady = true; renderCollab(); });
+        Members.loadStaff().then(() => { staffReady = true; renderCollab(); fillCreditNames(); renderCoauthors(); renderEditCredits(); paintAuthorKind(); });
         grow(field('title')); grow(field('subtitle'));
         if (!currentId) field('title').focus();
     });

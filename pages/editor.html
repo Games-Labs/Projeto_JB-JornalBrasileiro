@@ -16,6 +16,7 @@
     <link rel="preload" href="../assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="../assets/vendor/bootstrap/bootstrap.min.css">
     <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="../assets/css/motion.css">
     <script>try{var d=document.documentElement,s=localStorage;if(s.getItem('jb_theme')==='dark')d.setAttribute('data-bs-theme','dark');var a=JSON.parse(s.getItem('jb_a11y')||'{}')||{};if(a.font>0&&a.font<4)d.setAttribute('data-font',String(a.font|0));if(a.contrast)d.setAttribute('data-contrast','high')}catch(e){}</script>
 </head>
 <body data-root="../" data-page="admin">
@@ -25,7 +26,7 @@
         <div id="ed-error"></div>
         <div id="gate" class="auth-card text-center" hidden>
             <h1 class="h3">Área restrita</h1>
-            <p>O editor de matérias é exclusivo para a equipe da redação (jornalistas, coordenadores e administradores).</p>
+            <p>O editor de matérias é exclusivo para a equipe (jornalistas, professores do JB Educa, coordenadores e administradores).</p>
             <a class="btn btn-primary" href="login.html?next=editor.html">Entrar com uma conta da redação</a>
         </div>
 
@@ -69,6 +70,8 @@
                             <button type="button" class="rte-btn" data-cmd="ol" aria-pressed="false" title="Lista numerada" aria-label="Lista numerada"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M10 6h10M10 12h10M10 18h10"/><path d="M4 4h1.5v4M3.5 8h3M3.5 14.5a1.5 1.5 0 0 1 3 0c0 1.5-3 2-3 3.5h3" stroke-width="1.5"/></svg></button>
                             <span class="rte-sep" aria-hidden="true"></span>
                             <button type="button" class="rte-btn rte-btn-text" data-cmd="image" title="Inserir imagem no texto" aria-label="Inserir imagem no texto" aria-controls="rte-img-panel" aria-expanded="false"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 17-5-5-9 8"/></svg><span class="rte-btn-label">Imagem</span></button>
+                            <button type="button" class="rte-btn rte-btn-text" data-cmd="math" title="Inserir fórmula" aria-label="Inserir fórmula" aria-controls="rte-math-panel" aria-expanded="false"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 13h3l3 7 4-16h8"/><path d="m14 10 6 6M20 10l-6 6"/></svg><span class="rte-btn-label">Fórmula</span></button>
+                            <button type="button" class="rte-btn rte-btn-text" data-cmd="exercise" id="rte-ex-btn" title="Inserir exercício com resposta" aria-label="Inserir exercício" aria-controls="rte-ex-panel" aria-expanded="false" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h5"/><path d="m9 16.5 1.5 1.5 3-3"/></svg><span class="rte-btn-label">Exercício</span></button>
                             <span class="rte-sep" aria-hidden="true"></span>
                             <button type="button" class="rte-btn" data-cmd="clear" title="Limpar formatação" aria-label="Limpar formatação"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 5h12M12 5l-3 14M4 20l16-16" /></svg></button>
                             <button type="button" class="rte-btn" data-cmd="undo" title="Desfazer (Ctrl+Z)" aria-label="Desfazer"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg></button>
@@ -85,6 +88,32 @@
                                 <button type="button" class="btn btn-sm btn-primary" id="rte-img-insert">Inserir no texto</button>
                                 <button type="button" class="btn btn-sm btn-outline-dark" id="rte-img-cancel">Cancelar</button>
                                 <small class="text-muted" id="rte-img-msg" role="status">A imagem entra logo depois do parágrafo onde está o cursor.</small>
+                            </div>
+                        </div>
+                        <div class="rte-img-panel" id="rte-math-panel" role="group" aria-labelledby="rte-math-title" hidden>
+                            <p class="fw-semibold small mb-2" id="rte-math-title">Fórmula</p>
+                            <label class="form-label small" for="rte-math-tex">Escreva a fórmula (notação LaTeX)</label>
+                            <textarea class="form-control form-control-sm font-monospace" id="rte-math-tex" rows="2" maxlength="500" placeholder="x = \frac{-b \pm \sqrt{\Delta}}{2a}" aria-describedby="rte-math-help"></textarea>
+                            <div class="form-text" id="rte-math-help">Exemplos: <code>x^2</code> (potência), <code>x_1</code> (índice), <code>\frac{a}{b}</code> (fração), <code>\sqrt{x}</code> (raiz), <code>\pm</code> (±), <code>\cdot</code> e <code>\times</code>, <code>\le</code> <code>\ge</code> <code>\neq</code>, <code>\Delta</code> <code>\pi</code>, <code>\text{palavra}</code>.</div>
+                            <div class="form-check mt-2"><input class="form-check-input" type="checkbox" id="rte-math-inline"><label class="form-check-label small" for="rte-math-inline">No meio da frase (senão, em destaque numa linha própria)</label></div>
+                            <div class="rte-math-preview" id="rte-math-preview" aria-live="polite"></div>
+                            <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+                                <button type="button" class="btn btn-sm btn-primary" id="rte-math-insert">Inserir no texto</button>
+                                <button type="button" class="btn btn-sm btn-outline-dark" id="rte-math-cancel">Cancelar</button>
+                                <small class="text-muted" id="rte-math-msg" role="status"></small>
+                            </div>
+                        </div>
+                        <div class="rte-img-panel" id="rte-ex-panel" role="group" aria-labelledby="rte-ex-title" hidden>
+                            <p class="fw-semibold small mb-2" id="rte-ex-title">Exercício</p>
+                            <label class="form-label small" for="rte-ex-q">Enunciado</label>
+                            <textarea class="form-control form-control-sm mb-2" id="rte-ex-q" rows="3" maxlength="2000" placeholder="Resolva a equação $$x^2 - 5x + 6 = 0$$."></textarea>
+                            <label class="form-label small" for="rte-ex-a">Resposta (fica escondida até o estudante clicar em “Ver resposta”)</label>
+                            <textarea class="form-control form-control-sm" id="rte-ex-a" rows="2" maxlength="2000" placeholder="$$x_1 = 2$$ e $$x_2 = 3$$" aria-describedby="rte-ex-help"></textarea>
+                            <div class="form-text" id="rte-ex-help">Aceita <code>**negrito**</code>, <code>*itálico*</code> e fórmulas entre <code>$$</code> e <code>$$</code>. Os exercícios são numerados sozinhos.</div>
+                            <div class="d-flex flex-wrap gap-2 align-items-center mt-2">
+                                <button type="button" class="btn btn-sm btn-primary" id="rte-ex-insert">Inserir no texto</button>
+                                <button type="button" class="btn btn-sm btn-outline-dark" id="rte-ex-cancel">Cancelar</button>
+                                <small class="text-muted" id="rte-ex-msg" role="status"></small>
                             </div>
                         </div>
                         <div class="rte article-body" id="f-body" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="body-label" aria-describedby="body-help editor-stats" data-placeholder="Escreva a matéria. Enter cria um parágrafo novo; selecione um trecho para formatar."></div>
@@ -153,18 +182,45 @@
                     <section class="editor-panel" aria-labelledby="class-title">
                         <h2 id="class-title">Classificação</h2>
                         <div class="row g-3">
+                            <div class="col-12" id="division-wrap"><label class="form-label" for="f-division">Divisão</label><select class="form-select" id="f-division" name="division" aria-describedby="division-help"></select>
+                                <div class="form-text" id="division-help"></div></div>
                             <div class="col-sm-6 col-lg-12 col-xl-6"><label class="form-label" for="f-kind">Tipo de conteúdo</label><select class="form-select" id="f-kind" name="kind"></select></div>
-                            <div class="col-sm-6 col-lg-12 col-xl-6"><label class="form-label" for="f-cat">Editoria</label><select class="form-select" id="f-cat" name="category"></select></div>
+                            <div class="col-sm-6 col-lg-12 col-xl-6"><label class="form-label" for="f-cat" id="cat-label">Editoria</label><select class="form-select" id="f-cat" name="category"></select></div>
                             <div class="col-12" id="verdict-wrap" hidden><label class="form-label" for="f-verdict">Classificação da checagem</label><select class="form-select" id="f-verdict" name="verdict"><option value="">Escolha…</option></select><div class="invalid-feedback">Escolha a classificação.</div></div>
                             <div class="col-12" id="live-wrap" hidden><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="f-live" name="live"><label class="form-check-label" for="f-live">Cobertura em andamento (selo AO VIVO e atualização automática)</label></div></div>
-                            <div class="col-12"><label class="form-label" for="f-author">Autor</label><input class="form-control" id="f-author" name="author" maxlength="120" placeholder="Redação JB" list="authors-list"><datalist id="authors-list"></datalist></div>
-                            <div class="col-12">
-                                <label class="form-label" for="f-coauthor">Coautores <span class="text-muted fw-normal small">(opcional)</span></label>
-                                <div class="d-flex gap-2"><input class="form-control" id="f-coauthor" maxlength="120" placeholder="Ex.: Núcleo de Verificação JB" list="authors-list" aria-describedby="coauthor-help"><button type="button" class="btn btn-outline-dark" id="coauthor-add">Adicionar</button></div>
-                                <ul class="chip-list" id="coauthor-chips" aria-label="Coautores adicionados"></ul>
-                                <div class="form-text" id="coauthor-help">Aparecem na assinatura: “Por Redação Investigativa JB e Núcleo de Verificação JB”. Até 10.</div>
-                            </div>
                         </div>
+                    </section>
+
+                    <section class="editor-panel" aria-labelledby="credits-title">
+                        <h2 id="credits-title">Créditos</h2>
+                        <div class="mb-3"><label class="form-label" for="f-author">Autor principal</label><input class="form-control" id="f-author" name="author" maxlength="120" placeholder="Redação JB" list="credit-names" aria-describedby="author-kind"><datalist id="credit-names"></datalist>
+                            <div class="form-text" id="author-kind"></div></div>
+                        <div class="mb-3">
+                            <label class="form-label" for="f-coauthor">Coautores <span class="text-muted fw-normal small">(assinatura)</span></label>
+                            <div class="d-flex gap-2"><input class="form-control" id="f-coauthor" maxlength="120" placeholder="Ex.: Núcleo de Verificação JB" list="credit-names" aria-describedby="coauthor-help"><button type="button" class="btn btn-outline-dark" id="coauthor-add">Adicionar</button></div>
+                            <ul class="chip-list" id="coauthor-chips" aria-label="Coautores adicionados"></ul>
+                            <div class="form-text" id="coauthor-help">Pessoas da equipe, núcleos da redação (“Redação Investigativa JB”) ou convidados. Aparecem na assinatura: “Por Redação Investigativa JB e Núcleo de Verificação JB”. Até 10.</div>
+                        </div>
+                        <div>
+                            <label class="form-label" for="f-editcredit">Edição <span class="text-muted fw-normal small">(crédito)</span></label>
+                            <div class="d-flex gap-2"><input class="form-control" id="f-editcredit" maxlength="120" placeholder="Ex.: Mesa de Edição JB" list="credit-names" aria-describedby="editcredit-help"><button type="button" class="btn btn-outline-dark" id="editcredit-add">Adicionar</button></div>
+                            <ul class="chip-list" id="editcredit-chips" aria-label="Créditos de edição adicionados"></ul>
+                            <div class="form-text" id="editcredit-help">Quem editou ou revisou o texto aparece como “Edição: …” no fim da matéria. É só crédito: para dar permissão de editar, use “Colaboradores de edição”. Até 10.</div>
+                        </div>
+                    </section>
+
+                    <section class="editor-panel" aria-labelledby="tags-title">
+                        <h2 id="tags-title">Tags e selos</h2>
+                        <label class="form-label" for="f-tag">Tags</label>
+                        <div class="d-flex gap-2"><input class="form-control" id="f-tag" maxlength="60" placeholder="Ex.: Eleições 2026" list="tags-list" aria-describedby="tag-help"><button type="button" class="btn btn-outline-dark" id="tag-add">Adicionar</button></div>
+                        <datalist id="tags-list"></datalist>
+                        <ul class="chip-list" id="tag-chips" aria-label="Tags da matéria"></ul>
+                        <div class="form-text mb-3" id="tag-help">Assuntos da matéria (até 10). O leitor clica na tag e vê as matérias relacionadas. Uma tag nova é criada na hora.</div>
+                        <fieldset>
+                            <legend class="form-label fs-6 mb-1">Selos da matéria <span class="text-muted fw-normal small">(até 3)</span></legend>
+                            <div id="badge-picks" class="badge-picks"></div>
+                            <div class="form-text">A coordenação define quais selos podem ser usados em Painel › Selos e tags.</div>
+                        </fieldset>
                     </section>
 
                     <section class="editor-panel" aria-labelledby="collab-title">
@@ -213,6 +269,7 @@
     <script src="../assets/js/storage.js"></script>
     <script src="../assets/js/supabase-backend.js"></script>
     <script src="../assets/js/layout.js"></script>
+    <script src="../assets/js/motion.js"></script>
     <script src="../assets/js/editor.js"></script>
 </body>
 </html>

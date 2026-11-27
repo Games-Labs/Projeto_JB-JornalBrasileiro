@@ -9,8 +9,8 @@ O **Cloudflare Pages** só serve os arquivos estáticos.
 
 1. Crie uma conta em <https://supabase.com> e um **New project** (guarde a *Database password* num gerenciador de senhas; o site não usa).
 2. Abra **SQL Editor → New query**, cole o conteúdo de [`supabase/01_schema.sql`](../supabase/01_schema.sql) e clique **Run**. Ele cria tabelas, RLS, privilégios mínimos, o bucket público de imagens `news-images` e o bucket **privado** `report-files` (anexos das denúncias) do Storage.
-   - **Projeto criado com uma versão anterior?** Não rode o 01 de novo: rode só as atualizações que faltam, nesta ordem (todas idempotentes, não apagam dados): [`supabase/04_auditoria_seguranca.sql`](../supabase/04_auditoria_seguranca.sql) (auditoria de segurança) [`supabase/05_secoes_editoriais.sql`](../supabase/05_secoes_editoriais.sql) (tipos de conteúdo, ao vivo, checagem, agendamento, autores e versões) [`supabase/07_hierarquia.sql`](../supabase/07_hierarquia.sql) (cargos coordenador/jornalista, perfis públicos e selo) e [`supabase/08_seguranca.sql`](../supabase/08_seguranca.sql) (MFA obrigatório para a equipe, idade mínima, auditoria, limites contra spam e formatos de imagem) e [`supabase/09_editor_video_comentarios.sql`](../supabase/09_editor_video_comentarios.sql) (vídeo do YouTube nas matérias e edição do próprio comentário) e [`supabase/10_equipe_selos_lockdown.sql`](../supabase/10_equipe_selos_lockdown.sql) (selos de perfil, perfis oficiais da redação, coautores e colaboradores de edição, modo lockdown, comentários e denúncias só com conta e anexos reais nas denúncias, no bucket privado `report-files`). Sem o 10 o site continua no ar sem essas funções (o console avisa); **com o site novo publicado antes do 10, visitantes ainda conseguem comentar e denunciar sem conta pelo banco**, então rode o 10 junto com o deploy. Sem o 09 o site continua no ar, mas sem vídeo e sem edição de comentário (o console avisa). Sem o 05 e o 07, o site novo não carrega as notícias. **Atenção ao 08:** depois dele, toda a equipe (inclusive o administrador) só tem os poderes da redação depois de confirmar a idade e ativar a verificação em duas etapas pelo site novo (`pages/seguranca.html`).
-3. (Opcional) Faça o mesmo com [`supabase/02_seed.sql`](../supabase/02_seed.sql) para carregar as 17 notícias de demonstração e com [`supabase/06_exemplos_secoes.sql`](../supabase/06_exemplos_secoes.sql) para os autores e as matérias de exemplo das seções (ao vivo, editorial, opinião, análise, entrevista e checagens).
+   - **Projeto criado com uma versão anterior?** Não rode o 01 de novo: rode só as atualizações que faltam, nesta ordem (todas idempotentes, não apagam dados): [`supabase/04_auditoria_seguranca.sql`](../supabase/04_auditoria_seguranca.sql) (auditoria de segurança) [`supabase/05_secoes_editoriais.sql`](../supabase/05_secoes_editoriais.sql) (tipos de conteúdo, ao vivo, checagem, agendamento, autores e versões) [`supabase/07_hierarquia.sql`](../supabase/07_hierarquia.sql) (cargos coordenador/jornalista, perfis públicos e selo) e [`supabase/08_seguranca.sql`](../supabase/08_seguranca.sql) (MFA obrigatório para a equipe, idade mínima, auditoria, limites contra spam e formatos de imagem) e [`supabase/09_editor_video_comentarios.sql`](../supabase/09_editor_video_comentarios.sql) (vídeo do YouTube nas matérias e edição do próprio comentário) e [`supabase/10_equipe_selos_lockdown.sql`](../supabase/10_equipe_selos_lockdown.sql) (selos de perfil, perfis oficiais da redação, coautores e colaboradores de edição, modo lockdown, comentários e denúncias só com conta e anexos reais nas denúncias, no bucket privado `report-files`) e [`supabase/11_divisoes_tags_notificacoes.sql`](../supabase/11_divisoes_tags_notificacoes.sql) (JB Educa e cargo Professor, créditos de edição, catálogo de selos e tags, seguir matérias, notificações e push, visitas do site). Sem o 11 o site continua no ar, mas sem JB Educa, tags, notificações e estatísticas de visitas (o console avisa). Sem o 10 o site continua no ar sem essas funções (o console avisa); **com o site novo publicado antes do 10, visitantes ainda conseguem comentar e denunciar sem conta pelo banco**, então rode o 10 junto com o deploy. Sem o 09 o site continua no ar, mas sem vídeo e sem edição de comentário (o console avisa). Sem o 05 e o 07, o site novo não carrega as notícias. **Atenção ao 08:** depois dele, toda a equipe (inclusive o administrador) só tem os poderes da redação depois de confirmar a idade e ativar a verificação em duas etapas pelo site novo (`pages/seguranca.html`).
+3. (Opcional) Faça o mesmo com [`supabase/02_seed.sql`](../supabase/02_seed.sql) para carregar as 17 notícias de demonstração e com [`supabase/06_exemplos_secoes.sql`](../supabase/06_exemplos_secoes.sql) para os autores e as matérias de exemplo das seções (ao vivo, editorial, opinião, análise, entrevista e checagens) e, na parte 2, os materiais de exemplo do JB Educa e as tags.
 4. **Authentication → Sign In / Providers → Email**:
    - Para um trabalho acadêmico é mais simples **desligar "Confirm email"**; assim o cadastro já entra logado.
    - Se deixar ligado, o site avisa "confirme seu e-mail" e o link do e-mail usa a *Site URL* (passo 7).
@@ -79,15 +79,16 @@ Faça nesta ordem: **publique o site novo primeiro** e só depois ligue o CAPTCH
 
 Não existe conta/senha padrão, e o cargo de administrador não pode ser dado pela API do site (só pelo SQL Editor).
 
-### Cargos da redação (coordenador e jornalista)
+### Cargos da redação (coordenador, jornalista e professor)
 
 Depois de ter um administrador, os outros cargos são dados pelo próprio site: **Painel Administrativo → Equipe e cargos**. A pessoa precisa ter se cadastrado antes.
 
 | Cargo | O que faz | Quem dá o cargo |
 |---|---|---|
 | **Administrador** | Tudo | Só o SQL Editor (`03_promover_admin.sql`) |
-| **Coordenador** | Publica, arquiva, corrige e exclui matérias; denúncias, comentários e autores; coloca e tira jornalistas; selos de perfil de leitores e jornalistas; modo lockdown | Administrador |
+| **Coordenador** | Publica, arquiva, corrige e exclui matérias (também do JB Educa); denúncias, comentários, autores, selos e tags; coloca e tira jornalistas e professores; selos de perfil; modo lockdown | Administrador |
 | **Jornalista** | Cria e edita as próprias matérias até “Aprovada” (quem publica é o coordenador) | Administrador ou coordenador |
+| **Professor** | Igual ao jornalista, só no JB Educa (aulas e exercícios) | Administrador ou coordenador |
 | **Leitor** | Conta comum | Padrão do cadastro |
 
 As regras valem no banco (RLS e a função `set_member_role`), não só na tela; ninguém muda o próprio cargo, e cada mudança fica registrada na tabela `role_changes`.
@@ -112,6 +113,26 @@ As regras valem no banco (RLS e a função `set_member_role`), não só na tela;
 
    **PWA:** o `sw.js` (raiz) é registrado pelo `layout.js` só no site publicado. Ele busca tudo na rede primeiro e só usa a cópia guardada sem internet, então um deploy novo aparece na hora. Para desativá-lo, apague o `sw.js` e o registro no `layout.js`. O `404.html` usa caminhos absolutos (`/assets/...`) porque o Cloudflare o entrega em qualquer endereço.
 5. Volte ao passo 7 do Supabase e informe esse endereço.
+
+### Serviços (tempo, cotações, futebol, Hoje na História)
+
+Funcionam sem configuração: a Function [`functions/api/ext.js`](../functions/api/ext.js) busca os dados (Open-Meteo, ViaCEP, AwesomeAPI, TheSportsDB e Wikipédia), só das fontes e parâmetros da lista dela, e guarda cada resposta no cache do Cloudflare (de 5 minutos, nas cotações, a 1 dia, nos dados das competições). O navegador ainda guarda a última cópia (`jb_ext`) e a mostra, com aviso, se a fonte cair. O futebol usa a chave pública de testes da TheSportsDB (`123`), que limita a classificação aos primeiros colocados; com uma chave própria, defina a variável **`THESPORTSDB_KEY`** em **Settings → Variables and Secrets** (tipo *Secret*). A cidade aproximada vem de [`functions/api/local.js`](../functions/api/local.js) (dados de localização do próprio Cloudflare, sem guardar nada) e só é pedida com o consentimento “Localização aproximada”.
+
+### Notificações com o site fechado (Web Push)
+
+O sino do site funciona sem nada disto. Para os avisos chegarem também com o site fechado:
+
+1. Gere um par de chaves VAPID (uma vez): `npx web-push generate-vapid-keys`. A **pública** vai em `VAPID_PUBLIC_KEY` no [`config.js`](../assets/js/config.js) (pode commitar). A **privada** nunca vai para o repositório.
+2. Invente um segredo longo e aleatório para o gancho (ex.: `node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"`).
+3. No Cloudflare, **Settings → Variables and Secrets**, crie os *Secrets* **`VAPID_PRIVATE_KEY`** (a privada) e **`PUSH_HOOK_SECRET`** (o segredo do passo 2). Se trocar a chave pública, crie também **`VAPID_PUBLIC_KEY`**. Faça um novo deploy para valerem.
+4. No Supabase, **SQL Editor**, guarde no Vault o endereço e o mesmo segredo (não deixe os valores em arquivo):
+   ```sql
+   select vault.create_secret('https://SEU-SITE.pages.dev/api/push', 'jb_push_hook_url');
+   select vault.create_secret('<o mesmo valor de PUSH_HOOK_SECRET>', 'jb_push_hook_secret');
+   ```
+5. Confira em **Painel → Segurança**: o item “Notificações push” fica verde e mostra quantos aparelhos estão inscritos.
+
+O banco chama a Function pelo `pg_net` em lotes de 40 aparelhos (limite de pedidos por execução no plano gratuito do Cloudflare); endereços recusados pelo navegador (404/410) são apagados sozinhos. No iPhone, o push só funciona com o JB instalado na tela de início (iOS 16.4+).
 
 ### Cabeçalhos de segurança (`_headers`)
 
@@ -140,10 +161,10 @@ O `_headers` e a pasta `functions/` só valem no Cloudflare; localmente a CSP n�
 
 ## 4. Conferir a segurança (RLS)
 
-No painel do Supabase, **Table Editor**: todas as tabelas devem mostrar *RLS enabled*; em **Advisors → Security Advisor** só devem restar os avisos intencionais sobre funções `SECURITY DEFINER` que o site chama de propósito (`hit_news`, `delete_my_account`, `confirm_age`, `log_account_event`, `security_overview`, `public_profile`, `staff_profiles`, `list_members`, `set_member_role` e as de cargo, que checam permissão por dentro) e a proteção contra senhas vazadas (plano Pro). Teste deslogado em aba anônima:
+No painel do Supabase, **Table Editor**: todas as tabelas devem mostrar *RLS enabled*; em **Advisors → Security Advisor** só devem restar os avisos intencionais sobre funções `SECURITY DEFINER` que o site chama de propósito (`hit_news`, `hit_site`, `push_subscribe`, `push_unsubscribe`, `push_gone` (exige o segredo do gancho), `delete_my_account`, `confirm_age`, `log_account_event`, `security_overview`, `public_profile`, `staff_profiles`, `list_members`, `set_member_role` e as de cargo, que checam permissão por dentro) e a proteção contra senhas vazadas (plano Pro). Teste deslogado em aba anônima:
 
 - Não deve aparecer matéria em rascunho, nem matéria agendada (publicada com data futura), em lugar nenhum.
-- `pages/admin.html` mostra "acesso restrito" e, mesmo forçando pela API, o banco recusa escrita.
+- `pages/admin.html` (e as outras páginas `admin-*.html`) mostra "acesso restrito" e, mesmo forçando pela API, o banco recusa escrita.
 
 ## Recomeçar do zero
 

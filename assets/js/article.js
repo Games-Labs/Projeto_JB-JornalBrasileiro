@@ -1,10 +1,12 @@
 /* Leitura de uma matéria: pages/noticia.html?id=...
    Selos de tipo (opinião, análise, checagem…), cobertura ao vivo com atualização automática,
    entrevista em perguntas e respostas, gráfico, cronologia, personagens, fontes, correções,
-   perfil do autor, modo leitura, favoritar, compartilhar, imprimir, histórico e comentários. */
+   perfil do autor, créditos de edição, tags, selos, seguir a matéria (notificações), modo leitura,
+   favoritar, compartilhar, imprimir, histórico e comentários. Materiais do JB Educa ganham o tema
+   da divisão (verde), fórmulas e exercícios com resposta. */
 JB.ready.then(function () {
     'use strict';
-    const { News, Favs, History, Comments, Auth, Authors, Members, util } = JB;
+    const { News, Favs, History, Comments, Auth, Authors, Members, Follows, util } = JB;
     const { esc } = util;
     const box = document.getElementById('article');
     if (JB.loadError) { box.innerHTML = util.errorHTML(); return; }
@@ -18,7 +20,9 @@ JB.ready.then(function () {
         return;
     }
     if (!preview) { JB.Views.hit(n.id); History.add(n.id); }
-    document.title = n.title + ' — Jornal Brasileiro (JB)';
+    const division = util.divisionOf(n), educa = division === 'educa';
+    document.title = n.title + ' — ' + (educa ? 'JB Educa — ' : '') + 'Jornal Brasileiro (JB)';
+    if (educa && JB.ui && JB.ui.setDivision) JB.ui.setDivision('educa');
     const kind = n.kind || 'noticia';
     const hm = iso => new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     const dm = iso => new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
@@ -33,6 +37,8 @@ JB.ready.then(function () {
         if (kind === 'opiniao') return '<div class="kind-note">Artigo de <strong>opinião</strong>: reflete a visão do autor, não necessariamente a do jornal.</div>';
         if (kind === 'analise') return '<div class="kind-note"><strong>Análise</strong>: interpretação dos fatos a partir de dados e contexto, assinada por especialista da redação.</div>';
         if (kind === 'editorial') return '<div class="kind-note"><strong>Editorial</strong>: expressa a posição institucional do Jornal Brasileiro.</div>';
+        if (kind === 'exercicios') return '<div class="kind-note"><strong>Lista de exercícios</strong> do JB Educa: tente resolver antes de abrir “Ver resposta”.</div>';
+        if (educa) return '<div class="kind-note"><strong>JB Educa</strong>: material didático preparado pela equipe de professores. <a href="educa.html">Ver mais aulas</a></div>';
         return '';
     }
     function verdictBox() {
@@ -87,12 +93,22 @@ JB.ready.then(function () {
             '<div><a class="fw-bold" href="' + esc(util.authorUrl(a.name)) + '">' + esc(a.name) + '</a> ' + util.officialSealHTML(a) + (a.role ? '<span class="d-block small opacity-75">' + esc(a.role) + '</span>' : '') +
             (a.bio ? '<p class="small mb-0 mt-1">' + esc(a.bio) + '</p>' : '') + '</div></aside>').join('');
     }
-    // Nome na assinatura: link para a página do autor + selo do JB (conta da redação ou perfil oficial)
-    function bylineName(name) {
-        const staff = Members.staffByName(name), a = Authors.get(name);
-        const seal = staff && util.isStaffRole(staff.role) ? ' <a href="' + esc(util.profileUrl(staff.id)) + '" class="text-decoration-none">' + util.sealHTML(staff.role) + '</a>'
+    // Nome na assinatura: link para a página do autor + selo do JB (conta da redação ou perfil oficial).
+    // Pessoa da equipe sem página de autor cadastrada: o link vai para o perfil público dela.
+    function bylineName(name, plain) {
+        const staff = Members.staffByName(name), a = Authors.get(name) || Authors.all().find(x => util.sameName(x.name, name));
+        const isStaff = staff && util.isStaffRole(staff.role);
+        const seal = isStaff ? ' <a href="' + esc(util.profileUrl(staff.id)) + '" class="text-decoration-none">' + util.sealHTML(staff.role) + '</a>'
             : a && a.official ? ' ' + util.officialSealHTML(a) : '';
-        return '<a href="' + esc(util.authorUrl(name)) + '"><strong>' + esc(name) + '</strong></a>' + seal;
+        const href = a ? util.authorUrl(a.name) : isStaff ? util.profileUrl(staff.id) : util.authorUrl(name);
+        const label = esc(a ? a.name : isStaff ? staff.name : name);
+        return '<a href="' + esc(href) + '">' + (plain ? label : '<strong>' + label + '</strong>') + '</a>' + seal;
+    }
+    const creditName = name => bylineName(name, true);
+    // Quem editou (crédito; não é a lista de quem pode editar no sistema)
+    function creditsHTML() {
+        const names = util.creditNames(n);
+        return names.length ? '<p class="credits-line"><span class="credits-label">Edição:</span> ' + util.creditsHTML(n, creditName) + '</p>' : '';
     }
     function meta() {
         return '<p class="meta-info">Por ' + util.bylineHTML(n, bylineName) + ' • Publicado em ' + esc(util.fmtDate(n.date)) +
@@ -105,6 +121,7 @@ JB.ready.then(function () {
         '<h1 class="article-title">' + esc(n.title) + '</h1><p class="lead">' + esc(n.subtitle) + '</p><div id="article-meta">' + meta() + '</div>' +
         '<div class="article-tools d-flex flex-wrap gap-2 mb-3 no-print">' +
         '<button type="button" class="btn btn-outline-dark btn-sm" id="btn-fav"></button>' +
+        (preview ? '' : '<button type="button" class="btn btn-outline-dark btn-sm" id="btn-follow" aria-pressed="false"></button>') +
         '<button type="button" class="btn btn-outline-dark btn-sm" id="btn-share">Compartilhar</button>' +
         '<button type="button" class="btn btn-outline-dark btn-sm" id="btn-print">Imprimir</button>' +
         '<button type="button" class="btn btn-outline-dark btn-sm" id="btn-read" aria-pressed="false">Modo leitura</button>' +
@@ -114,7 +131,8 @@ JB.ready.then(function () {
         mediaHTML() +
         '<div class="article-body">' + bodyHTML() + '</div>' +
         '<div id="live-wrap">' + liveHTML() + '</div>' +
-        util.chartHTML(n.chart) + timelineHTML() + sourcesHTML() + correctionsHTML() + authorBox() +
+        util.chartHTML(n.chart) + timelineHTML() + sourcesHTML() + correctionsHTML() +
+        '<div id="article-credits">' + creditsHTML() + '</div>' + util.tagsHTML(n) + authorBox() +
         '<p class="small text-muted mt-3">Conteúdo fictício, produzido para fins acadêmicos.</p>' +
         '<button type="button" class="btn btn-dark reading-exit" id="btn-read-exit">Sair do modo leitura</button>';
     if (JB.ui) JB.ui.paintA11y();
@@ -124,6 +142,30 @@ JB.ready.then(function () {
     const paintFav = () => { const on = Favs.has(n.id); favBtn.textContent = on ? '★ Salvo nos favoritos' : '☆ Salvar para ler depois'; favBtn.classList.toggle('fav-active', on); favBtn.setAttribute('aria-pressed', on); };
     favBtn.addEventListener('click', () => { Favs.toggle(n.id); paintFav(); });
     paintFav();
+
+    /* Seguir a matéria: notificação quando ela for atualizada ou corrigida (e a cada atualização ao vivo) */
+    const followBtn = document.getElementById('btn-follow');
+    const followMsg = t => { const m = document.getElementById('share-msg'); if (m) m.textContent = t; };
+    const paintFollow = () => {
+        if (!followBtn) return;
+        const on = Follows.has(n.id);
+        followBtn.textContent = on ? '✓ Seguindo' : (kind === 'aovivo' && n.live ? 'Seguir a cobertura' : 'Seguir esta matéria');
+        followBtn.classList.toggle('fav-active', on); followBtn.setAttribute('aria-pressed', on);
+        followBtn.title = on ? 'Você recebe uma notificação quando esta matéria for atualizada. Clique para deixar de seguir.' : 'Receba uma notificação quando esta matéria for atualizada ou corrigida.';
+    };
+    if (followBtn) {
+        paintFollow();
+        if (Auth.current()) Follows.load().then(paintFollow);
+        followBtn.addEventListener('click', async () => {
+            if (!Auth.current()) { location.href = 'login.html?next=' + encodeURIComponent('noticia.html?id=' + n.id); return; }
+            followBtn.disabled = true;
+            const r = await Follows.toggle(n.id);
+            followBtn.disabled = false;
+            if (r === null) { followMsg(Auth.accountOk() ? 'Não foi possível agora. Tente de novo.' : 'Conclua a verificação da sua conta para seguir matérias.'); return; }
+            paintFollow();
+            followMsg(r ? 'Pronto: você será avisado das atualizações (sino no topo e na Minha Central).' : 'Você deixou de seguir esta matéria.');
+        });
+    }
 
     /* Compartilhar (API nativa quando existir; senão copia o link) */
     document.getElementById('btn-share').addEventListener('click', async () => {
@@ -250,16 +292,19 @@ JB.ready.then(function () {
     Members.loadStaff().then(ok => {
         if (!ok) return;
         const m = document.getElementById('article-meta'); if (m) m.innerHTML = meta();
+        const c = document.getElementById('article-credits'); if (c) c.innerHTML = creditsHTML();
         if (commentsOk) renderComments();
     });
 
     // Se o servidor recusar uma gravação, o cache é desfeito: redesenha o que pode ter mudado.
-    document.addEventListener('jb:sync-error', () => { paintFav(); renderComments(); });
+    document.addEventListener('jb:sync-error', () => { paintFav(); paintFollow(); renderComments(); });
 
-    /* Leia também: mesma editoria; em opinião/checagem, também o mesmo tipo de conteúdo */
-    const sameKind = kind !== 'noticia' && kind !== 'reportagem' ? News.byKind(kind) : [];
+    /* Leia também: mesmas tags primeiro; depois a mesma editoria (no JB Educa, a mesma disciplina);
+       em opinião/checagem, também o mesmo tipo de conteúdo */
+    const byTags = (n.tags || []).reduce((acc, t) => acc.concat(News.byTag(t).filter(x => util.divisionOf(x) === division)), []);
+    const sameKind = kind !== 'noticia' && kind !== 'reportagem' ? (educa ? News.byDivision('educa') : News.all()).filter(x => x.kind === kind) : [];
     const seen = new Set([n.id]);
-    const pool = sameKind.concat(News.byCategory(n.category)).filter(x => !seen.has(x.id) && seen.add(x.id));
+    const pool = byTags.concat(sameKind, News.byCategory(n.category)).filter(x => !seen.has(x.id) && seen.add(x.id));
     const more = pool.slice(0, 3);
     document.getElementById('related').innerHTML = more.map(x => '<div class="col-md-4">' + util.newsCard(x) + '</div>').join('');
     document.getElementById('related-wrap').hidden = !more.length;

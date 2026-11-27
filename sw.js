@@ -16,10 +16,10 @@ const PAGES = 'jb-pages-' + VERSION, DATA = 'jb-data-' + VERSION;
 const PAGES_MAX = 150, DATA_MAX = 20;
 const OFFLINE = 'pages/offline.html';
 const PRECACHE = ['./', OFFLINE,
-    'assets/vendor/bootstrap/bootstrap.min.css', 'assets/css/style.css',
+    'assets/vendor/bootstrap/bootstrap.min.css', 'assets/css/style.css', 'assets/css/motion.css',
     'assets/vendor/bootstrap/bootstrap.bundle.min.js', 'assets/vendor/supabase/supabase.js',
-    'assets/js/config.js', 'assets/js/storage.js', 'assets/js/supabase-backend.js', 'assets/js/layout.js',
-    'assets/js/home.js', 'assets/js/news-list.js', 'assets/js/article.js',
+    'assets/js/config.js', 'assets/js/storage.js', 'assets/js/supabase-backend.js', 'assets/js/layout.js', 'assets/js/motion.js',
+    'assets/js/home.js', 'assets/js/services.js', 'assets/js/news-list.js', 'assets/js/article.js',
     'assets/fonts/source-serif-4-latin.woff2', 'assets/fonts/source-serif-4-italic-latin.woff2', 'assets/fonts/inter-latin.woff2',
     'assets/favicon/favicon-32x32.png'];
 
@@ -99,12 +99,41 @@ async function networkFirst(event, cacheName, max, isNav) {
     }
 }
 
+/* ---------- Notificações push (site fechado) ----------
+   Enviadas pela Function /api/push quando uma matéria seguida é atualizada, a cobertura ao vivo
+   ganha uma atualização ou (administradores) há um alerta de segurança. O endereço é sempre uma
+   página do próprio site. */
+self.addEventListener('push', event => {
+    let d = {};
+    try { d = event.data ? event.data.json() : {}; } catch (e) { d = { body: event.data ? event.data.text() : '' }; }
+    const url = /^pages\/[a-z0-9-]+\.html(\?[A-Za-z0-9=&%._-]*)?$/.test(String(d.url || '')) ? d.url : '';
+    event.waitUntil(self.registration.showNotification(String(d.title || 'Jornal Brasileiro').slice(0, 200), {
+        body: String(d.body || '').slice(0, 300),
+        icon: new URL('assets/favicon/android-chrome-192x192.png', self.registration.scope).href,
+        badge: new URL('assets/favicon/favicon-32x32.png', self.registration.scope).href,
+        tag: String(d.tag || 'jb').slice(0, 80),
+        renotify: !!d.tag,
+        lang: 'pt-BR',
+        data: { url: new URL(url || './', self.registration.scope).href }
+    }));
+});
+self.addEventListener('notificationclick', event => {
+    event.notification.close();
+    const target = (event.notification.data && event.notification.data.url) || self.registration.scope;
+    event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+        for (const c of list) if (c.url === target && 'focus' in c) return c.focus();
+        return self.clients.openWindow ? self.clients.openWindow(target) : null;
+    }));
+});
+
 self.addEventListener('fetch', event => {
     const req = event.request;
     if (req.method !== 'GET' || req.headers.has('Range')) return;
     const url = new URL(req.url);
     if (url.origin === self.location.origin) {
         if (url.pathname.endsWith('/sw.js')) return;
+        // Functions de dados (tempo, cotações, push): o próprio site guarda a última cópia (JB.Ext)
+        if (/\/api\//.test(url.pathname)) return;
         event.respondWith(networkFirst(event, PAGES, PAGES_MAX, req.mode === 'navigate'));
     } else if (publicData(req, url)) {
         event.respondWith(networkFirst(event, DATA, DATA_MAX, false));

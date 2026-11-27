@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1B6B45">
+    <title>JB Educa — Jornal Brasileiro (JB)</title>
+    <meta name="description" content="JB Educa: aulas e listas de exercícios de matemática, português, ciências e outras disciplinas, preparadas pelos professores do Jornal Brasileiro.">
+    <link rel="icon" href="../assets/favicon/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon/favicon-16x16.png">
+    <link rel="apple-touch-icon" href="../assets/favicon/apple-touch-icon.png">
+    <link rel="manifest" href="../assets/favicon/site.webmanifest">
+    <!-- Fontes hospedadas no próprio site (Source Serif 4 e Inter, licença OFL): sem pedidos ao Google -->
+    <link rel="preload" href="../assets/fonts/source-serif-4-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="../assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="../assets/vendor/bootstrap/bootstrap.min.css">
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="../assets/css/motion.css">
+    <script>try{var d=document.documentElement,s=localStorage;if(s.getItem('jb_theme')==='dark')d.setAttribute('data-bs-theme','dark');var a=JSON.parse(s.getItem('jb_a11y')||'{}')||{};if(a.font>0&&a.font<4)d.setAttribute('data-font',String(a.font|0));if(a.contrast)d.setAttribute('data-contrast','high')}catch(e){}</script>
+</head>
+<body data-root="../" data-page="educa" data-division="educa">
+    <div id="site-top"></div>
+    <main class="container main-layout">
+        <section class="educa-hero">
+            <div>
+                <p class="educa-kicker">JB Educa</p>
+                <h1 class="page-title border-0 mb-2">Aprender com o Jornal Brasileiro</h1>
+                <p class="page-lead mb-0">Aulas explicadas passo a passo e listas de exercícios com resposta, preparadas pelos professores do JB Educa.</p>
+                <div class="mt-3" id="educa-staff" hidden></div>
+            </div>
+        </section>
+
+        <h2 class="visually-hidden">Disciplinas</h2>
+        <ul class="subject-bar" id="subject-bar" aria-label="Disciplinas"></ul>
+        <p class="text-muted" id="subject-desc"></p>
+        <div class="d-flex flex-wrap gap-2 align-items-center mb-3"><div class="d-flex flex-wrap gap-2" id="kind-bar" role="group" aria-label="Tipo de material"></div><span class="small text-muted ms-auto" id="educa-info"></span></div>
+        <div class="row g-4 mb-5" id="educa-grid"><div class="col-12"><div class="jb-loading" role="status"><span class="jb-spinner" aria-hidden="true"></span>Carregando…</div></div></div>
+
+        <section class="bhaskara panel-box" aria-labelledby="bhaskara-title">
+            <h2 class="h4" id="bhaskara-title">Calculadora: equação do 2º grau (Bhaskara)</h2>
+            <p class="small text-muted">Digite os coeficientes da equação e veja a resolução completa: discriminante (Δ), raízes e vértice da parábola.</p>
+            <div id="bhaskara-formula" class="mb-3"></div>
+            <form id="bhaskara-form" class="row g-2 align-items-end" method="post" novalidate>
+                <div class="col-4 col-sm-3 col-md-2"><label class="form-label" for="bh-a">a</label><input class="form-control" id="bh-a" name="a" inputmode="decimal" autocomplete="off" value="1"></div>
+                <div class="col-4 col-sm-3 col-md-2"><label class="form-label" for="bh-b">b</label><input class="form-control" id="bh-b" name="b" inputmode="decimal" autocomplete="off" value="-5"></div>
+                <div class="col-4 col-sm-3 col-md-2"><label class="form-label" for="bh-c">c</label><input class="form-control" id="bh-c" name="c" inputmode="decimal" autocomplete="off" value="6"></div>
+                <div class="col-12 col-sm-3 col-md-auto d-flex gap-2"><button class="btn btn-educa" type="submit">Resolver</button><button class="btn btn-outline-dark" type="button" id="bhaskara-example">Exemplo</button></div>
+            </form>
+            <div class="bhaskara-out mt-3" id="bhaskara-out" aria-live="polite"></div>
+        </section>
+    </main>
+    <div id="site-bottom"></div>
+    <script src="../assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="../assets/vendor/supabase/supabase.js"></script>
+    <script src="../assets/js/config.js"></script>
+    <script src="../assets/js/storage.js"></script>
+    <script src="../assets/js/supabase-backend.js"></script>
+    <script src="../assets/js/layout.js"></script>
+    <script src="../assets/js/motion.js"></script>
+    <script src="../assets/js/educa.js"></script>
+</body>
+</html>

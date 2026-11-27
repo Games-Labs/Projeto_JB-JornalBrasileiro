@@ -4,7 +4,8 @@
 import { esc, supabaseGet } from './_lib/seo.js';
 
 const SECTIONS = ['pages/noticias', 'pages/politica', 'pages/economia', 'pages/esportes', 'pages/investigacao', 'pages/opiniao',
-    'pages/entrevistas', 'pages/verificacao', 'pages/ao-vivo', 'pages/arquivo', 'pages/autor', 'pages/denuncias', 'pages/institucional'];
+    'pages/entrevistas', 'pages/verificacao', 'pages/ao-vivo', 'pages/arquivo', 'pages/autor', 'pages/denuncias', 'pages/institucional',
+    'pages/sobre', 'pages/educa', 'pages/tag', 'pages/tempo', 'pages/cotacoes', 'pages/futebol', 'pages/hoje-na-historia'];
 
 export async function onRequestGet({ request, env }) {
     const origin = new URL(request.url).origin;

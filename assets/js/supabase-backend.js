@@ -30,8 +30,9 @@
     // o site volta para as colunas antigas e continua no ar, só sem vídeo e sem edição de comentário.
     // Colunas da migração supabase/10_equipe_selos_lockdown.sql (news.coauthors/editors, authors.official,
     // reports.attachments): mesma ideia, um nível a mais. schema.x = quantos níveis de colunas novas o banco tem.
-    const schema = { news: 2, comments: 1, authors: 1, reports: 1 };
-    const newsCols = () => NEWS_COLS_V8 + (schema.news >= 1 ? ',video' : '') + (schema.news >= 2 ? ',coauthors,editors' : '');
+    // news 3 = com as colunas da migração 11 (division, edit_credits, tags, badges)
+    const schema = { news: 3, comments: 1, authors: 1, reports: 1 };
+    const newsCols = () => NEWS_COLS_V8 + (schema.news >= 1 ? ',video' : '') + (schema.news >= 2 ? ',coauthors,editors' : '') + (schema.news >= 3 ? ',division,edit_credits,tags,badges' : '');
     const commentCols = () => schema.comments ? COMMENT_COLS_V8 + ',edited_at' : COMMENT_COLS_V8;
     const AUTHOR_COLS_V9 = 'id,name,role,bio,avatar,columnist,created_at';
     const authorCols = () => schema.authors ? AUTHOR_COLS_V9 + ',official' : AUTHOR_COLS_V9;
@@ -85,7 +86,10 @@
     });
 
     // Cache em memória do que o usuário atual pode ver
-    const C = { aal: {}, me: null, news: [], authors: [], versions: {}, comments: [], commentsLoaded: {}, reports: [], views: {}, favs: [], newsletter: 0, members: [], roleLog: [], staff: [], staffLoaded: null };
+    const C = { aal: {}, me: null, news: [], authors: [], versions: {}, comments: [], commentsLoaded: {}, reports: [], views: {}, favs: [], newsletter: 0, members: [], roleLog: [], staff: [], staffLoaded: null,
+        tags: [], follows: [], notifs: [], notifsLoaded: null, visits: [] };
+    // Tabela/função que ainda não existe no banco (migração 11 não rodou): segue sem o recurso
+    const missing = e => !!e && ['42P01', 'PGRST205', 'PGRST202', '42883'].includes(e.code);
     const byDateDesc = (a, b) => new Date(b.date) - new Date(a.date);
     const nowIso = () => new Date().toISOString();
     const uuid = () => (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
@@ -164,16 +168,16 @@
     let googleCheck = null;
 
     /* ---------- Carga inicial (em paralelo) ---------- */
-    const toUser = (p, u) => ({ id: p.id, name: p.name, email: u.email, role: p.role, bio: p.bio, city: p.city, interests: p.interests || [], avatar: p.avatar || '', created: p.created_at, ageVerified: p.age_verified_at || null, badges: p.badges || [] });
+    const toUser = (p, u) => ({ id: p.id, name: p.name, email: u.email, role: p.role, bio: p.bio, city: p.city, interests: p.interests || [], avatar: p.avatar || '', created: p.created_at, ageVerified: p.age_verified_at || null, badges: p.badges || [], notifyLive: !!p.notify_live });
     const toAuthor = a => ({ id: a.id, name: a.name, role: a.role, bio: a.bio, avatar: a.avatar || '', columnist: !!a.columnist, official: !!a.official, created: a.created_at });
 
     const PROFILE_COLS = 'id,name,role,bio,city,interests,avatar,created_at,age_verified_at';
-    let profileBadges = true;   // false = banco sem a migração 10 (sem profiles.badges)
+    let profileBadges = 2;   // 2 = com badges e notify_live; 1 = sem a migração 11; 0 = sem a migração 10
     async function loadMe(user) {
         C.me = null;
         if (!user) return;
-        const q = () => sb.from('profiles').select(PROFILE_COLS + (profileBadges ? ',badges' : '')).eq('id', user.id).maybeSingle();
-        const p = await get(async () => { let r = await q(); if (r.error && r.error.code === '42703' && profileBadges) { profileBadges = false; r = await q(); } return r; }, null);
+        const q = () => sb.from('profiles').select(PROFILE_COLS + (profileBadges >= 1 ? ',badges' : '') + (profileBadges >= 2 ? ',notify_live' : '')).eq('id', user.id).maybeSingle();
+        const p = await get(async () => { let r = await q(); while (r.error && r.error.code === '42703' && profileBadges > 0) { profileBadges--; r = await q(); } return r; }, null);
         if (p) C.me = toUser(p, user);
     }
     // Nível da sessão (aal1 = só senha/Google; aal2 = passou pelo app autenticador) e se a conta tem
@@ -203,8 +207,19 @@
         get(() => compat('news', () => sb.from('news').select(newsCols()).order('date', { ascending: false })), [], true).then(rows => { C.news = rows.map(JB.util.withDefaults); }),
         get(() => compat('authors', () => sb.from('authors').select(authorCols()).order('name')), []).then(rows => { C.authors = rows.map(toAuthor); }),
         get(() => sb.from('news_views').select('news_id,count'), []).then(rows => { C.views = {}; rows.forEach(v => { C.views[v.news_id] = Number(v.count); }); }),
-        session.then(s => loadFavs(s && s.user))
+        session.then(s => loadFavs(s && s.user)),
+        // Catálogos de tags e selos (sem a migração 11: sem tags e com os selos padrão)
+        sb ? sb.from('tags').select('slug,name,description,created_at').order('name').then(r => { if (r.error) { if (!missing(r.error)) console.error(r.error); return; } C.tags = (r.data || []).map(toTag); }, e => console.error(e)) : null,
+        sb ? sb.from('badges').select('slug,label,description,color,for_profiles,for_news,active,sort').then(r => { if (r.error) { if (!missing(r.error)) console.error(r.error); return; } JB._internal.setBadgeCatalog((r.data || []).map(toBadge)); }, e => console.error(e)) : null
     ]);
+    function toTag(t) { return { slug: t.slug, name: t.name, description: t.description || '', created: t.created_at }; }
+    function toBadge(b) { return { slug: b.slug, label: b.label, desc: b.description || '', color: b.color, forProfiles: !!b.for_profiles, forNews: !!b.for_news, active: !!b.active, sort: b.sort || 0 }; }
+    // Mesma limpeza do gatilho news_clean_labels (o banco confere de novo)
+    function cleanLabels(item) {
+        if ('tags' in item) item.tags = [...new Set((item.tags || []).filter(t => C.tags.some(x => x.slug === t)))].slice(0, 10);
+        if ('badges' in item) item.badges = [...new Set((item.badges || []).filter(b => JB.BADGES[b] && JB.BADGES[b].forNews && JB.BADGES[b].active))].slice(0, 3);
+        if ('edit_credits' in item) item.edit_credits = [...new Set((item.edit_credits || []).map(x => String(x || '').trim()).filter(Boolean))].slice(0, 10);
+    }
 
     /* ---------- Notícias ---------- */
     const bucketPath = url => { const pre = cfg.SUPABASE_URL.replace(/\/$/, '') + '/storage/v1/object/public/' + BUCKET + '/'; return typeof url === 'string' && url.indexOf(pre) === 0 ? decodeURIComponent(url.slice(pre.length)) : null; };
@@ -212,13 +227,17 @@
 
     Object.assign(News, {
         everything() { return C.news.slice().sort(byDateDesc); },
-        all() { return News.everything().filter(isPublished); },
+        published() { return News.everything().filter(isPublished); },
+        all() { return News.published().filter(n => n.division === 'jb'); },
+        byDivision(d) { return News.published().filter(n => n.division === d); },
         get(id) { return C.news.find(x => x.id === id) || null; },
         save(item) {
             const i = C.news.findIndex(x => x.id === item.id);
             delete item.updated_at;   // definida só pelo banco (gatilho news_track_changes)
+            cleanLabels(item);
             if (schema.news < 1) delete item.video;   // banco sem a migração 09
             if (schema.news < 2) { delete item.coauthors; delete item.editors; }   // banco sem a migração 10
+            if (schema.news < 3) { delete item.division; delete item.edit_credits; delete item.tags; delete item.badges; }   // sem a migração 11
             if (i >= 0) {
                 const before = Object.assign({}, C.news[i]);
                 const change = JB.util.changeKind(before, item);
@@ -512,7 +531,8 @@
         },
         staff() { return C.staff.slice(); },
         staffById(id) { return C.staff.find(p => p.id === id) || null; },
-        staffByName(name) { return C.staff.find(p => p.name === name) || null; },
+        // Sem diferenciar maiúsculas (a assinatura "games" é a conta "Games")
+        staffByName(name) { return C.staff.find(p => JB.util.sameName(p.name, name)) || null; },
         // Perfil público: objeto, null (não existe) ou undefined (falha de conexão)
         async profile(id) {
             if (!sb) return undefined;
@@ -810,6 +830,192 @@
             };
         }
     };
+
+    /* ---------- Tags e catálogo de selos (migração 11) ---------- */
+    const labelError = (e, what) => {
+        const m = (e && e.message) || '';
+        if (e && (e.name === 'AbortError' || /fetch|network/i.test(m))) return 'Falha de conexão. Verifique sua internet e tente novamente.';
+        if (missing(e)) return 'O banco ainda não tem a migração supabase/11_divisoes_tags_notificacoes.sql.';
+        if (e && (e.code === '42501' || /row-level security|permission/i.test(m))) return 'Você não tem permissão para isso.';
+        if (e && e.code === '23514') return 'Confira os campos: algum valor não é aceito.';
+        return 'Não foi possível salvar ' + what + ' agora. Tente novamente.';
+    };
+    Object.assign(JB.Tags, {
+        all() { return C.tags.slice().sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')); },
+        async load() {
+            if (!sb) return false;
+            const r = await sb.from('tags').select('slug,name,description,created_at').order('name');
+            if (r.error) { if (!missing(r.error)) console.error(r.error); return missing(r.error); }
+            C.tags = (r.data || []).map(toTag); return true;
+        },
+        async save(t) {
+            if (!sb) return { ok: false, error: 'Sem conexão com o servidor.' };
+            const isNew = !t.slug, name = String(t.name || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+            const slug = isNew ? JB.util.slugify(name) : t.slug;
+            if (!name || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) return { ok: false, error: 'Dê um nome à tag (letras ou números).' };
+            const row = { name, description: String(t.description || '').trim().slice(0, 300) };
+            if (isNew) {
+                const old = C.tags.find(x => x.slug === slug);
+                if (old) return { ok: true, tag: old, existed: true };
+                const r = await sb.from('tags').insert(Object.assign({ slug }, row)).select('slug,name,description,created_at').maybeSingle();
+                if (r.error && r.error.code === '23505') { await JB.Tags.load(); return { ok: true, tag: JB.Tags.get(slug), existed: true }; }
+                if (r.error || !r.data) { console.error(r.error); return { ok: false, error: labelError(r.error, 'a tag') }; }
+                C.tags.push(toTag(r.data)); return { ok: true, tag: toTag(r.data) };
+            }
+            const r = await sb.from('tags').update(row).eq('slug', slug).select('slug,name,description,created_at');
+            if (r.error || !(r.data && r.data.length)) { console.error(r.error); return { ok: false, error: r.error ? labelError(r.error, 'a tag') : 'Você não tem permissão para isso.' }; }
+            C.tags = C.tags.filter(x => x.slug !== slug).concat([toTag(r.data[0])]);
+            return { ok: true, tag: toTag(r.data[0]) };
+        },
+        async remove(slug) {
+            if (!sb) return { ok: false, error: 'Sem conexão com o servidor.' };
+            const r = await sb.from('tags').delete().eq('slug', slug).select('slug');
+            if (r.error || !(r.data && r.data.length)) { console.error(r.error); return { ok: false, error: r.error ? labelError(r.error, 'a tag') : 'Você não tem permissão para isso.' }; }
+            C.tags = C.tags.filter(x => x.slug !== slug);
+            C.news.forEach(n => { if ((n.tags || []).includes(slug)) n.tags = n.tags.filter(x => x !== slug); });   // o gatilho do banco faz o mesmo
+            return { ok: true };
+        }
+    });
+    const BADGE_SEL = 'slug,label,description,color,for_profiles,for_news,active,sort';
+    Object.assign(JB.Badges, {
+        async load() {
+            if (!sb) return false;
+            const r = await sb.from('badges').select(BADGE_SEL);
+            if (r.error) { if (!missing(r.error)) console.error(r.error); return missing(r.error); }
+            JB._internal.setBadgeCatalog((r.data || []).map(toBadge)); return true;
+        },
+        async save(b, isNew) {
+            if (!sb) return { ok: false, error: 'Sem conexão com o servidor.' };
+            const slug = isNew ? JB.util.slugify(b.slug || b.label, 30) : b.slug, label = String(b.label || '').trim().slice(0, 40);
+            if (!label || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) return { ok: false, error: 'Dê um nome ao selo.' };
+            if (isNew && JB.BADGES[slug]) return { ok: false, error: 'Já existe um selo com esse identificador.' };
+            const row = { label, description: String(b.desc || '').trim().slice(0, 200), color: JB.BADGE_COLORS[b.color] ? b.color : 'accent', for_profiles: !!b.forProfiles, for_news: !!b.forNews, active: b.active !== false, sort: Number(b.sort) || 0 };
+            const r = isNew ? await sb.from('badges').insert(Object.assign({ slug }, row)).select(BADGE_SEL) : await sb.from('badges').update(row).eq('slug', slug).select(BADGE_SEL);
+            if (r.error || !(r.data && r.data.length)) { console.error(r.error); return { ok: false, error: r.error ? (r.error.code === '23505' ? 'Já existe um selo com esse identificador.' : labelError(r.error, 'o selo')) : 'Você não tem permissão para isso.' }; }
+            await JB.Badges.load();
+            return { ok: true, badge: JB.BADGES[slug] };
+        },
+        async remove(slug) {
+            if (!sb) return { ok: false, error: 'Sem conexão com o servidor.' };
+            const r = await sb.from('badges').delete().eq('slug', slug).select('slug');
+            if (r.error || !(r.data && r.data.length)) { console.error(r.error); return { ok: false, error: r.error ? labelError(r.error, 'o selo') : 'Você não tem permissão para isso.' }; }
+            await JB.Badges.load();
+            C.news.forEach(n => { if ((n.badges || []).includes(slug)) n.badges = n.badges.filter(x => x !== slug); });
+            C.staffLoaded = null;
+            return { ok: true };
+        }
+    });
+
+    /* ---------- Seguir matérias, notificações e push (migração 11) ---------- */
+    const followsReady = session.then(s => s && s.user ? get(() => sb.from('follows').select('news_id').order('created_at', { ascending: false }), []).then(rows => { C.follows = rows.map(f => f.news_id); }) : null);
+    Object.assign(JB.Follows, {
+        ids() { return C.me ? C.follows.slice() : []; },
+        has(id) { return !!C.me && C.follows.includes(id); },
+        load() { return followsReady.then(() => true, () => false); },
+        // true = passou a seguir, false = deixou de seguir, null = precisa de conta liberada / falhou
+        async toggle(id) {
+            if (!C.me || !Auth.accountOk() || !sb) return null;
+            const had = C.follows.includes(id), before = C.follows.slice();
+            C.follows = had ? C.follows.filter(x => x !== id) : [id].concat(C.follows);
+            const ok = await run(() => had ? sb.from('follows').delete().eq('news_id', id).eq('user_id', C.me.id) : sb.from('follows').insert({ user_id: C.me.id, news_id: id }),
+                had ? 'deixar de seguir a matéria' : 'seguir a matéria', () => { C.follows = before; });
+            return ok ? !had : null;
+        }
+    });
+    const toNotif = n => ({ id: n.id, kind: n.kind, title: n.title, body: n.body || '', url: n.url || '', newsId: n.news_id || null, date: n.created_at, readAt: n.read_at || null });
+    Object.assign(JB.Notifications, {
+        list() { return C.me ? C.notifs.slice() : []; },
+        unread() { return C.me ? C.notifs.filter(n => !n.readAt).length : 0; },
+        async load() {
+            await authReady.catch(() => { });
+            if (!C.me || !sb) { C.notifs = []; return true; }
+            const r = await sb.from('notifications').select('id,kind,title,body,url,news_id,created_at,read_at').order('created_at', { ascending: false }).limit(50);
+            if (r.error) { if (!missing(r.error)) console.error(r.error); return missing(r.error); }
+            C.notifs = (r.data || []).map(toNotif); return true;
+        },
+        async markRead(ids) {
+            if (!C.me || !sb) return false;
+            const now = nowIso(), target = C.notifs.filter(n => !n.readAt && (!ids || ids.includes(n.id)));
+            if (!target.length) return true;
+            target.forEach(n => { n.readAt = now; });
+            return run(() => sb.from('notifications').update({ read_at: now }).in('id', target.map(n => n.id)), 'marcar as notificações como lidas', () => { target.forEach(n => { n.readAt = null; }); });
+        },
+        async remove(id) {
+            if (!C.me || !sb) return false;
+            const before = C.notifs.slice();
+            C.notifs = id === undefined ? [] : C.notifs.filter(n => n.id !== id);
+            return run(() => id === undefined ? sb.from('notifications').delete().eq('user_id', C.me.id) : sb.from('notifications').delete().eq('id', id), 'apagar a notificação', () => { C.notifs = before; });
+        }
+    });
+    Object.assign(Auth, {
+        async setNotifyLive(on) {
+            if (!C.me || !sb || profileBadges < 2) return false;
+            const before = !!C.me.notifyLive;
+            C.me.notifyLive = !!on;
+            return run(async () => {
+                const r = await sb.from('profiles').update({ notify_live: !!on }).eq('id', C.me.id).select('id');
+                return !r.error && !(r.data && r.data.length) ? { error: new Error('perfil não atualizado (conta não liberada)') } : r;
+            }, 'salvar a preferência de notificações', () => { if (C.me) C.me.notifyLive = before; });
+        }
+    });
+    // Push (Web Push): chave pública VAPID em config.js; o envio é feito pela Function /api/push,
+    // chamada pelo banco. Os dados do aparelho (endpoint e chaves) ficam em push_subscriptions.
+    const VAPID = String(cfg.VAPID_PUBLIC_KEY || '').trim();
+    const b64uToBytes = s => { s = s.replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; return Uint8Array.from(atob(s), c => c.charCodeAt(0)); };
+    const swReg = () => Promise.race([navigator.serviceWorker.ready, new Promise(res => setTimeout(() => res(null), 8000))]);
+    Object.assign(JB.Push, {
+        supported() { return !!VAPID && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window && window.isSecureContext; },
+        async state() {
+            if (!JB.Push.supported()) return 'unsupported';
+            if (Notification.permission === 'denied') return 'denied';
+            try { const reg = await navigator.serviceWorker.getRegistration(); const sub = reg && await reg.pushManager.getSubscription(); return sub ? 'on' : 'off'; } catch (e) { return 'off'; }
+        },
+        async enable() {
+            if (!JB.Push.supported()) return { ok: false, error: 'Este navegador não recebe notificações do site.' };
+            if (!C.me || !Auth.accountOk()) return { ok: false, error: 'Entre na sua conta (e conclua a verificação dela) para receber notificações.' };
+            const perm = await Notification.requestPermission();
+            if (perm !== 'granted') return { ok: false, error: 'O navegador não deu permissão para notificações. Libere nas configurações do site.' };
+            const reg = await swReg();
+            if (!reg) return { ok: false, error: 'O app do JB ainda não terminou de instalar. Recarregue a página e tente de novo.' };
+            let sub;
+            try { sub = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToBytes(VAPID) }); }
+            catch (e) { console.error(e); return { ok: false, error: 'Não foi possível ativar as notificações neste navegador.' }; }
+            const j = sub.toJSON(), keys = j.keys || {};
+            const { error } = await sb.rpc('push_subscribe', { p_endpoint: j.endpoint, p_p256dh: keys.p256dh || '', p_auth: keys.auth || '' });
+            if (error) {
+                console.error(error);
+                if (error.code === '23514') { try { await sub.unsubscribe(); } catch (e) { } return { ok: false, error: 'O serviço de notificações deste navegador não é aceito pelo JB.' }; }
+                return { ok: false, error: missing(error) ? 'O banco ainda não tem a migração supabase/11_divisoes_tags_notificacoes.sql.' : 'Não foi possível ativar as notificações agora.' };
+            }
+            return { ok: true };
+        },
+        async disable() {
+            try {
+                const reg = await navigator.serviceWorker.getRegistration(), sub = reg && await reg.pushManager.getSubscription();
+                if (sub) { if (sb && C.me) await sb.rpc('push_unsubscribe', { p_endpoint: sub.endpoint }); await sub.unsubscribe(); }
+                return { ok: true };
+            } catch (e) { console.error(e); return { ok: false, error: 'Não foi possível desativar as notificações agora.' }; }
+        }
+    });
+
+    /* ---------- Visitas do site (painel: Estatísticas) ---------- */
+    let visitHit = false;
+    Object.assign(JB.Visits, {
+        hit() {
+            if (visitHit || !sb) return;
+            visitHit = true;
+            const fresh = JB._internal.newVisitorToday();
+            sb.rpc('hit_site', { p_new: fresh }).then(r => { if (r.error && !missing(r.error)) console.warn(r.error); }, () => { });
+        },
+        async load(days) {
+            if (!Auth.isStaff() || !sb) { C.visits = []; return true; }
+            const since = new Date(Date.parse(JB._internal.todaySP() + 'T12:00:00') - ((days || 30) - 1) * 86400000).toISOString().slice(0, 10);
+            const r = await sb.from('site_visits').select('day,views,visitors').gte('day', since).order('day');
+            if (r.error) { if (!missing(r.error)) console.error(r.error); C.visits = []; return missing(r.error); }
+            C.visits = r.data || []; return true;
+        },
+        list(days) { return JB._internal.lastDays(days || 30, C.visits); }
+    });
 
     /* ---------- Central de Segurança (painel: coordenador e admin) ---------- */
     JB.Security = {

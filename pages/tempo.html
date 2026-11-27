@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#941F2B">
+    <title>Previsão do tempo — Jornal Brasileiro (JB)</title>
+    <meta name="description" content="Previsão do tempo para a sua cidade e o tempo agora nas capitais do Brasil, com dados do Open-Meteo.">
+    <link rel="icon" href="../assets/favicon/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon/favicon-16x16.png">
+    <link rel="apple-touch-icon" href="../assets/favicon/apple-touch-icon.png">
+    <link rel="manifest" href="../assets/favicon/site.webmanifest">
+    <!-- Fontes hospedadas no próprio site (Source Serif 4 e Inter, licença OFL): sem pedidos ao Google -->
+    <link rel="preload" href="../assets/fonts/source-serif-4-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="../assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="../assets/vendor/bootstrap/bootstrap.min.css">
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="../assets/css/motion.css">
+    <script>try{var d=document.documentElement,s=localStorage;if(s.getItem('jb_theme')==='dark')d.setAttribute('data-bs-theme','dark');var a=JSON.parse(s.getItem('jb_a11y')||'{}')||{};if(a.font>0&&a.font<4)d.setAttribute('data-font',String(a.font|0));if(a.contrast)d.setAttribute('data-contrast','high')}catch(e){}</script>
+</head>
+<body data-root="../" data-page="tempo">
+    <div id="site-top"></div>
+    <main class="container main-layout svc-page svc-tempo">
+        <h1 class="page-title">Previsão do tempo</h1>
+        <p class="page-lead">Temperatura, chuva e vento para os próximos dias, na sua cidade e nas capitais.</p>
+        <div class="row g-4">
+            <div class="col-lg-7"><section class="panel-box weather-card" id="tempo-main" aria-live="polite"><div class="jb-loading" role="status"><span class="jb-spinner" aria-hidden="true"></span>Carregando…</div></section></div>
+            <div class="col-lg-5">
+                <section class="panel-box">
+                    <h2 class="h5">Escolher a cidade</h2>
+                    <form id="city-form" class="d-flex gap-2" method="post" role="search">
+                        <label class="visually-hidden" for="city-q">Cidade ou CEP</label>
+                        <input class="form-control" id="city-q" name="q" placeholder="Nome da cidade ou CEP" autocomplete="off" maxlength="60" required>
+                        <button class="btn btn-primary" type="submit">Buscar</button>
+                    </form>
+                    <p class="small mt-2 mb-1" id="city-msg" aria-live="polite"></p>
+                    <ul class="city-results" id="city-results"></ul>
+                    <div class="d-flex flex-wrap gap-2 mt-2"><button class="btn btn-sm btn-outline-dark" type="button" id="city-locate">Usar minha localização aproximada</button><button class="btn btn-sm btn-outline-dark" type="button" id="city-reset" hidden>Esquecer a cidade escolhida</button></div>
+                    <p class="small text-muted mt-3 mb-0">A localização é estimada pela sua conexão (sem GPS) e só com o seu consentimento em “Localização aproximada”. A cidade escolhida fica só neste navegador (“Preferências”).</p>
+                </section>
+            </div>
+        </div>
+        <section class="mt-5" aria-labelledby="h-capitals">
+            <h2 class="section-title" id="h-capitals">Agora nas capitais</h2>
+            <div id="capitals"><div class="jb-loading" role="status"><span class="jb-spinner" aria-hidden="true"></span>Carregando…</div></div>
+        </section>
+        <p class="small text-muted mt-4">Dados de serviços externos, guardados em cache por alguns minutos para não sobrecarregar as fontes. O JB não se responsabiliza por eventuais erros das fontes.</p>
+    </main>
+    <div id="site-bottom"></div>
+    <script src="../assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="../assets/vendor/supabase/supabase.js"></script>
+    <script src="../assets/js/config.js"></script>
+    <script src="../assets/js/storage.js"></script>
+    <script src="../assets/js/supabase-backend.js"></script>
+    <script src="../assets/js/layout.js"></script>
+    <script src="../assets/js/motion.js"></script>
+    <script src="../assets/js/services.js"></script>
+</body>
+</html>

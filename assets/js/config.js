@@ -18,5 +18,8 @@ window.JB_CONFIG = {
     SUPABASE_ANON_KEY: 'sb_publishable_-FcYDCNnccpWU5FWIFiKkA_6Da70Hbn',
     // CAPTCHA anti-robô (Cloudflare Turnstile): chave do SITE, pública por design. A chave SECRETA
     // fica só no Supabase (Authentication > Attack Protection). Vazio = sem CAPTCHA.
-    TURNSTILE_SITE_KEY: '0x4AAAAAAGJGMpSlDy3NJmPG'
+    TURNSTILE_SITE_KEY: '0x4AAAAAAGJGMpSlDy3NJmPG',
+    // Notificações com o site fechado (Web Push): chave PÚBLICA VAPID. A privada fica só no Cloudflare
+    // (segredo VAPID_PRIVATE_KEY, ver docs/DEPLOY.md). Vazio = sem push (o sino do site continua).
+    VAPID_PUBLIC_KEY: 'BANyUTYZfVZaWyng-4WCwi0HSCOxxQXh3XvyAMakUTNZmd3uU-Ntk3dpFFeXLkqYBgWTTFtj0KwBc1vbmK62c00'
 };

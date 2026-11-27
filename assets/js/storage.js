@@ -13,7 +13,7 @@
 (function () {
     'use strict';
 
-    const KEYS = { news: 'jb_news', users: 'jb_users', session: 'jb_session', reports: 'jb_reports', cookies: 'jb_cookies', views: 'jb_views', favs: 'jb_favs', history: 'jb_history', comments: 'jb_comments', newsletter: 'jb_newsletter', theme: 'jb_theme', authors: 'jb_authors', versions: 'jb_versions', a11y: 'jb_a11y', seed: 'jb_seed', roleLog: 'jb_role_log', drafts: 'jb_drafts', site: 'jb_site' };
+    const KEYS = { news: 'jb_news', users: 'jb_users', session: 'jb_session', reports: 'jb_reports', cookies: 'jb_cookies', views: 'jb_views', favs: 'jb_favs', history: 'jb_history', comments: 'jb_comments', newsletter: 'jb_newsletter', theme: 'jb_theme', authors: 'jb_authors', versions: 'jb_versions', a11y: 'jb_a11y', seed: 'jb_seed', roleLog: 'jb_role_log', drafts: 'jb_drafts', site: 'jb_site', tags: 'jb_tags', badges: 'jb_badges', follows: 'jb_follows', notifs: 'jb_notifs', visits: 'jb_visits', visitDay: 'jb_visit_day', place: 'jb_place', ext: 'jb_ext' };
 
     // Fallback em memória caso o localStorage esteja bloqueado
     const memory = {};
@@ -74,6 +74,29 @@
         noticia: 'Notícia', reportagem: 'Reportagem', analise: 'Análise', opiniao: 'Opinião', editorial: 'Editorial',
         entrevista: 'Entrevista', checagem: 'Verificação de fatos', aovivo: 'Ao vivo'
     };
+    /* Divisões editoriais (tabela divisions no banco). Cada divisão tem as próprias editorias e
+       tipos de conteúdo; as páginas e listas do jornal (News.all) mostram só a divisão "jb".
+       Divisão nova = uma entrada aqui (editorias, tipos, página inicial e tema) + uma linha em
+       public.divisions + as editorias dela na restrição news_category_check do banco. */
+    const SUBJECTS = {
+        matematica: { label: 'Matemática', page: 'pages/educa.html?materia=matematica', desc: 'Números, álgebra, geometria e equações, com exemplos resolvidos.' },
+        portugues: { label: 'Português', page: 'pages/educa.html?materia=portugues', desc: 'Gramática, interpretação de texto e literatura.' },
+        redacao: { label: 'Redação', page: 'pages/educa.html?materia=redacao', desc: 'Estrutura do texto dissertativo, argumentação e revisão.' },
+        ciencias: { label: 'Ciências', page: 'pages/educa.html?materia=ciencias', desc: 'Física, química e biologia do dia a dia.' },
+        historia: { label: 'História', page: 'pages/educa.html?materia=historia', desc: 'Brasil e mundo, das origens aos dias de hoje.' },
+        geografia: { label: 'Geografia', page: 'pages/educa.html?materia=geografia', desc: 'Território, clima, população e economia.' },
+        ingles: { label: 'Inglês', page: 'pages/educa.html?materia=ingles', desc: 'Vocabulário, gramática e leitura em inglês.' }
+    };
+    const EDUCA_KINDS = { aula: 'Aula', exercicios: 'Lista de exercícios' };
+    const DIVISIONS = {
+        jb: { name: 'Jornal Brasileiro', short: 'JB', home: 'index.html', categories: CATEGORIES, kinds: KINDS, defaultCategory: 'politica', defaultKind: 'noticia',
+            tagline: 'Investigação & Fatos', desc: 'Notícias, reportagens, análises e checagens.' },
+        educa: { name: 'JB Educa', short: 'Educa', home: 'pages/educa.html', categories: SUBJECTS, kinds: EDUCA_KINDS, defaultCategory: 'matematica', defaultKind: 'aula', theme: 'educa', themeColor: '#1B6B45',
+            tagline: 'Aprender com o Jornal Brasileiro', desc: 'Aulas, explicações e exercícios para estudantes.' }
+    };
+    const ALL_CATEGORIES = Object.assign({}, CATEGORIES, SUBJECTS);
+    const ALL_KINDS = Object.assign({}, KINDS, EDUCA_KINDS);
+    const divisionOf = n => (n && DIVISIONS[n.division]) ? n.division : 'jb';
     // Classificações da verificação de fatos
     const VERDICTS = {
         verdadeiro: { label: 'Verdadeiro', desc: 'A informação é comprovada por dados e fontes confiáveis.' },
@@ -89,24 +112,42 @@
     //   admin       tudo (dado só pelo SQL Editor do Supabase)
     //   coordenador publica, arquiva, exclui; denúncias, comentários, autores; coloca/tira jornalistas
     //   jornalista  cria e edita só as próprias matérias, até "Aprovada"
+    //   professor   igual ao jornalista, só no JB Educa (supabase/11_divisoes_tags_notificacoes.sql)
     //   leitor      conta comum
-    const ROLES = { admin: 'Administrador', coordenador: 'Coordenador', jornalista: 'Jornalista', leitor: 'Leitor' };
-    const STAFF_ROLES = ['admin', 'coordenador', 'jornalista'];
+    const ROLES = { admin: 'Administrador', coordenador: 'Coordenador', jornalista: 'Jornalista', professor: 'Professor', leitor: 'Leitor' };
+    const STAFF_ROLES = ['admin', 'coordenador', 'jornalista', 'professor'];
     const EDITOR_ROLES = ['admin', 'coordenador'];
     const JOURNALIST_STATUSES = ['rascunho', 'revisao', 'aprovada'];
     const roleRank = r => { const i = STAFF_ROLES.indexOf(r); return i < 0 ? 9 : i; };
-    // Selos de perfil: independentes do cargo, dados por coordenador/admin (set_member_badges no banco)
-    const BADGES = {
-        colaborador: { label: 'Colaborador', desc: 'Colabora com conteúdo, informações ou pautas para o JB.' },
-        apoiador: { label: 'Apoiador Oficial', desc: 'Apoia oficialmente o projeto do Jornal Brasileiro.' },
-        ajudante: { label: 'Ajudante do Jornal', desc: 'Ajuda a redação no dia a dia do jornal.' },
-        reporter: { label: 'Repórter', desc: 'Repórter que contribui com o JB.' }
-    };
+    // Catálogo de selos (tabela badges): de perfil (dados por coordenador/admin com set_member_badges)
+    // e/ou de matéria (escolhidos no editor). Gerido na página "Selos e tags" do painel. BADGES é o
+    // mapa vivo slug -> selo: Badges.load() o atualiza no lugar (as páginas leem JB.BADGES[slug]).
+    const BADGE_COLORS = { accent: 'Vermelho JB', blue: 'Azul', green: 'Verde', orange: 'Laranja', purple: 'Roxo', gray: 'Cinza' };
+    const DEFAULT_BADGES = [
+        { slug: 'colaborador', label: 'Colaborador', desc: 'Colabora com conteúdo, informações ou pautas para o JB.', color: 'accent', forProfiles: true, forNews: false, active: true, sort: 1 },
+        { slug: 'apoiador', label: 'Apoiador Oficial', desc: 'Apoia oficialmente o projeto do Jornal Brasileiro.', color: 'accent', forProfiles: true, forNews: false, active: true, sort: 2 },
+        { slug: 'ajudante', label: 'Ajudante do Jornal', desc: 'Ajuda a redação no dia a dia do jornal.', color: 'accent', forProfiles: true, forNews: false, active: true, sort: 3 },
+        { slug: 'reporter', label: 'Repórter', desc: 'Repórter que contribui com o JB.', color: 'accent', forProfiles: true, forNews: false, active: true, sort: 4 },
+        { slug: 'exclusivo', label: 'Exclusivo', desc: 'Informação apurada e publicada primeiro pelo JB.', color: 'accent', forProfiles: false, forNews: true, active: true, sort: 10 },
+        { slug: 'especial', label: 'Especial', desc: 'Reportagem especial, com apuração aprofundada.', color: 'purple', forProfiles: false, forNews: true, active: true, sort: 11 },
+        { slug: 'dados-abertos', label: 'Dados abertos', desc: 'Matéria construída a partir de dados públicos, com as fontes indicadas.', color: 'blue', forProfiles: false, forNews: true, active: true, sort: 12 }
+    ];
+    const BADGES = {};
+    function setBadgeCatalog(list) {
+        Object.keys(BADGES).forEach(k => delete BADGES[k]);
+        (list || []).slice().sort((a, b) => (a.sort || 0) - (b.sort || 0) || String(a.label).localeCompare(String(b.label), 'pt-BR')).forEach(b => {
+            BADGES[b.slug] = { slug: b.slug, label: b.label, desc: b.desc || '', color: BADGE_COLORS[b.color] ? b.color : 'accent', forProfiles: !!b.forProfiles, forNews: !!b.forNews, active: b.active !== false, sort: b.sort || 0 };
+        });
+    }
+    setBadgeCatalog(DEFAULT_BADGES);
+    const SLUG_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+    // Nome -> slug ("Reforma Tributária" -> "reforma-tributaria")
+    const slugify = (s, max) => String(s || '').normalize('NFD').replace(/\p{M}+/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, max || 60).replace(/-+$/, '');
     // Agendamento: "publicada" com data no futuro só aparece quando a data chega.
     const isScheduled = n => (!n.status || n.status === 'publicada') && !!n.date && new Date(n.date) > Date.now();
     const isPublished = n => (!n.status || n.status === 'publicada') && !isScheduled(n);   // dados antigos (sem status) contam como publicados
     // Campos novos com valor padrão (matérias antigas não têm)
-    const EXTRA_ARRAYS = ['sources', 'corrections', 'updates', 'timeline', 'people', 'coauthors', 'editors'];
+    const EXTRA_ARRAYS = ['sources', 'corrections', 'updates', 'timeline', 'people', 'coauthors', 'editors', 'edit_credits', 'tags', 'badges'];
     function withDefaults(n) {
         if (!n) return n;
         if (!n.kind) n.kind = 'noticia';
@@ -116,11 +157,12 @@
         if (n.verdict === undefined) n.verdict = null;
         if (n.updated_at === undefined) n.updated_at = null;
         if (typeof n.video !== 'string') n.video = '';
+        n.division = divisionOf(n);
         n.live = !!n.live;
         return n;
     }
     // Campos cuja mudança gera uma nova versão (mesma lista do gatilho news_track_changes no banco)
-    const VERSIONED = ['title', 'subtitle', 'body', 'image', 'author', 'category', 'kind', 'verdict', 'sources', 'timeline', 'people', 'chart', 'video', 'coauthors'];
+    const VERSIONED = ['title', 'subtitle', 'body', 'image', 'author', 'category', 'kind', 'verdict', 'sources', 'timeline', 'people', 'chart', 'video', 'coauthors', 'edit_credits'];
     const TOUCHES = VERSIONED.concat(['updates', 'corrections']);   // mudam a data de atualização
 
     // Imagens locais disponíveis (usadas no painel e como fallback por categoria)
@@ -144,6 +186,7 @@
         investigacao: 'assets/img/obras-publicas.jpg', tecnologia: 'assets/img/seguranca-digital.jpg', infraestrutura: 'assets/img/ferrovia.webp',
         brasil: 'assets/img/cat-brasil.svg', mundo: 'assets/img/cat-mundo.svg', educacao: 'assets/img/cat-educacao.svg', saude: 'assets/img/cat-saude.svg', meioambiente: 'assets/img/cat-meioambiente.svg', cultura: 'assets/img/cat-cultura.svg'
     };
+    Object.keys(SUBJECTS).forEach(k => { FALLBACK_IMG[k] = 'assets/img/cat-educacao.svg'; });   // JB Educa
 
     // Hash simples SOMENTE para simulação (não é seguro para produção)
     function hash(text) {
@@ -156,7 +199,7 @@
     function minutesAgo(m) { return new Date(Date.now() - m * 60000).toISOString(); }
 
     /* Exemplos das seções editoriais (o mesmo conteúdo está em supabase/06_exemplos_secoes.sql) */
-    const SEED_VERSION = 4;
+    const SEED_VERSION = 5;
     // official: perfil oficial da redação (selo do JB). Mesmo conteúdo de supabase/06_exemplos_secoes.sql.
     const SAMPLE_AUTHORS = [
         { name: 'Redação JB', role: 'Equipe de reportagem', bio: 'Equipe de reportagem geral do Jornal Brasileiro.', columnist: false, official: true },
@@ -165,7 +208,8 @@
         { name: 'Núcleo de Verificação JB', role: 'Verificação de fatos', bio: 'Checa declarações públicas, conteúdos virais e dados oficiais, com metodologia publicada.', columnist: false, official: true },
         { name: 'Helena Prado', role: 'Colunista de Economia', bio: 'Personagem fictícia. Escreve às terças sobre juros, emprego e orçamento das famílias.', columnist: true, official: false },
         { name: 'Rafael Monteiro', role: 'Analista político', bio: 'Personagem fictício. Acompanha o Congresso e as negociações do governo.', columnist: true, official: false },
-        { name: 'Carla Nunes', role: 'Repórter de Tecnologia & Ciência', bio: 'Personagem fictícia. Cobre dados abertos, inteligência artificial e governo digital.', columnist: false, official: true }
+        { name: 'Carla Nunes', role: 'Repórter de Tecnologia & Ciência', bio: 'Personagem fictícia. Cobre dados abertos, inteligência artificial e governo digital.', columnist: false, official: true },
+        { name: 'Equipe JB Educa', role: 'Professores do JB Educa', bio: 'Professores que preparam as aulas e as listas de exercícios do JB Educa.', columnist: false, official: true }
     ];
     const DOSSIE_EXTRAS = {
         kind: 'reportagem',
@@ -256,6 +300,69 @@
         ];
     }
 
+    /* Exemplos do JB Educa (o mesmo conteúdo está em supabase/06_exemplos_secoes.sql, parte 2) */
+    function educaSamples(n) {
+        const NOTE = 'Material de demonstração do JB Educa, no projeto acadêmico Jornal Brasileiro (JB).';
+        return [
+            n('matematica', 'Equação do 2º grau: como usar a fórmula de Bhaskara', 'Passo a passo para encontrar as raízes de qualquer equação do tipo ax² + bx + c = 0.', 'assets/img/cat-educacao.svg', 140,
+                ['Uma equação do 2º grau tem a forma $$ax^2 + bx + c = 0$$, com $$a \\neq 0$$. Resolver a equação é encontrar os valores de $$x$$ que a tornam verdadeira: as **raízes**.',
+                    '## 1. Calcule o discriminante',
+                    '$$ \\Delta = b^2 - 4ac',
+                    '- Se $$\\Delta > 0$$, há duas raízes reais diferentes.',
+                    '- Se $$\\Delta = 0$$, há uma raiz real (dupla).',
+                    '- Se $$\\Delta < 0$$, não há raiz real.',
+                    '## 2. Aplique a fórmula',
+                    '$$ x = \\frac{-b \\pm \\sqrt{\\Delta}}{2a}',
+                    '## Exemplo resolvido',
+                    'Resolva $$x^2 - 5x + 6 = 0$$. Aqui $$a = 1$$, $$b = -5$$ e $$c = 6$$.',
+                    '$$ \\Delta = (-5)^2 - 4 \\cdot 1 \\cdot 6 = 25 - 24 = 1',
+                    '$$ x = \\frac{5 \\pm 1}{2} \\Rightarrow x_1 = 3, \\quad x_2 = 2',
+                    '> Confira sempre: substitua cada raiz na equação original. $$3^2 - 5 \\cdot 3 + 6 = 0$$ ✔',
+                    NOTE],
+                { division: 'educa', kind: 'aula', author: 'Equipe JB Educa', tags: ['equacao-do-2-grau', 'matematica-basica'] }),
+            n('matematica', 'Lista de exercícios: equação do 2º grau', 'Seis exercícios com resposta para treinar o discriminante e a fórmula de Bhaskara.', 'assets/img/cat-educacao.svg', 135,
+                ['Tente resolver antes de abrir a resposta. Use $$\\Delta = b^2 - 4ac$$ e $$x = \\frac{-b \\pm \\sqrt{\\Delta}}{2a}$$.',
+                    '?? Calcule o discriminante de $$x^2 + 2x - 8 = 0$$.\n=> $$\\Delta = 2^2 - 4 \\cdot 1 \\cdot (-8) = 4 + 32 = 36$$',
+                    '?? Encontre as raízes de $$x^2 + 2x - 8 = 0$$.\n=> $$x = \\frac{-2 \\pm 6}{2}$$, então $$x_1 = 2$$ e $$x_2 = -4$$.',
+                    '?? Quantas raízes reais tem $$x^2 - 6x + 9 = 0$$?\n=> $$\\Delta = 36 - 36 = 0$$: uma raiz real dupla, $$x = 3$$.',
+                    '?? Quantas raízes reais tem $$2x^2 + x + 5 = 0$$?\n=> $$\\Delta = 1 - 40 = -39 < 0$$: nenhuma raiz real.',
+                    '?? Resolva $$2x^2 - 8 = 0$$.\n=> Equação incompleta: $$x^2 = 4$$, logo $$x = \\pm 2$$.',
+                    '?? A área de um terreno retangular é 24 m² e um lado mede 2 m a mais que o outro. Quanto mede o lado menor?\n=> $$x(x + 2) = 24 \\Rightarrow x^2 + 2x - 24 = 0$$; $$\\Delta = 100$$; $$x = 4$$ (a raiz negativa não serve). O lado menor mede 4 m.',
+                    NOTE],
+                { division: 'educa', kind: 'exercicios', author: 'Equipe JB Educa', tags: ['equacao-do-2-grau'] }),
+            n('portugues', 'Crase: quando usar o acento grave', 'Três perguntas rápidas que resolvem a maioria das dúvidas sobre a crase.', 'assets/img/cat-educacao.svg', 150,
+                ['A crase é a junção da preposição **a** com o artigo **a** (ou com o "a" de aquele, aquela, aquilo). O acento grave marca essa junção.',
+                    '## Truque da troca',
+                    'Troque a palavra feminina por uma masculina. Se aparecer **ao**, há crase: "Vou **à** escola" → "Vou **ao** colégio".',
+                    '## Quando não usar',
+                    '- Antes de palavras masculinas: "andar a cavalo".',
+                    '- Antes de verbos: "começou a chover".',
+                    '- Entre palavras repetidas: "cara a cara".',
+                    '?? Complete: "Entreguei o livro ___ professora."\n=> **à** (entreguei o livro **ao** professor).',
+                    NOTE],
+                { division: 'educa', kind: 'aula', author: 'Equipe JB Educa' })
+        ];
+    }
+    const SAMPLE_TAGS = [
+        { slug: 'transparencia', name: 'Transparência', description: 'Acesso a dados, contratos e gastos públicos.' },
+        { slug: 'contas-publicas', name: 'Contas públicas', description: 'Orçamento, contratos e fiscalização do dinheiro público.' },
+        { slug: 'reforma-administrativa', name: 'Reforma administrativa', description: 'A tramitação da reforma do serviço público.' },
+        { slug: 'dados-abertos', name: 'Dados abertos', description: 'Informações públicas em formato aberto.' },
+        { slug: 'equacao-do-2-grau', name: 'Equação do 2º grau', description: 'Discriminante, fórmula de Bhaskara e exercícios.' },
+        { slug: 'matematica-basica', name: 'Matemática básica', description: '' }
+    ];
+    // Tags dos exemplos do jornal (pelo título)
+    const SAMPLE_NEWS_TAGS = {
+        'Votação da reforma administrativa no plenário': ['reforma-administrativa'],
+        'Relator apresenta parecer final sobre reforma administrativa nesta quinta-feira': ['reforma-administrativa'],
+        'Transparência não é favor, é dever': ['transparencia', 'contas-publicas'],
+        'O que muda com o novo marco de transparência pública': ['transparencia'],
+        'Comissão aprova novo marco regulatório para transparência pública': ['transparencia'],
+        'Dossiê aponta gargalos na fiscalização de obras públicas em 14 estados': ['contas-publicas', 'transparencia'],
+        '“Dados abertos economizam dinheiro público”, diz pesquisadora': ['dados-abertos', 'transparencia'],
+        'Estádios públicos passam a divulgar custos de manutenção em painel aberto': ['dados-abertos', 'contas-publicas']
+    };
+
     function seed() {
         if (store.get(KEYS.news) === null) {
             const n = (category, title, subtitle, image, minutes, body, extra) => Object.assign({
@@ -281,7 +388,7 @@
                 n('meioambiente', 'Relatório aponta avanço de programas de recuperação de áreas degradadas', 'Dados fictícios de demonstração indicam aumento da área monitorada.', 'assets/img/cat-meioambiente.svg', 1100),
                 n('cultura', 'Festival regional anuncia programação gratuita de cinema e música', 'Evento ocupará espaços públicos durante o fim de semana.', 'assets/img/cat-cultura.svg', 1200)
             ].concat(sectionSamples(n)));
-            store.set(KEYS.seed, String(SEED_VERSION));
+            store.set(KEYS.seed, '4');   // o passo da versão 5 (Educa e tags) roda logo abaixo
         }
         // Demonstrações criadas antes do selo dos perfis da redação: autores de exemplo ganham o selo, uma vez.
         if (Number(store.get(KEYS.seed) || 1) < 4 && store.get(KEYS.authors) !== null) {
@@ -289,11 +396,21 @@
             write(KEYS.authors, read(KEYS.authors, []).map(a => 'official' in a ? a : Object.assign(a, { official: a.name in sample ? sample[a.name] : !a.columnist })));
         }
         // Demonstrações criadas antes das seções novas: acrescenta só os exemplos novos, uma vez.
-        if (Number(store.get(KEYS.seed) || 1) < SEED_VERSION) {
+        const mk = (category, title, subtitle, image, minutes, body, extra) => Object.assign({ id: uid() + category.slice(0, 2), category, title, subtitle, image, author: 'Redação JB', date: minutesAgo(minutes), featured: false, body }, extra || {});
+        if (Number(store.get(KEYS.seed) || 1) < 4) {
             const list = read(KEYS.news, []);
             const titles = new Set(list.map(x => x.title));
-            const add = sectionSamples((category, title, subtitle, image, minutes, body, extra) => Object.assign({ id: uid() + category.slice(0, 2), category, title, subtitle, image, author: 'Redação JB', date: minutesAgo(minutes), featured: false, body }, extra || {}));
-            write(KEYS.news, list.concat(add.filter(x => !titles.has(x.title))));
+            write(KEYS.news, list.concat(sectionSamples(mk).filter(x => !titles.has(x.title))));
+            store.set(KEYS.seed, '4');
+        }
+        // Versão 5: exemplos do JB Educa e tags (uma vez, sem mexer no que a pessoa criou)
+        if (Number(store.get(KEYS.seed) || 1) < SEED_VERSION) {
+            if (store.get(KEYS.tags) === null) write(KEYS.tags, SAMPLE_TAGS.map(t => Object.assign({ created: new Date().toISOString() }, t)));
+            const authors = read(KEYS.authors, null), educa = SAMPLE_AUTHORS[SAMPLE_AUTHORS.length - 1];
+            if (authors && !authors.some(a => a.name === educa.name)) write(KEYS.authors, authors.concat([Object.assign({ id: uid(), avatar: '', created: new Date().toISOString() }, educa)]));
+            const list = read(KEYS.news, []).map(x => SAMPLE_NEWS_TAGS[x.title] && !(x.tags || []).length ? Object.assign(x, { tags: SAMPLE_NEWS_TAGS[x.title].slice() }) : x);
+            const titles = new Set(list.map(x => x.title));
+            write(KEYS.news, list.concat(educaSamples(mk).filter(x => !titles.has(x.title))));
             store.set(KEYS.seed, String(SEED_VERSION));
         }
         if (store.get(KEYS.authors) === null) write(KEYS.authors, SAMPLE_AUTHORS.map(a => Object.assign({ id: uid(), avatar: '', created: new Date().toISOString() }, a)));
@@ -314,13 +431,23 @@
     }
     const snapshotOf = n => VERSIONED.reduce((o, k) => { o[k] = n[k] === undefined ? null : n[k]; return o; }, {});
 
+    // Mesma limpeza do gatilho news_clean_labels: só tags que existem e selos de matéria ativos, sem repetir
+    function cleanLabels(item) {
+        if ('tags' in item) item.tags = [...new Set((item.tags || []).filter(t => Tags.get(t)))].slice(0, 10);
+        if ('badges' in item) item.badges = [...new Set((item.badges || []).filter(b => BADGES[b] && BADGES[b].forNews && BADGES[b].active))].slice(0, 3);
+        if ('edit_credits' in item) item.edit_credits = [...new Set((item.edit_credits || []).map(x => String(x || '').trim()).filter(Boolean))].slice(0, 10);
+        return item;
+    }
     const News = {
         everything() { return read(KEYS.news, []).map(withDefaults).sort((a, b) => new Date(b.date) - new Date(a.date)); },   // painel: todos os status
-        all() { return News.everything().filter(isPublished); },                                                      // leitores: só publicadas
+        published() { return News.everything().filter(isPublished); },                                                // todas as divisões
+        all() { return News.published().filter(n => n.division === 'jb'); },                                         // o jornal (leitores: só publicadas)
+        byDivision(d) { return News.published().filter(n => n.division === d); },
         get(id) { return withDefaults(read(KEYS.news, []).find(x => x.id === id) || null); },
         save(item) {
             const list = read(KEYS.news, []);
             const i = list.findIndex(x => x.id === item.id);
+            cleanLabels(item);
             // Colaboradores de edição: só quem criou ou coordenador/admin mudam (gatilho news_set_editors)
             if ('editors' in item) {
                 const old = i >= 0 ? list[i] : null, me = Auth.current();
@@ -329,7 +456,8 @@
                 item.editors = [...new Set((item.editors || []).filter(e => e && e !== creator))].slice(0, 10);
             }
             if (i >= 0) {
-                const change = changeKind(withDefaults(list[i]), item);
+                const before = withDefaults(JSON.parse(JSON.stringify(list[i])));
+                const change = changeKind(before, item);
                 if (change === 'version') {   // guarda a versão anterior (20 últimas)
                     const all = read(KEYS.versions, {}), me = Auth.current();
                     all[item.id] = [{ id: uid(), replacedAt: new Date().toISOString(), replacedBy: me ? me.name : '', snapshot: snapshotOf(list[i]) }].concat(all[item.id] || []).slice(0, 20);
@@ -337,6 +465,7 @@
                 }
                 if (change) item.updated_at = new Date().toISOString();
                 list[i] = Object.assign(list[i], item);
+                notifyFollowers(before, withDefaults(Object.assign({}, list[i])));
             } else {
                 const me = Auth.current();
                 item.id = uid(); item.date = item.date || new Date().toISOString(); item.updated_at = null; item.created_by = me ? me.id : null;
@@ -349,15 +478,184 @@
             write(KEYS.news, read(KEYS.news, []).filter(x => x.id !== id));
             const v = read(KEYS.versions, {}); if (v[id]) { delete v[id]; write(KEYS.versions, v); }
         },
-        byCategory(cat) { return News.all().filter(x => x.category === cat); },
+        byCategory(cat) { return (SUBJECTS[cat] ? News.byDivision('educa') : News.all()).filter(x => x.category === cat); },
         byKind(kinds) { kinds = [].concat(kinds); return News.all().filter(x => kinds.includes(x.kind || 'noticia')); },
-        byAuthor(name) { return News.all().filter(x => x.author === name || (x.coauthors || []).includes(name)); },
+        // Assinaturas (autor e coautores) e créditos de edição, em todas as divisões
+        // Sem diferenciar maiúsculas ("games" e "Games" são a mesma assinatura)
+        byAuthor(name) { return News.published().filter(x => sameName(x.author, name) || (x.coauthors || []).some(c => sameName(c, name))); },
+        byCredit(name) { return News.published().filter(x => (x.edit_credits || []).some(c => sameName(c, name))); },
+        byTag(slug) { return News.published().filter(x => (x.tags || []).includes(slug)); },
         // Relê uma matéria do servidor (cobertura ao vivo). No modo local, lê de novo o navegador.
         refresh() { return Promise.resolve(true); },
         search(q) {
             q = q.toLowerCase();
-            return News.all().filter(x => (x.title + ' ' + x.subtitle + ' ' + x.author + ' ' + x.coauthors.join(' ') + ' ' + x.body.map(plainText).join(' ') + ' ' + x.updates.map(u => u.text).join(' ')).toLowerCase().includes(q));
+            return News.published().filter(x => (x.title + ' ' + x.subtitle + ' ' + x.author + ' ' + x.coauthors.join(' ') + ' ' + x.tags.map(t => (Tags.get(t) || { name: t }).name).join(' ') + ' ' +
+                x.body.map(plainText).join(' ') + ' ' + x.updates.map(u => u.text).join(' ')).toLowerCase().includes(q));
         }
+    };
+
+    /* ---------- Tags (navegação entre matérias relacionadas) ----------
+       Qualquer pessoa da equipe cria uma tag ao escrever; editar e excluir é da coordenação
+       (no Supabase o banco confere: tabela tags). Excluir uma tag a tira das matérias. */
+    const tagSort = (a, b) => a.name.localeCompare(b.name, 'pt-BR');
+    const Tags = {
+        all() { return (read(KEYS.tags, []) || []).slice().sort(tagSort); },
+        get(slug) { return Tags.all().find(t => t.slug === slug) || null; },
+        find(name) { const s = slugify(name); return s ? Tags.get(s) : null; },
+        count(slug) { return News.byTag(slug).length; },
+        load() { return Promise.resolve(true); },
+        // {slug?, name, description}. Sem slug = tag nova (o slug sai do nome).
+        save(t) {
+            const isNew = !t.slug, name = String(t.name || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+            const slug = isNew ? slugify(name) : t.slug;
+            if (!name || !SLUG_RE.test(slug)) return Promise.resolve({ ok: false, error: 'Dê um nome à tag (letras ou números).' });
+            if (isNew ? !Auth.isStaff() : !Auth.isEditor()) return Promise.resolve({ ok: false, error: 'Você não tem permissão para isso.' });
+            const list = read(KEYS.tags, []) || [], i = list.findIndex(x => x.slug === slug);
+            if (isNew && i >= 0) return Promise.resolve({ ok: true, tag: list[i], existed: true });
+            const tag = { slug, name, description: String(t.description || '').trim().slice(0, 300), created: i >= 0 ? list[i].created : new Date().toISOString() };
+            if (i >= 0) list[i] = tag; else list.push(tag);
+            write(KEYS.tags, list);
+            return Promise.resolve({ ok: true, tag });
+        },
+        remove(slug) {
+            if (!Auth.isEditor()) return Promise.resolve({ ok: false, error: 'Só a coordenação exclui tags.' });
+            write(KEYS.tags, (read(KEYS.tags, []) || []).filter(t => t.slug !== slug));
+            write(KEYS.news, read(KEYS.news, []).map(n => (n.tags || []).includes(slug) ? Object.assign(n, { tags: n.tags.filter(x => x !== slug) }) : n));
+            return Promise.resolve({ ok: true });
+        }
+    };
+
+    /* ---------- Catálogo de selos ----------
+       Coordenação e administração criam, editam, desativam e excluem; "Em matérias" / "Em perfis"
+       definem onde cada selo pode ser usado. Excluir um selo o tira das matérias e dos perfis. */
+    const Badges = {
+        all() { return Object.keys(BADGES).map(k => BADGES[k]); },
+        forProfiles() { return Badges.all().filter(b => b.forProfiles && b.active); },
+        forNews() { return Badges.all().filter(b => b.forNews && b.active); },
+        load() { const saved = read(KEYS.badges, null); if (Array.isArray(saved)) setBadgeCatalog(saved); return Promise.resolve(true); },
+        save(b, isNew) {
+            if (!Auth.isEditor()) return Promise.resolve({ ok: false, error: 'Só a coordenação gerencia os selos.' });
+            const slug = isNew ? slugify(b.slug || b.label, 30) : b.slug, label = String(b.label || '').trim().slice(0, 40);
+            if (!label || !SLUG_RE.test(slug)) return Promise.resolve({ ok: false, error: 'Dê um nome ao selo.' });
+            if (isNew && BADGES[slug]) return Promise.resolve({ ok: false, error: 'Já existe um selo com esse identificador.' });
+            const list = Badges.all().filter(x => x.slug !== slug).concat([{ slug, label, desc: String(b.desc || '').trim().slice(0, 200), color: b.color, forProfiles: !!b.forProfiles, forNews: !!b.forNews, active: b.active !== false, sort: Number(b.sort) || 0 }]);
+            write(KEYS.badges, list); setBadgeCatalog(list);
+            return Promise.resolve({ ok: true, badge: BADGES[slug] });
+        },
+        remove(slug) {
+            if (!Auth.isEditor()) return Promise.resolve({ ok: false, error: 'Só a coordenação gerencia os selos.' });
+            const list = Badges.all().filter(x => x.slug !== slug);
+            write(KEYS.badges, list); setBadgeCatalog(list);
+            write(KEYS.news, read(KEYS.news, []).map(n => (n.badges || []).includes(slug) ? Object.assign(n, { badges: n.badges.filter(x => x !== slug) }) : n));
+            write(KEYS.users, read(KEYS.users, []).map(u => (u.badges || []).includes(slug) ? Object.assign(u, { badges: u.badges.filter(x => x !== slug) }) : u));
+            return Promise.resolve({ ok: true });
+        }
+    };
+
+    /* ---------- Seguir matérias e notificações ----------
+       Quem segue uma matéria é avisado quando ela é atualizada (correção, nova versão) e, na cobertura
+       ao vivo, a cada atualização. Administradores recebem os alertas de segurança. No Supabase os
+       avisos são criados pelo banco (gatilhos) e podem chegar também por push com o site fechado.
+       No modo local, valem entre as contas de demonstração deste navegador. */
+    const Follows = {
+        ids() { const me = Auth.current(); return me ? ((read(KEYS.follows, {}) || {})[me.id] || []).slice() : []; },
+        has(id) { return Follows.ids().includes(id); },
+        // true = passou a seguir, false = deixou de seguir, null = precisa de conta liberada
+        toggle(id) {
+            const me = Auth.current();
+            if (!me || !Auth.accountOk()) return Promise.resolve(null);
+            const all = read(KEYS.follows, {}) || {}, l = all[me.id] || [], had = l.includes(id);
+            all[me.id] = had ? l.filter(x => x !== id) : [id].concat(l).slice(0, 500);
+            write(KEYS.follows, all);
+            return Promise.resolve(!had);
+        },
+        load() { return Promise.resolve(true); }
+    };
+    function notifyLocal(users, kind, title, body, url, newsId) {
+        const all = read(KEYS.notifs, {}) || {}, now = new Date().toISOString(), me = Auth.current();
+        [...new Set(users)].filter(u => u && (!me || u !== me.id)).forEach(u => {
+            const l = all[u] || [];
+            const same = newsId && l.find(x => x.newsId === newsId && x.kind === kind && !x.readAt && Date.now() - new Date(x.date) < 15 * 60000);
+            if (same) Object.assign(same, { title, body, date: now });
+            else l.unshift({ id: uid(), kind, title, body, url, newsId: newsId || null, date: now, readAt: null });
+            all[u] = l.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 100);
+        });
+        write(KEYS.notifs, all);
+    }
+    // Mesmas regras do gatilho news_notify
+    function notifyFollowers(before, after) {
+        if (!isPublished(before) || !isPublished(after) || (read(KEYS.site, {}) || {}).lockdown) return;
+        const follows = read(KEYS.follows, {}) || {};
+        const followers = Object.keys(follows).filter(u => follows[u].includes(after.id));
+        const url = 'pages/noticia.html?id=' + encodeURIComponent(after.id);
+        if (after.updates.length > before.updates.length) {
+            const last = after.updates.slice().sort((a, b) => new Date(b.date) - new Date(a.date))[0] || {};
+            const live = after.kind === 'aovivo' ? Auth.users().filter(u => u.notifyLive).map(u => u.id) : [];
+            notifyLocal(followers.concat(live), 'live', 'Ao vivo: ' + after.title, last.text || 'Nova atualização na cobertura.', url, after.id);
+        } else if (VERSIONED.concat(['corrections']).some(k => !sameValue(before[k], after[k]))) {
+            notifyLocal(followers, 'follow', 'Atualizada: ' + after.title, after.corrections.length > before.corrections.length ?
+                'Uma correção foi publicada na matéria que você segue.' : 'A matéria que você segue foi atualizada.', url, after.id);
+        }
+    }
+    const Notifications = {
+        list() { const me = Auth.current(); return me ? ((read(KEYS.notifs, {}) || {})[me.id] || []).slice() : []; },
+        unread() { return Notifications.list().filter(n => !n.readAt).length; },
+        load() { return Promise.resolve(true); },
+        markRead(ids) {
+            const me = Auth.current(); if (!me) return Promise.resolve(false);
+            const all = read(KEYS.notifs, {}) || {}, now = new Date().toISOString();
+            (all[me.id] || []).forEach(n => { if (!n.readAt && (!ids || ids.includes(n.id))) n.readAt = now; });
+            write(KEYS.notifs, all);
+            return Promise.resolve(true);
+        },
+        remove(id) {
+            const me = Auth.current(); if (!me) return Promise.resolve(false);
+            const all = read(KEYS.notifs, {}) || {};
+            all[me.id] = (all[me.id] || []).filter(n => id !== undefined && n.id !== id);
+            write(KEYS.notifs, all);
+            return Promise.resolve(true);
+        }
+    };
+    // Push com o site fechado: só no modo Supabase (supabase-backend.js).
+    const Push = {
+        supported: () => false,
+        state: () => Promise.resolve('unsupported'),
+        enable: () => Promise.resolve({ ok: false, error: 'As notificações com o site fechado só funcionam no site publicado.' }),
+        disable: () => Promise.resolve({ ok: true })
+    };
+
+    /* ---------- Visitas do site (estatísticas do painel) ----------
+       Página vista: sempre conta (só um número por dia). Visitante diferente: só com o consentimento
+       de "Estatísticas", guardando neste navegador apenas a data da última visita (jb_visit_day). */
+    const todaySP = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+    function newVisitorToday() {
+        if (!Cookies.allows('statistics')) return false;
+        const day = todaySP();
+        if (store.get(KEYS.visitDay) === day) return false;
+        store.set(KEYS.visitDay, day);
+        return true;
+    }
+    const lastDays = (days, rows) => {
+        const map = {}; (rows || []).forEach(r => { map[r.day] = r; });
+        const out = [], base = new Date(todaySP() + 'T12:00:00');
+        for (let i = days - 1; i >= 0; i--) {
+            const d = new Date(base - i * 86400000).toISOString().slice(0, 10);
+            out.push({ day: d, views: map[d] ? map[d].views : 0, visitors: map[d] ? map[d].visitors : 0 });
+        }
+        return out;
+    };
+    let visitsHit = false;
+    const Visits = {
+        hit() {
+            if (visitsHit || (read(KEYS.site, {}) || {}).lockdown) return;
+            visitsHit = true;
+            const all = read(KEYS.visits, {}) || {}, day = todaySP(), row = all[day] || { views: 0, visitors: 0 };
+            row.views++; if (newVisitorToday()) row.visitors++;
+            all[day] = row;
+            write(KEYS.visits, Object.keys(all).sort().slice(-400).reduce((o, k) => { o[k] = all[k]; return o; }, {}));
+        },
+        load() { return Promise.resolve(true); },
+        list(days) { const all = read(KEYS.visits, {}) || {}; return lastDays(days || 30, Object.keys(all).map(d => Object.assign({ day: d }, all[d]))); }
     };
 
     /* ---------- Autores (jornalistas e colunistas) ---------- */
@@ -466,16 +764,20 @@
         canEditNews(n) {
             if (!n) return false;
             if (Auth.isEditor()) return true;
-            return Auth.role() === 'jornalista' && (Auth.isOwnNews(n) || Auth.isCollaborator(n)) && JOURNALIST_STATUSES.includes(n.status || 'publicada');
+            const r = Auth.role();
+            return (r === 'jornalista' || (r === 'professor' && divisionOf(n) === 'educa')) &&
+                (Auth.isOwnNews(n) || Auth.isCollaborator(n)) && JOURNALIST_STATUSES.includes(n.status || 'publicada');
         },
+        // Divisões em que o usuário escreve (professor: só o JB Educa)
+        divisions() { const r = Auth.role(); return !STAFF_ROLES.includes(r) ? [] : r === 'professor' ? ['educa'] : Object.keys(DIVISIONS); },
         // Quem muda a lista de colaboradores: quem criou a matéria ou coordenador/admin (gatilho news_set_editors)
         canManageEditors(n) { return Auth.isEditor() || (Auth.isStaff() && (!n || !n.id || Auth.isOwnNews(n))); },
         // Cargos que o usuário logado pode dar a `target` ({id, role}); [] = não pode mexer.
         assignableRoles(target) {
             const me = Auth.current(), r = Auth.role();
             if (!me || !target || target.id === me.id || target.role === 'admin') return [];
-            if (r === 'admin') return ['leitor', 'jornalista', 'coordenador'];
-            if (r === 'coordenador' && ['leitor', 'jornalista'].includes(target.role || 'leitor')) return ['leitor', 'jornalista'];
+            if (r === 'admin') return ['leitor', 'jornalista', 'professor', 'coordenador'];
+            if (r === 'coordenador' && ['leitor', 'jornalista', 'professor'].includes(target.role || 'leitor')) return ['leitor', 'jornalista', 'professor'];
             return [];
         },
         // Pode dar/tirar selos de `target`? (mesmas regras de set_member_badges no banco)
@@ -483,14 +785,17 @@
             const me = Auth.current(), r = Auth.role();
             if (!me || !target || target.id === me.id || target.role === 'admin') return false;
             if (r === 'admin') return true;
-            return r === 'coordenador' && ['leitor', 'jornalista'].includes(target.role || 'leitor');
-        }
+            return r === 'coordenador' && ['leitor', 'jornalista', 'professor'].includes(target.role || 'leitor');
+        },
+        // Avisar de todas as coberturas ao vivo (profiles.notify_live)
+        notifyLive() { const u = Auth.current(); return !!(u && u.notifyLive); },
+        setNotifyLive(on) { if (!Auth.current()) return Promise.resolve(false); Auth.update({ notifyLive: !!on }); return Promise.resolve(true); }
     });
 
     /* ---------- Membros: cargos (painel) e perfis públicos ---------- */
     // Perfil público: nunca inclui e-mail, cidade nem interesses.
     const publicOf = u => ({ id: u.id, name: u.name, role: u.role || 'leitor', bio: u.bio || '', avatar: u.avatar || '', created: u.created, badges: (u.badges || []).slice() });
-    const cleanBadges = list => [...new Set((list || []).filter(b => BADGES[b]))].sort();
+    const cleanBadges = list => [...new Set((list || []).filter(b => BADGES[b] && BADGES[b].forProfiles && BADGES[b].active))].sort();
     let memberList = [];
     const Members = {
         // Painel (coordenador/admin): busca contas por nome ou e-mail
@@ -530,7 +835,7 @@
         loadStaff() { return Promise.resolve(true); },
         staff() { return Auth.users().filter(u => STAFF_ROLES.includes(u.role) || (u.badges || []).length).map(publicOf).sort((a, b) => roleRank(a.role) - roleRank(b.role) || byName(a, b)); },
         staffById(id) { return Members.staff().find(p => p.id === id) || null; },
-        staffByName(name) { return Members.staff().find(p => p.name === name) || null; },
+        staffByName(name) { return Members.staff().find(p => sameName(p.name, name)) || null; },
         // Perfil público de qualquer conta: objeto, null (não existe) ou undefined (falha de conexão)
         profile(id) { const u = Auth.users().find(x => x.id === id); return Promise.resolve(u ? publicOf(u) : null); }
     };
@@ -582,7 +887,8 @@
     };
     const History = {
         all() { return read(KEYS.history, []).map(News.get).filter(n => n && isPublished(n)); },
-        add(id) { write(KEYS.history, [id].concat(read(KEYS.history, []).filter(x => x !== id)).slice(0, 30)); },
+        // Só com o consentimento de "Preferências" (cookies)
+        add(id) { if (Cookies.allows('preferences')) write(KEYS.history, [id].concat(read(KEYS.history, []).filter(x => x !== id)).slice(0, 30)); },
         clear() { write(KEYS.history, []); }
     };
     const Comments = {
@@ -623,6 +929,9 @@
         setLockdown(on, message) {
             if (!Auth.isEditor()) return Promise.resolve({ ok: false, error: 'Só coordenadores e administradores ligam o modo lockdown.' });
             write(KEYS.site, { lockdown: !!on, message: String(message || '').slice(0, 500), since: new Date().toISOString() });
+            const me = Auth.current();
+            notifyLocal(Auth.users().filter(u => u.role === 'admin').map(u => u.id), 'security', on ? 'Modo lockdown LIGADO' : 'Modo lockdown desligado',
+                'Por ' + (me ? me.name : '') + (on && message ? ': ' + String(message).slice(0, 200) : '.'), 'pages/admin-seguranca.html', null);
             return Promise.resolve({ ok: true });
         }
     };
@@ -649,10 +958,11 @@
         set(t) { store.set(KEYS.theme, t); if (t === 'dark') document.documentElement.setAttribute('data-bs-theme', 'dark'); else document.documentElement.removeAttribute('data-bs-theme'); },
         toggle() { Theme.set(Theme.get() === 'dark' ? 'light' : 'dark'); return Theme.get(); }
     };
-    // Acessibilidade: tamanho do texto (0 = normal … 3 = maior) e alto contraste. Aplicado antes
-    // da página aparecer pelo script inline do <head> (mesma chave jb_a11y).
+    // Acessibilidade: tamanho do texto (0 = normal … 3 = maior), alto contraste e "menos animação".
+    // Texto e contraste são aplicados antes da página aparecer pelo script inline do <head> (mesma
+    // chave jb_a11y); "menos animação" é aplicado aqui mesmo, antes do layout.js desenhar o cabeçalho.
     const A11y = {
-        get() { const a = read(KEYS.a11y, {}) || {}; return { font: Math.max(0, Math.min(3, Number(a.font) || 0)), contrast: !!a.contrast }; },
+        get() { const a = read(KEYS.a11y, {}) || {}; return { font: Math.max(0, Math.min(3, Number(a.font) || 0)), contrast: !!a.contrast, motion: !!a.motion }; },
         set(patch) {
             const a = Object.assign(A11y.get(), patch);
             a.font = Math.max(0, Math.min(3, Number(a.font) || 0));
@@ -664,14 +974,147 @@
             const a = A11y.get(), d = document.documentElement;
             if (a.font) d.setAttribute('data-font', a.font); else d.removeAttribute('data-font');
             if (a.contrast) d.setAttribute('data-contrast', 'high'); else d.removeAttribute('data-contrast');
+            if (a.motion) d.setAttribute('data-motion', 'reduce'); else d.removeAttribute('data-motion');
+        }
+    };
+    try { if (A11y.get().motion) document.documentElement.setAttribute('data-motion', 'reduce'); } catch (e) { /* sem DOM */ }
+
+    /* ---------- Cookies e armazenamento no navegador (LGPD) ----------
+       O JB não usa cookies de publicidade nem rastreadores. O que fica no navegador está listado em
+       COOKIE_CATEGORIES (a mesma lista aparece na janela de preferências e na Política de Privacidade).
+       Consentimento versão 2: quem respondeu à versão antiga vê o aviso de novo. */
+    const COOKIE_CATEGORIES = [
+        { key: 'necessary', label: 'Necessários', locked: true,
+            desc: 'Fazem o site funcionar e protegem a sua conta. Não podem ser desligados.',
+            items: ['Sessão de login e verificação em duas etapas (Supabase Auth)', 'Proteção contra robôs no login e no cadastro (Cloudflare Turnstile)', 'Tema claro/escuro, tamanho do texto, alto contraste e menos animação', 'Favoritos de quem navega sem conta e rascunhos do editor', 'Estas escolhas de cookies e uma cópia das páginas públicas já abertas, para ler sem internet'] },
+        { key: 'preferences', label: 'Preferências',
+            desc: 'Lembram o que você fez para personalizar o site.',
+            items: ['Histórico de leitura (últimas 30 matérias) e as recomendações da Minha Central', 'Cidade escolhida para a previsão do tempo'] },
+        { key: 'statistics', label: 'Estatísticas',
+            desc: 'Ajudam a redação a saber quantas pessoas leem o JB. Sem perfil e sem identificar você.',
+            items: ['Contagem de visitantes diferentes por dia: guarda só a data da sua última visita neste navegador', 'Páginas vistas e leituras de cada matéria são sempre contadas apenas como números totais'] },
+        { key: 'location', label: 'Localização aproximada',
+            desc: 'Mostra o tempo da sua cidade sem você precisar escolher.',
+            items: ['A cidade é estimada pela sua conexão (Cloudflare), sem GPS; nada é guardado no servidor'] },
+        { key: 'external', label: 'Conteúdo de terceiros',
+            desc: 'Carrega imagens hospedadas por outros serviços, que recebem o seu endereço IP.',
+            items: ['Capas de vídeos do YouTube', 'Escudos dos times (TheSportsDB) e fotos da Wikipédia'] }
+    ];
+    const Cookies = {
+        VERSION: 2,
+        CATEGORIES: COOKIE_CATEGORIES,
+        get() { const c = read(KEYS.cookies, null); return c && c.v === 2 ? c : null; },
+        // Sem resposta ainda: só os necessários
+        allows(k) { if (k === 'necessary') return true; const c = Cookies.get(); return !!(c && c[k]); },
+        set(prefs) {
+            const c = { v: 2, necessary: true, date: new Date().toISOString() };
+            COOKIE_CATEGORIES.forEach(cat => { if (!cat.locked) c[cat.key] = !!(prefs && prefs[cat.key]); });
+            write(KEYS.cookies, c);
+            // Retirou o consentimento: apaga o que dependia dele
+            if (!c.preferences) { store.del(KEYS.history); store.del(KEYS.place); }
+            if (!c.statistics) store.del(KEYS.visitDay);
+            try { document.dispatchEvent(new CustomEvent('jb:consent', { detail: c })); } catch (e) { }
+            return c;
         }
     };
 
-    /* ---------- Cookies (LGPD) ---------- */
-    const Cookies = {
-        get() { return read(KEYS.cookies, null); },
-        set(prefs) { write(KEYS.cookies, Object.assign({ essential: true, analytics: false, date: new Date().toISOString() }, prefs)); }
+    /* ---------- Serviços externos (tempo, cotações, futebol, Hoje na História) ----------
+       No site publicado, o navegador chama só o próprio JB (/api/ext, Cloudflare Pages Function), que
+       consulta o serviço e guarda a resposta no cache da Cloudflare: o seu IP não chega ao serviço e
+       muitos leitores reaproveitam a mesma consulta. Aqui ainda fica uma cópia (jb_ext) por alguns
+       minutos, para não repetir pedidos ao trocar de página. Abrindo por file:// (ou num servidor sem
+       as Functions) o navegador chama o serviço direto. Fontes e limites: functions/api/ext.js. */
+    const EXT_TTL = { weather: 15, capitals: 15, geocode: 1440, cep: 10080, rates: 5, football: 10, table: 60, league: 1440, history: 720 };   // minutos
+    const LEAGUES = {
+        4351: { name: 'Brasileirão Série A', short: 'Série A' },
+        4404: { name: 'Brasileirão Série B', short: 'Série B' },
+        4725: { name: 'Copa do Brasil', short: 'Copa do Brasil' },
+        4501: { name: 'Copa Libertadores', short: 'Libertadores' },
+        4724: { name: 'Copa Sul-Americana', short: 'Sul-Americana' }
     };
+    // Capitais do "tempo agora" (mesma ordem de functions/api/ext.js)
+    const CAPITALS = [['São Paulo', 'SP', -23.55, -46.63], ['Rio de Janeiro', 'RJ', -22.91, -43.17], ['Brasília', 'DF', -15.78, -47.93], ['Salvador', 'BA', -12.97, -38.5],
+        ['Fortaleza', 'CE', -3.72, -38.54], ['Belo Horizonte', 'MG', -19.92, -43.94], ['Manaus', 'AM', -3.12, -60.02], ['Curitiba', 'PR', -25.43, -49.27],
+        ['Recife', 'PE', -8.05, -34.88], ['Porto Alegre', 'RS', -30.03, -51.23], ['Belém', 'PA', -1.46, -48.49], ['Goiânia', 'GO', -16.69, -49.25]]
+        .map(c => ({ name: c[0], uf: c[1], lat: c[2], lon: c[3] }));
+    const RATE_PAIRS = ['USD-BRL', 'EUR-BRL', 'GBP-BRL', 'ARS-BRL', 'JPY-BRL', 'CNY-BRL', 'CAD-BRL', 'CHF-BRL', 'BTC-BRL', 'ETH-BRL', 'LTC-BRL', 'XRP-BRL', 'DOGE-BRL'];
+    // Endereço do serviço (modo direto). Mesmas regras de functions/api/ext.js.
+    function extDirect(src, p) {
+        const num = (v, lo, hi) => { if (v === undefined || String(v).trim() === '') return null; v = Number(v); return isFinite(v) && v >= lo && v <= hi ? Math.round(v * 100) / 100 : null; };
+        if (src === 'weather') {
+            const lat = num(p.lat, -90, 90), lon = num(p.lon, -180, 180);
+            return lat === null || lon === null ? '' : 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon +
+                '&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=6';
+        }
+        if (src === 'capitals') return 'https://api.open-meteo.com/v1/forecast?latitude=' + CAPITALS.map(c => c.lat).join(',') + '&longitude=' + CAPITALS.map(c => c.lon).join(',') +
+            '&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=1&timezone=auto';
+        if (src === 'geocode') { const q = String(p.q || '').trim().slice(0, 60); return q.length < 2 ? '' : 'https://geocoding-api.open-meteo.com/v1/search?count=8&language=pt&format=json&name=' + encodeURIComponent(q); }
+        if (src === 'cep') { const c = String(p.cep || '').replace(/\D/g, ''); return c.length === 8 ? 'https://viacep.com.br/ws/' + c + '/json/' : ''; }
+        if (src === 'rates') return 'https://economia.awesomeapi.com.br/json/last/' + RATE_PAIRS.join(',');
+        if (src === 'football' || src === 'table' || src === 'league') {
+            const id = String(p.league || ''); if (!LEAGUES[id]) return '';
+            const base = 'https://www.thesportsdb.com/api/v1/json/123/';
+            if (src === 'table') return base + 'lookuptable.php?l=' + id + '&s=' + encodeURIComponent(String(p.season || new Date().getFullYear()).replace(/[^0-9-]/g, ''));
+            if (src === 'league') return base + 'lookupleague.php?id=' + id;
+            return base + (p.when === 'next' ? 'eventsnextleague.php' : 'eventspastleague.php') + '?id=' + id;
+        }
+        if (src === 'history') {
+            const m = /^(\d{2})-(\d{2})$/.exec(String(p.day || ''));
+            return m ? 'https://pt.wikipedia.org/api/rest_v1/feed/onthisday/events/' + m[1] + '/' + m[2] : '';
+        }
+        return '';
+    }
+    const extCache = () => read(KEYS.ext, {}) || {};
+    const Ext = {
+        LEAGUES, RATE_PAIRS, CAPITALS,
+        // Promise<{data, at, stale}> ou null (sem conexão e sem cópia). at = quando o dado foi obtido.
+        get(src, params, opts) {
+            params = params || {}; opts = opts || {};
+            const qs = Object.keys(params).sort().filter(k => params[k] !== undefined && params[k] !== '').map(k => encodeURIComponent(k) + '=' + encodeURIComponent(params[k])).join('&');
+            const key = src + '?' + qs, ttl = (EXT_TTL[src] || 10) * 60000, now = Date.now();
+            const hit = extCache()[key];
+            if (hit && now - hit.t < ttl && !opts.force) return Promise.resolve({ data: hit.d, at: hit.at || hit.t, stale: false });
+            // Mesma consulta já em andamento (dois widgets pedindo a mesma previsão): espera a mesma resposta
+            if (Ext._flight[key]) return Ext._flight[key];
+            const timeout = (p, ms) => Promise.race([p, new Promise((res, rej) => setTimeout(() => rej(new Error('timeout')), ms))]);
+            const viaFn = /^https?:$/.test(location.protocol) ? fetch(root() + 'api/ext?src=' + encodeURIComponent(src) + (qs ? '&' + qs : ''), { headers: { Accept: 'application/json' } })
+                .then(r => { if (r.status === 404 && !/json/.test(r.headers.get('content-type') || '')) throw new Error('nofn'); if (!r.ok) throw new Error('http ' + r.status); return r.json().then(d => ({ d, at: Date.parse(r.headers.get('X-JB-Fetched') || '') || now })); })
+                : Promise.reject(new Error('nofn'));
+            const direct = () => { const url = extDirect(src, params); if (!url) return Promise.reject(new Error('bad')); return fetch(url).then(r => { if (!r.ok) throw new Error('http ' + r.status); return r.text().then(t => ({ d: JSON.parse(t.trim() || '{}'), at: now })); }); };
+            const flight = Ext._flight[key] = timeout(viaFn.catch(e => { if (e.message === 'nofn') return direct(); throw e; }), 15000).then(res => {
+                const all = extCache();
+                all[key] = { t: now, at: res.at, d: res.d };
+                // Guarda só as 40 consultas mais recentes
+                const keep = Object.keys(all).sort((a, b) => all[b].t - all[a].t).slice(0, 40);
+                write(KEYS.ext, keep.reduce((o, k) => { o[k] = all[k]; return o; }, {}));
+                return { data: res.d, at: res.at, stale: false };
+            }).catch(() => hit ? { data: hit.d, at: hit.at || hit.t, stale: true } : null);
+            flight.then(() => { delete Ext._flight[key]; });
+            return flight;
+        },
+        _flight: {},
+        // Cidade aproximada pela conexão (Cloudflare), só com o consentimento de "Localização aproximada"
+        locate() {
+            if (!Cookies.allows('location') || !/^https?:$/.test(location.protocol)) return Promise.resolve(null);
+            if (Ext._loc) return Ext._loc;   // uma consulta por página
+            return Ext._loc = fetch(root() + 'api/local', { headers: { Accept: 'application/json' }, cache: 'no-store' })
+                .then(r => r.ok && /json/.test(r.headers.get('content-type') || '') ? r.json() : null)
+                .then(d => d && isFinite(d.lat) && isFinite(d.lon) && d.city ? { name: String(d.city), region: String(d.region || ''), lat: Number(d.lat), lon: Number(d.lon), auto: true } : null)
+                .catch(() => null)
+                .then(p => { if (!p) Ext._loc = null; return p; });
+        },
+        // Cidade escolhida pelo leitor (só com o consentimento de "Preferências"; senão vale só nesta visita)
+        place() { const p = read(KEYS.place, null); return p && isFinite(p.lat) && isFinite(p.lon) ? p : (Ext._session || null); },
+        setPlace(p) {
+            const v = { name: String(p.name).slice(0, 80), region: String(p.region || '').slice(0, 80), uf: String(p.uf || '').slice(0, 2), lat: Number(p.lat), lon: Number(p.lon) };
+            Ext._session = v;
+            if (Cookies.allows('preferences')) write(KEYS.place, v);
+            return v;
+        },
+        clearPlace() { Ext._session = null; store.del(KEYS.place); }
+    };
+    // Cidade padrão quando não há escolha nem localização: Brasília
+    const DEFAULT_PLACE = { name: 'Brasília', region: 'Distrito Federal', lat: -15.78, lon: -47.93, fallback: true };
 
     /* ---------- Utilitários ---------- */
     const root = () => document.body.dataset.root || '';
@@ -691,33 +1134,56 @@
     }
     const fmtDate = iso => new Date(iso).toLocaleString('pt-BR', { dateStyle: 'long', timeStyle: 'short' });
     const articleUrl = n => root() + 'pages/noticia.html?id=' + encodeURIComponent(n.id);
-    const catLabel = c => (CATEGORIES[c] ? CATEGORIES[c].label : c);
-    const catUrl = c => root() + (CATEGORIES[c] ? CATEGORIES[c].page : 'pages/noticias.html');
+    const catLabel = c => (ALL_CATEGORIES[c] ? ALL_CATEGORIES[c].label : c);
+    const catUrl = c => root() + (ALL_CATEGORIES[c] ? ALL_CATEGORIES[c].page : 'pages/noticias.html');
+    const tagUrl = slug => root() + 'pages/tag.html?t=' + encodeURIComponent(slug || '');
 
     // Avatar do usuário: foto (data URL) ou inicial do nome sobre fundo carmim
     const avatarHTML = (u, cls) => '<span class="avatar ' + (cls || '') + '" data-avatar>' +
         (u.avatar && safeImg(String(u.avatar)) ? '<img src="' + esc(u.avatar) + '" alt="">' : esc((u.name || '?').trim().charAt(0).toUpperCase())) + '</span>';
 
-    const kindLabel = k => KINDS[k] || KINDS.noticia;
+    const kindLabel = k => ALL_KINDS[k] || KINDS.noticia;
     const authorUrl = name => root() + 'pages/autor.html?nome=' + encodeURIComponent(name || '');
     // Cargos e selo do JB (só para a equipe da redação)
     const roleLabel = r => ROLES[r] || ROLES.leitor;
     const isStaffRole = r => STAFF_ROLES.includes(r);
-    const sealSpan = title => {
+    const sealSpan = (title, cls) => {
         const t = esc(title);
-        return '<span class="jb-seal" title="' + t + '"><svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true" focusable="false"><path d="M6.4 11.6 2.8 8l1.1-1.1 2.5 2.5 5.7-5.7L13.2 4.8z" fill="currentColor"/></svg><span aria-hidden="true">JB</span><span class="visually-hidden">' + t + '</span></span>';
+        return '<span class="jb-seal' + (cls ? ' ' + cls : '') + '" title="' + t + '"><svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true" focusable="false"><path d="M6.4 11.6 2.8 8l1.1-1.1 2.5 2.5 5.7-5.7L13.2 4.8z" fill="currentColor"/></svg><span aria-hidden="true">JB</span><span class="visually-hidden">' + t + '</span></span>';
     };
-    const sealHTML = role => isStaffRole(role) ? sealSpan(roleLabel(role) + ' do Jornal Brasileiro') : '';
+    // Professor: selo verde do JB Educa
+    const sealHTML = role => !isStaffRole(role) ? '' : role === 'professor' ? sealSpan('Professor do JB Educa', 'jb-seal-educa') : sealSpan(roleLabel(role) + ' do Jornal Brasileiro');
     // Perfis oficiais da redação (autores com official = true): mesmo selo do JB
     const officialSealHTML = a => a && a.official ? sealSpan('Perfil oficial da redação do Jornal Brasileiro') : '';
     // Selos de perfil (Colaborador, Apoiador Oficial…): contorno, para não confundir com o selo da equipe
-    const profileBadgesHTML = list => (list || []).filter(b => BADGES[b]).map(b => '<span class="jb-badge jb-badge-' + esc(b) + '" title="' + esc(BADGES[b].desc) + '">' +
-        '<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true" focusable="false"><path d="M8 1.2l1.9 4 4.4.5-3.3 3 .9 4.3L8 10.8 4.1 13l.9-4.3-3.3-3 4.4-.5z" fill="currentColor"/></svg>' + esc(BADGES[b].label) + '</span>').join(' ');
+    const STAR = '<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true" focusable="false"><path d="M8 1.2l1.9 4 4.4.5-3.3 3 .9 4.3L8 10.8 4.1 13l.9-4.3-3.3-3 4.4-.5z" fill="currentColor"/></svg>';
+    const badgeSpan = b => '<span class="jb-badge jb-badge-c-' + esc(b.color) + '" title="' + esc(b.desc) + '">' + STAR + esc(b.label) + '</span>';
+    const profileBadgesHTML = list => (list || []).filter(b => BADGES[b] && BADGES[b].forProfiles && BADGES[b].active).map(b => badgeSpan(BADGES[b])).join(' ');
+    // Selos da matéria (Exclusivo, Especial…), escolhidos no editor
+    const newsBadgesHTML = n => (n.badges || []).filter(b => BADGES[b] && BADGES[b].forNews && BADGES[b].active).map(b => badgeSpan(BADGES[b])).join(' ');
     const profileUrl = id => root() + 'pages/perfil-publico.html?id=' + encodeURIComponent(id || '');
     // Assinatura com coautores: "A", "A e B", "A, B e C". link(name) devolve o HTML de cada nome.
-    const bylineNames = n => [n.author || 'Redação JB'].concat((n.coauthors || []).filter(x => x && x !== n.author));
+    const sameName = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+    const bylineNames = n => {
+        const out = [];
+        [n.author || 'Redação JB'].concat(n.coauthors || []).forEach(x => { x = String(x || '').trim(); if (x && !out.some(y => sameName(x, y))) out.push(x); });
+        return out;
+    };
     const joinNames = parts => parts.length < 2 ? parts.join('') : parts.slice(0, -1).join(', ') + ' e ' + parts[parts.length - 1];
     const bylineHTML = (n, link) => joinNames(bylineNames(n).map(nm => link ? link(nm) : esc(nm)));
+    // Créditos de edição ("Edição: Núcleo de Verificação JB e Ana Souza")
+    const creditNames = n => { const out = []; (n.edit_credits || []).forEach(x => { x = String(x || '').trim(); if (x && !out.some(y => sameName(x, y))) out.push(x); }); return out; };
+    const creditsHTML = (n, link) => joinNames(creditNames(n).map(nm => link ? link(nm) : esc(nm)));
+    // Tags da matéria (só as que existem no catálogo)
+    const tagsHTML = n => {
+        const list = (n.tags || []).map(t => Tags.get(t)).filter(Boolean);
+        return list.length ? '<ul class="tag-list" aria-label="Tags">' + list.map(t => '<li><a class="tag-chip" href="' + esc(tagUrl(t.slug)) + '">#' + esc(t.name) + '</a></li>').join('') + '</ul>' : '';
+    };
+    // Saudação conforme a hora (horário de Brasília)
+    function greeting(d) {
+        const h = Number(new Date(d || Date.now()).toLocaleString('en-US', { timeZone: 'America/Sao_Paulo', hour: 'numeric', hour12: false })) % 24;
+        return h >= 5 && h < 12 ? 'Bom dia' : h >= 12 && h < 18 ? 'Boa tarde' : 'Boa noite';
+    }
     const OPINION_KINDS = ['opiniao', 'analise', 'editorial'];
     // Só links http(s) viram <a>; qualquer outra coisa (javascript:, data:) é ignorada.
     const safeUrl = u => (/^https?:\/\//i.test(String(u || '').trim()) ? String(u).trim() : '');
@@ -731,6 +1197,7 @@
         else if (k !== 'noticia') parts.push('<span class="kind-badge kind-' + esc(k) + '">' + esc(kindLabel(k)) + '</span>');
         if (k === 'checagem' && n.verdict) parts.push(verdictBadge(n.verdict));
         if (n.video) parts.push('<span class="kind-badge kind-video"><svg viewBox="0 0 16 16" width="9" height="9" aria-hidden="true" focusable="false"><path d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg> Vídeo</span>');
+        const nb = newsBadgesHTML(n); if (nb) parts.push(nb);
         return parts.length ? '<div class="card-badges">' + parts.join('') + '</div>' : '';
     }
     // Data de atualização: só aparece se for depois da publicação (edição, correção ou nova atualização ao vivo).
@@ -779,7 +1246,8 @@
     function videoHTML(n) {
         const v = parseVideo(n && n.video);
         if (!v) return '';
-        const poster = isChannel(v) ? imgSrc(n) : 'https://i.ytimg.com/vi/' + v + '/hqdefault.jpg';
+        // Capa do YouTube só com o consentimento de "Conteúdo de terceiros"; senão, a imagem da matéria
+        const poster = isChannel(v) || !Cookies.allows('external') ? imgSrc(n) : 'https://i.ytimg.com/vi/' + v + '/hqdefault.jpg';
         const label = (n.kind === 'aovivo' ? 'Assistir à transmissão: ' : 'Assistir ao vídeo: ') + (n.title || '');
         return '<figure class="jb-video" data-video-embed="' + esc(videoEmbedUrl(v)) + '" data-video-title="' + esc(n.title || 'Vídeo') + '">' +
             '<button type="button" class="jb-video-play" aria-label="' + esc(label) + '"><img src="' + esc(poster) + '" alt="" loading="lazy" decoding="async">' +
@@ -787,22 +1255,128 @@
             '<figcaption class="jb-video-note">Vídeo do YouTube. Ao reproduzir, o YouTube pode registrar dados da sua visita. <a href="' + esc(videoPageUrl(v)) + '" target="_blank" rel="noopener noreferrer">Abrir no YouTube</a></figcaption></figure>';
     }
 
+    /* ---------- Fórmulas (JB Educa) ----------
+       Um subconjunto de LaTeX vira MathML, que o próprio navegador desenha (sem biblioteca externa):
+       \frac{a}{b}, \sqrt{x}, \sqrt[n]{x}, x^2, x_1, x^{n+1}, \pm, \times, \cdot, \le, \ge, \neq,
+       \Delta e outras letras gregas, \text{…}, \left( \right), \sin, \log… Tudo é escapado; o que
+       não for reconhecido aparece como texto. No texto da matéria:
+         bloco "$$ fórmula"  -> fórmula em destaque (linha própria)
+         "$$fórmula$$"       -> fórmula no meio da frase
+         bloco "?? enunciado\n=> resposta" -> exercício numerado com a resposta escondida */
+    const GREEK = { alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', varepsilon: 'ε', theta: 'θ', lambda: 'λ', mu: 'μ', pi: 'π', rho: 'ρ', sigma: 'σ', tau: 'τ', phi: 'φ', varphi: 'φ', omega: 'ω',
+        Delta: 'Δ', Gamma: 'Γ', Theta: 'Θ', Lambda: 'Λ', Pi: 'Π', Sigma: 'Σ', Phi: 'Φ', Omega: 'Ω' };
+    const MATH_OPS = { pm: '±', mp: '∓', times: '×', cdot: '·', div: '÷', le: '≤', leq: '≤', ge: '≥', geq: '≥', neq: '≠', ne: '≠', approx: '≈', equiv: '≡', infty: '∞',
+        to: '→', rightarrow: '→', Rightarrow: '⇒', Leftrightarrow: '⇔', iff: '⇔', in: '∈', notin: '∉', subset: '⊂', cup: '∪', cap: '∩', forall: '∀', exists: '∃',
+        circ: '∘', degree: '°', angle: '∠', perp: '⊥', parallel: '∥', ldots: '…', cdots: '⋯', sum: '∑', prod: '∏', int: '∫', partial: '∂', percent: '%' };
+    const MATH_FUNCS = ['sin', 'cos', 'tan', 'sen', 'tg', 'cotg', 'sec', 'log', 'ln', 'exp', 'lim', 'max', 'min', 'mdc', 'mmc'];
+    function texToMathML(tex, display) {
+        const src = String(tex == null ? '' : tex).slice(0, 2000);
+        let i = 0, depth = 0;
+        const ws = () => { while (i < src.length && /\s/.test(src[i])) i++; };
+        const wrap = x => x || '<mrow></mrow>';
+        function rawArg() {
+            ws();
+            if (src[i] !== '{') return src[i++] || '';
+            let d = 0, s = ''; i++;
+            while (i < src.length) { const ch = src[i++]; if (ch === '{') d++; else if (ch === '}') { if (!d) break; d--; } s += ch; }
+            return s;
+        }
+        function arg() {
+            ws();
+            if (src[i] === '{') { i++; const s = seq('}'); if (src[i] === '}') i++; return '<mrow>' + s + '</mrow>'; }
+            return wrap(atom());
+        }
+        function atom() {
+            ws();
+            const c = src[i];
+            if (c === undefined) return '';
+            if (c === '{') { i++; const s = seq('}'); if (src[i] === '}') i++; return '<mrow>' + s + '</mrow>'; }
+            if (c === '}') { i++; return ''; }
+            if (c === '\\') {
+                i++;
+                const m = /^[A-Za-z]+/.exec(src.slice(i));
+                if (!m) {
+                    const ch = src[i++] || '';
+                    if (',;: '.includes(ch)) return '<mspace width="0.25em"></mspace>';
+                    if (ch === '!' || ch === '') return '';
+                    if (ch === '\\') return '<mspace linebreak="newline"></mspace>';
+                    return '<mo>' + esc(ch) + '</mo>';
+                }
+                const name = m[0]; i += name.length;
+                if (name === 'frac' || name === 'dfrac' || name === 'tfrac') { const a = arg(), b = arg(); return '<mfrac>' + a + b + '</mfrac>'; }
+                if (name === 'sqrt') {
+                    ws();
+                    if (src[i] === '[') { i++; const n = seq(']'); if (src[i] === ']') i++; const b = arg(); return '<mroot>' + b + '<mrow>' + n + '</mrow></mroot>'; }
+                    return '<msqrt>' + arg() + '</msqrt>';
+                }
+                if (name === 'text' || name === 'mathrm' || name === 'textrm' || name === 'textbf') return '<mtext>' + esc(rawArg()) + '</mtext>';
+                if (name === 'left' || name === 'right') { ws(); let d = src[i++] || ''; if (d === '\\') d = src[i++] || ''; return d === '.' ? '' : '<mo>' + esc(d) + '</mo>'; }
+                if (name === 'overline' || name === 'bar') return '<mover accent="true">' + arg() + '<mo>‾</mo></mover>';
+                if (name === 'vec') return '<mover accent="true">' + arg() + '<mo>→</mo></mover>';
+                if (name === 'quad') return '<mspace width="1em"></mspace>';
+                if (name === 'qquad') return '<mspace width="2em"></mspace>';
+                if (GREEK[name]) return '<mi>' + GREEK[name] + '</mi>';
+                if (MATH_OPS[name]) return '<mo>' + MATH_OPS[name] + '</mo>';
+                if (MATH_FUNCS.includes(name)) return '<mi>' + name + '</mi>';
+                return '<mtext>' + esc('\\' + name) + '</mtext>';
+            }
+            const num = /^[0-9]+(?:[.,][0-9]+)*/.exec(src.slice(i));
+            if (num) { i += num[0].length; return '<mn>' + esc(num[0]) + '</mn>'; }
+            i++;
+            if (/[A-Za-z]/.test(c)) return '<mi>' + c + '</mi>';
+            if (c === '-') return '<mo>−</mo>';
+            if (c === '*') return '<mo>·</mo>';
+            if (c === "'") return '<mo>′</mo>';
+            return /\p{L}/u.test(c) ? '<mi>' + esc(c) + '</mi>' : '<mo>' + esc(c) + '</mo>';
+        }
+        function seq(end) {
+            let out = '';
+            if (++depth > 40) { depth--; i = src.length; return ''; }
+            while (i < src.length) {
+                ws();
+                if (i >= src.length || (end && src[i] === end)) break;
+                let base = atom(), sub = null, sup = null;
+                for (; ;) {
+                    ws();
+                    if (src[i] === '^' && sup === null) { i++; sup = arg(); }
+                    else if (src[i] === '_' && sub === null) { i++; sub = arg(); }
+                    else break;
+                }
+                if (sub !== null && sup !== null) base = '<msubsup>' + wrap(base) + sub + sup + '</msubsup>';
+                else if (sup !== null) base = '<msup>' + wrap(base) + sup + '</msup>';
+                else if (sub !== null) base = '<msub>' + wrap(base) + sub + '</msub>';
+                out += base;
+            }
+            depth--;
+            return out;
+        }
+        const body = seq('');
+        return '<math' + (display ? ' display="block"' : '') + '><semantics><mrow>' + body + '</mrow><annotation encoding="application/x-tex">' + esc(src) + '</annotation></semantics></math>';
+    }
+    // O editor guarda a fórmula com as barras escapadas ("\\frac"), como o resto do texto
+    const unescTex = s => String(s || '').replace(/\\([\\*[\]()#>.$?-])/g, '$1');
+    const MATH_MARK = String.fromCharCode(0xE010);
+    const INLINE_MATH = /\$\$([^$\n]{1,500}?)\$\$/g;
+
     /* ---------- Texto da matéria com formatação ----------
        Cada item de `body` é um bloco de texto (o banco continua com uma lista de strings):
          "## Intertítulo", "### Subtítulo menor", "> Citação", "- item" (lista), "1. item" (lista numerada)
          ou um parágrafo. Dentro do bloco: **negrito**, *itálico*, [texto](https://link). "\*" = asterisco literal.
        Tudo é escapado antes de virar HTML; links só http/https. Matérias antigas (texto puro) aparecem iguais. */
-    const MD_ESC = { '\\': '\uE000', '*': '\uE001', '[': '\uE002', ']': '\uE003', '(': '\uE004', ')': '\uE005', '#': '\uE006', '>': '\uE007', '-': '\uE008', '.': '\uE009' };
+    const MD_ESC = { '\\': '\uE000', '*': '\uE001', '[': '\uE002', ']': '\uE003', '(': '\uE004', ')': '\uE005', '#': '\uE006', '>': '\uE007', '-': '\uE008', '.': '\uE009', '$': '\uE00A', '?': '\uE00B' };
     const MD_UNESC = Object.keys(MD_ESC).reduce((o, k) => { o[MD_ESC[k]] = k; return o; }, {});
-    const hideEscapes = s => s.replace(/\\([\\*[\]()#>.-])/g, (m, c) => MD_ESC[c]);
-    const showEscapes = s => s.replace(/[\uE000-\uE009]/g, c => MD_UNESC[c]);
+    const hideEscapes = s => s.replace(/\\([\\*[\]()#>.$?-])/g, (m, c) => MD_ESC[c]);
+    const showEscapes = s => s.replace(/[\uE000-\uE00B]/g, c => MD_UNESC[c]);
     function inlineHTML(text) {
-        let s = esc(hideEscapes(String(text == null ? '' : text)));
+        const maths = [];
+        let s = String(text == null ? '' : text).replace(INLINE_MATH, (m, t) => { maths.push(texToMathML(unescTex(t), false)); return MATH_MARK + (maths.length - 1) + MATH_MARK; });
+        s = esc(hideEscapes(s));
         s = s.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)*]+)\)/g, (m, t, u) => '<a href="' + u + '" target="_blank" rel="noopener noreferrer nofollow">' + t + '</a>');
         s = s.replace(/\*\*(?=\S)([\s\S]*?\S)\*\*/g, '<strong>$1</strong>');
         s = s.replace(/\*(?=[^\s*])([^*]*?[^\s*])\*/g, '<em>$1</em>');
         s = s.replace(/\*(?=[^\s*])([^*\s])\*/g, '<em>$1</em>');
-        return showEscapes(s).replace(/\n/g, '<br>');   // quebra de linha dentro do bloco (Shift+Enter no editor)
+        s = showEscapes(s).replace(/\n/g, '<br>');   // quebra de linha dentro do bloco (Shift+Enter no editor)
+        return maths.length ? s.replace(new RegExp(MATH_MARK + '(\\d+)' + MATH_MARK, 'g'), (m, k) => maths[k] || '') : s;
     }
     // Imagem no meio do texto: bloco "![legenda](endereço)". Só https://, imagem da galeria do site
     // ou data URL de imagem (modo local). A legenda é texto puro (colchetes escapados com \).
@@ -813,6 +1387,8 @@
         const s = String(raw == null ? '' : raw);
         let m;
         if ((m = IMG_BLOCK.exec(s)) && safeImg(m[2])) return { type: 'img', src: m[2], text: m[1].replace(/\\([\s\S])/g, '$1') };
+        if ((m = /^\$\$\s+([\s\S]+)$/.exec(s)) && !/\$\$/.test(m[1].replace(/\s*\$\$\s*$/, ''))) return { type: 'math', text: unescTex(m[1].replace(/\s*\$\$\s*$/, '')) };
+        if ((m = /^\?\?\s+([\s\S]+)$/.exec(s))) { const k = m[1].search(/\n=>\s?/); return { type: 'exercise', text: k < 0 ? m[1] : m[1].slice(0, k), answer: k < 0 ? '' : m[1].slice(k).replace(/^\n=>\s?/, '') }; }
         if ((m = /^###\s+([\s\S]+)$/.exec(s))) return { type: 'h3', text: m[1] };
         if ((m = /^##\s+([\s\S]+)$/.exec(s))) return { type: 'h2', text: m[1] };
         if ((m = /^>\s?([\s\S]+)$/.exec(s))) return { type: 'quote', text: m[1] };
@@ -821,11 +1397,11 @@
         return { type: 'p', text: s };
     }
     // Texto sem marcação (busca, tempo de leitura, resumos)
-    const plainText = raw => blockOf(raw).type === 'img' ? blockOf(raw).text : showEscapes(hideEscapes(blockOf(raw).text).replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)*]+)\)/g, '$1').replace(/\*\*|\*/g, '').replace(/\n/g, ' '));
+    const plainText = raw => blockOf(raw).type === 'img' || blockOf(raw).type === 'math' ? blockOf(raw).text : showEscapes(hideEscapes(blockOf(raw).text.replace(INLINE_MATH, '$1')).replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)*]+)\)/g, '$1').replace(/\*\*|\*/g, '').replace(/\n/g, ' '));
     // opts.interview: parágrafos "P:" / "R:" viram pergunta e resposta (entrevistas)
     function bodyHTML(blocks, opts) {
         opts = opts || {};
-        let html = '', list = null;
+        let html = '', list = null, exN = 0;
         const close = () => { if (list) { html += '</' + list + '>'; list = null; } };
         (blocks || []).forEach(raw => {
             const b = blockOf(raw);
@@ -839,6 +1415,13 @@
                 const src = /^(https:|data:)/i.test(b.src) ? b.src : root() + b.src;
                 html += '<figure class="body-figure" data-src="' + esc(b.src) + '"><img src="' + esc(src) + '" alt="' + esc(b.text) + '" loading="lazy" decoding="async">' +
                     (b.text ? '<figcaption>' + esc(b.text) + '</figcaption>' : '') + '</figure>';
+                return;
+            }
+            if (b.type === 'math') { html += '<div class="body-math">' + texToMathML(b.text, true) + '</div>'; return; }
+            if (b.type === 'exercise') {
+                exN++;
+                html += '<div class="body-exercise"><p class="exercise-q"><span class="exercise-n">Exercício ' + exN + '</span> ' + inlineHTML(b.text) + '</p>' +
+                    (b.answer ? '<details class="exercise-a"><summary>Ver resposta</summary><div>' + inlineHTML(b.answer) + '</div></details>' : '') + '</div>';
                 return;
             }
             const qa = opts.interview && b.type === 'p' &&/^\s*([PR])\s*[:\-–—]\s*([\s\S]*)$/.exec(b.text);
@@ -940,12 +1523,15 @@
     // Central de Segurança do painel: só no modo Supabase.
     const Security = { overview: () => Promise.resolve(null), audit: () => Promise.resolve(null) };
 
-    if (!remote) seed();   // no modo Supabase os dados vêm do servidor
+    if (!remote) { seed(); Badges.load(); }   // no modo Supabase os dados vêm do servidor
     window.JB = {
         remote, mode: 'local', ready: Promise.resolve(), authReady: Promise.resolve(), loadError: null, flush, storageOk: () => storageOk, PASSWORD_MIN, MIN_AGE, KEYS, Captcha, Security,
-        CATEGORIES, KINDS, VERDICTS, OPINION_KINDS, VERSIONED, IMAGES, STATUS, STATUS_FLOW, ROLES, STAFF_ROLES, JOURNALIST_STATUSES, BADGES,
+        CATEGORIES, KINDS, SUBJECTS, EDUCA_KINDS, ALL_CATEGORIES, ALL_KINDS, DIVISIONS, VERDICTS, OPINION_KINDS, VERSIONED, IMAGES, STATUS, STATUS_FLOW, ROLES, STAFF_ROLES, JOURNALIST_STATUSES,
+        BADGES, BADGE_COLORS, DEFAULT_PLACE,
         CHART_TYPES, News, Authors, Versions, Auth, Members, Reports, Cookies, Views, Favs, History, Comments, Newsletter, Theme, A11y, Media, Drafts, Site,
-        util: { isPublished, isScheduled, withDefaults, changeKind, wasUpdated, avatarHTML, readingTime, root, esc, imgSrc, safeImg, timeAgo, fmtDate, articleUrl, authorUrl, profileUrl, roleLabel, isStaffRole, sealHTML, officialSealHTML, profileBadgesHTML, catLabel, catUrl, catTag, kindLabel, safeUrl, verdictBadge, liveBadge, badgesHTML, newsCard,
-            bylineNames, bylineHTML, chartHTML, barChartHTML, chartItems, parseVideo, videoHTML, videoPageUrl, inlineHTML, blockOf, imgBlock, bodyHTML, plainText, loadingHTML, errorHTML, passwordIssues, ageFrom }
+        Tags, Badges, Follows, Notifications, Push, Visits, Ext,
+        _internal: { setBadgeCatalog, lastDays, newVisitorToday, todaySP },
+        util: { isPublished, isScheduled, withDefaults, changeKind, wasUpdated, avatarHTML, readingTime, root, esc, imgSrc, safeImg, timeAgo, fmtDate, articleUrl, authorUrl, profileUrl, roleLabel, isStaffRole, sealHTML, officialSealHTML, badgeSpan, profileBadgesHTML, newsBadgesHTML, catLabel, catUrl, catTag, kindLabel, safeUrl, verdictBadge, liveBadge, badgesHTML, newsCard,
+            bylineNames, bylineHTML, creditNames, creditsHTML, sameName, tagsHTML, tagUrl, slugify, greeting, divisionOf, texToMathML, chartHTML, barChartHTML, chartItems, parseVideo, videoHTML, videoPageUrl, inlineHTML, blockOf, imgBlock, bodyHTML, plainText, loadingHTML, errorHTML, passwordIssues, ageFrom }
     };
 })();

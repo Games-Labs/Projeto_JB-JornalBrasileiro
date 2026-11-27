@@ -1,6 +1,7 @@
 -- =====================================================================
 -- JB — Exemplos das seções editoriais (autores e matérias fictícias)
 -- Opcional. Rode depois do 05_secoes_editoriais.sql (ou do 01_schema.sql numa instalação nova).
+-- A parte 2 (JB Educa e tags, no fim) só roda se o 11_divisoes_tags_notificacoes.sql já estiver aplicado.
 -- Mesmo conteúdo do modo de demonstração local (gerado a partir de assets/js/storage.js).
 -- Pode ser rodado mais de uma vez: não duplica autores nem matérias (compara pelo nome/título).
 -- =====================================================================
@@ -214,3 +215,44 @@ select 'esportes',
        '[]'::jsonb,
        null
 where not exists (select 1 from public.news where title = 'Estádios públicos passam a divulgar custos de manutenção em painel aberto');
+
+-- =====================================================================
+-- Parte 2: exemplos do JB Educa e tags (precisa do 11_divisoes_tags_notificacoes.sql ou do
+-- 01_schema.sql atual). Mesmo conteúdo do modo local (educaSamples e SAMPLE_TAGS em storage.js).
+-- =====================================================================
+do $educa$
+begin
+    if not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'news' and column_name = 'division') then
+        raise notice 'Parte 2 ignorada: rode antes o 11_divisoes_tags_notificacoes.sql.';
+        return;
+    end if;
+    insert into public.authors (name, role, bio, columnist, official) values ('Equipe JB Educa', 'Professores do JB Educa', 'Professores que preparam as aulas e as listas de exercícios do JB Educa.', false, true) on conflict (name) do nothing;
+    insert into public.tags (slug, name, description) values
+        ('transparencia', 'Transparência', 'Acesso a dados, contratos e gastos públicos.'),
+        ('contas-publicas', 'Contas públicas', 'Orçamento, contratos e fiscalização do dinheiro público.'),
+        ('reforma-administrativa', 'Reforma administrativa', 'A tramitação da reforma do serviço público.'),
+        ('dados-abertos', 'Dados abertos', 'Informações públicas em formato aberto.'),
+        ('equacao-do-2-grau', 'Equação do 2º grau', 'Discriminante, fórmula de Bhaskara e exercícios.'),
+        ('matematica-basica', 'Matemática básica', '')
+    on conflict (slug) do nothing;
+    update public.news set tags = array['contas-publicas', 'transparencia']::text[] where title = 'Dossiê aponta gargalos na fiscalização de obras públicas em 14 estados' and tags = '{}';
+    update public.news set tags = array['reforma-administrativa']::text[] where title = 'Relator apresenta parecer final sobre reforma administrativa nesta quinta-feira' and tags = '{}';
+    update public.news set tags = array['transparencia']::text[] where title = 'Comissão aprova novo marco regulatório para transparência pública' and tags = '{}';
+    update public.news set tags = array['reforma-administrativa']::text[] where title = 'Votação da reforma administrativa no plenário' and tags = '{}';
+    update public.news set tags = array['transparencia', 'contas-publicas']::text[] where title = 'Transparência não é favor, é dever' and tags = '{}';
+    update public.news set tags = array['transparencia']::text[] where title = 'O que muda com o novo marco de transparência pública' and tags = '{}';
+    update public.news set tags = array['dados-abertos', 'transparencia']::text[] where title = '“Dados abertos economizam dinheiro público”, diz pesquisadora' and tags = '{}';
+    update public.news set tags = array['dados-abertos', 'contas-publicas']::text[] where title = 'Estádios públicos passam a divulgar custos de manutenção em painel aberto' and tags = '{}';
+    insert into public.news (division, category, title, subtitle, image, author, body, status, featured, date, kind, tags)
+    select 'educa', 'matematica', 'Equação do 2º grau: como usar a fórmula de Bhaskara', 'Passo a passo para encontrar as raízes de qualquer equação do tipo ax² + bx + c = 0.', 'assets/img/cat-educacao.svg', 'Equipe JB Educa',
+           '["Uma equação do 2º grau tem a forma $$ax^2 + bx + c = 0$$, com $$a \\neq 0$$. Resolver a equação é encontrar os valores de $$x$$ que a tornam verdadeira: as **raízes**.","## 1. Calcule o discriminante","$$ \\Delta = b^2 - 4ac","- Se $$\\Delta > 0$$, há duas raízes reais diferentes.","- Se $$\\Delta = 0$$, há uma raiz real (dupla).","- Se $$\\Delta < 0$$, não há raiz real.","## 2. Aplique a fórmula","$$ x = \\frac{-b \\pm \\sqrt{\\Delta}}{2a}","## Exemplo resolvido","Resolva $$x^2 - 5x + 6 = 0$$. Aqui $$a = 1$$, $$b = -5$$ e $$c = 6$$.","$$ \\Delta = (-5)^2 - 4 \\cdot 1 \\cdot 6 = 25 - 24 = 1","$$ x = \\frac{5 \\pm 1}{2} \\Rightarrow x_1 = 3, \\quad x_2 = 2","> Confira sempre: substitua cada raiz na equação original. $$3^2 - 5 \\cdot 3 + 6 = 0$$ ✔","Material de demonstração do JB Educa, no projeto acadêmico Jornal Brasileiro (JB)."]'::jsonb, 'publicada', false, now() - interval '140 minutes', 'aula', array['equacao-do-2-grau', 'matematica-basica']::text[]
+    where not exists (select 1 from public.news where title = 'Equação do 2º grau: como usar a fórmula de Bhaskara');
+    insert into public.news (division, category, title, subtitle, image, author, body, status, featured, date, kind, tags)
+    select 'educa', 'matematica', 'Lista de exercícios: equação do 2º grau', 'Seis exercícios com resposta para treinar o discriminante e a fórmula de Bhaskara.', 'assets/img/cat-educacao.svg', 'Equipe JB Educa',
+           '["Tente resolver antes de abrir a resposta. Use $$\\Delta = b^2 - 4ac$$ e $$x = \\frac{-b \\pm \\sqrt{\\Delta}}{2a}$$.","?? Calcule o discriminante de $$x^2 + 2x - 8 = 0$$.\n=> $$\\Delta = 2^2 - 4 \\cdot 1 \\cdot (-8) = 4 + 32 = 36$$","?? Encontre as raízes de $$x^2 + 2x - 8 = 0$$.\n=> $$x = \\frac{-2 \\pm 6}{2}$$, então $$x_1 = 2$$ e $$x_2 = -4$$.","?? Quantas raízes reais tem $$x^2 - 6x + 9 = 0$$?\n=> $$\\Delta = 36 - 36 = 0$$: uma raiz real dupla, $$x = 3$$.","?? Quantas raízes reais tem $$2x^2 + x + 5 = 0$$?\n=> $$\\Delta = 1 - 40 = -39 < 0$$: nenhuma raiz real.","?? Resolva $$2x^2 - 8 = 0$$.\n=> Equação incompleta: $$x^2 = 4$$, logo $$x = \\pm 2$$.","?? A área de um terreno retangular é 24 m² e um lado mede 2 m a mais que o outro. Quanto mede o lado menor?\n=> $$x(x + 2) = 24 \\Rightarrow x^2 + 2x - 24 = 0$$; $$\\Delta = 100$$; $$x = 4$$ (a raiz negativa não serve). O lado menor mede 4 m.","Material de demonstração do JB Educa, no projeto acadêmico Jornal Brasileiro (JB)."]'::jsonb, 'publicada', false, now() - interval '135 minutes', 'exercicios', array['equacao-do-2-grau']::text[]
+    where not exists (select 1 from public.news where title = 'Lista de exercícios: equação do 2º grau');
+    insert into public.news (division, category, title, subtitle, image, author, body, status, featured, date, kind, tags)
+    select 'educa', 'portugues', 'Crase: quando usar o acento grave', 'Três perguntas rápidas que resolvem a maioria das dúvidas sobre a crase.', 'assets/img/cat-educacao.svg', 'Equipe JB Educa',
+           '["A crase é a junção da preposição **a** com o artigo **a** (ou com o \"a\" de aquele, aquela, aquilo). O acento grave marca essa junção.","## Truque da troca","Troque a palavra feminina por uma masculina. Se aparecer **ao**, há crase: \"Vou **à** escola\" → \"Vou **ao** colégio\".","## Quando não usar","- Antes de palavras masculinas: \"andar a cavalo\".","- Antes de verbos: \"começou a chover\".","- Entre palavras repetidas: \"cara a cara\".","?? Complete: \"Entreguei o livro ___ professora.\"\n=> **à** (entreguei o livro **ao** professor).","Material de demonstração do JB Educa, no projeto acadêmico Jornal Brasileiro (JB)."]'::jsonb, 'publicada', false, now() - interval '150 minutes', 'aula', '{}'::text[]
+    where not exists (select 1 from public.news where title = 'Crase: quando usar o acento grave');
+end $educa$;

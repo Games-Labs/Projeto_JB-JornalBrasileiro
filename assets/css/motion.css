@@ -1,0 +1,135 @@
+/* =====================================================================
+   Jornal Brasileiro (JB): sistema de animações (motion.css + motion.js)
+   ---------------------------------------------------------------------
+   Carregado depois do style.css. Tudo é discreto e usa só transform e
+   opacity (não mexe no layout). Os tokens abaixo controlam velocidade e
+   intensidade; cada divisão pode redefinir os seus (ex.: JB Educa).
+   Sem JavaScript nada fica escondido: o estado "antes de aparecer"
+   (.jb-reveal) só existe depois que o motion.js marca <html class="jb-motion">.
+   Movimento reduzido: preferência do sistema (prefers-reduced-motion) ou
+   o botão "Menos animação" dos controles de acessibilidade (data-motion="reduce").
+   ===================================================================== */
+
+/* 1. Tokens */
+:root {
+    --jb-motion-dur: .5s;            /* entrada dos blocos */
+    --jb-motion-fast: .18s;          /* botões, abas, filtros */
+    --jb-motion-ease: cubic-bezier(.2, .7, .2, 1);
+    --jb-motion-dist: 14px;          /* quanto o bloco sobe ao aparecer */
+    --jb-motion-stagger: 60ms;       /* intervalo entre cards vizinhos */
+    --jb-motion-lift: -3px;          /* elevação do card no hover */
+    --jb-motion-zoom: 1.03;          /* zoom da imagem do card */
+    --jb-progress-height: 3px;
+    --jb-progress-color: var(--jb-accent);
+}
+/* JB Educa: um pouco mais curto e com um leve "quique", no verde da divisão */
+:root[data-division="educa"] {
+    --jb-motion-dist: 10px;
+    --jb-motion-ease: cubic-bezier(.34, 1.36, .64, 1);
+    --jb-motion-stagger: 70ms;
+    --jb-progress-color: var(--educa, var(--jb-accent));
+}
+/* Intensidades opcionais por bloco: data-reveal="fade" | "zoom" | "left" */
+
+/* 2. Entrada do cabeçalho (só CSS: termina sempre visível, mesmo sem JS) */
+@keyframes jbHeaderIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.site-header { animation: jbHeaderIn .32s var(--jb-motion-ease) both; }
+
+/* 3. Revelar ao rolar / ao carregar (classes postas pelo motion.js) */
+html.jb-motion .jb-reveal {
+    opacity: 0;
+    transform: translate3d(0, var(--jb-motion-dist), 0);
+    transition: opacity var(--jb-motion-dur) var(--jb-motion-ease), transform var(--jb-motion-dur) var(--jb-motion-ease);
+    transition-delay: var(--jb-delay, 0ms);
+}
+html.jb-motion .jb-reveal[data-reveal="fade"] { transform: none; }
+html.jb-motion .jb-reveal[data-reveal="zoom"] { transform: scale(.97); }
+html.jb-motion .jb-reveal[data-reveal="left"] { transform: translate3d(calc(var(--jb-motion-dist) * -1), 0, 0); }
+html.jb-motion .jb-reveal.is-in { opacity: 1; transform: none; }
+
+/* 4. Interação */
+/* Cards: sobem um pouco e a imagem aproxima, só em aparelhos com mouse */
+.mini-card, .live-card, .column-card, .editorial-card, .special-card, .svc-card, .team-card, .hist-item, .match-card {
+    transition: box-shadow .2s, transform .2s var(--jb-motion-ease), border-color .2s;
+}
+@media (hover: hover) and (pointer: fine) {
+    .news-card:hover, .column-card:hover, .live-card:hover, .editorial-card:hover, .special-card:hover, .svc-card:hover, .team-card:hover, .match-card:hover {
+        transform: translateY(var(--jb-motion-lift)); box-shadow: var(--jb-shadow-lg);
+    }
+    .news-card:hover .card-thumb { transform: scale(var(--jb-motion-zoom)); }
+}
+/* Toque: sem "hover preso" depois do toque; resposta ao apertar */
+@media (hover: none) {
+    .news-card:hover { transform: none; }
+    .news-card:hover .card-thumb, .mini-feature:hover .mini-feature-media img { transform: none; }
+    .news-card:active, .column-card:active, .live-card:active, .mini-feature:active, .svc-card:active, .match-card:active { transform: scale(.985); }
+}
+
+/* Botões: cor e sombra já vêm do Bootstrap; aqui o "apertar" */
+.btn { transition: color var(--jb-motion-fast), background-color var(--jb-motion-fast), border-color var(--jb-motion-fast), box-shadow var(--jb-motion-fast), transform .12s ease-out; }
+.btn:not(:disabled):not(.disabled):active { transform: translateY(1px) scale(.98); }
+
+/* Abas, filtros e paginação */
+.nav-link, .filter-bar .btn, .league-tabs a, .subject-chips a, .page-link, .admin-nav a {
+    transition: color var(--jb-motion-fast), background-color var(--jb-motion-fast), border-color var(--jb-motion-fast), box-shadow var(--jb-motion-fast);
+}
+.tab-pane.fade { transition: opacity .2s linear; }
+
+/* Menus e dropdowns em geral (o do perfil já tem o próprio) */
+@keyframes jbDropIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.dropdown-menu.show:not(.user-menu) { animation: jbDropIn .18s var(--jb-motion-ease); }
+
+/* Resposta a ações: seguir, favoritar, ligar notificações, preferências */
+@keyframes jbPop { 0% { transform: scale(1); } 35% { transform: scale(.93); } 70% { transform: scale(1.04); } 100% { transform: scale(1); } }
+.jb-pop { animation: jbPop .32s var(--jb-motion-ease); }
+.form-check-input { transition: background-color .15s, background-position .15s ease-in-out, border-color .15s, box-shadow .15s; }
+
+/* Contador do sino quando chega aviso novo */
+@keyframes jbBump { 0%, 100% { transform: none; } 30% { transform: scale(1.35); } 60% { transform: scale(.9); } }
+.jb-bump { animation: jbBump .45s var(--jb-motion-ease); }
+
+/* 5. Barra de progresso de leitura (só na página da matéria) */
+.jb-progress {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1045;
+    height: var(--jb-progress-height); pointer-events: none;
+    background: transparent;
+}
+.jb-progress span {
+    display: block; height: 100%; width: 100%;
+    background: var(--jb-progress-color);
+    transform: scaleX(var(--p, 0)); transform-origin: 0 50%;
+    transition: transform .12s linear;
+    will-change: transform;
+}
+.jb-progress[hidden] { display: none; }
+:root[data-contrast="high"] .jb-progress { --jb-progress-height: 5px; }
+:root[data-contrast="high"] .jb-progress span { background: var(--jb-ink); }
+
+/* 6. Movimento reduzido do sistema (ex.: Windows com "Efeitos de animação" desligado):
+      nada desliza, aproxima nem pula; os blocos só esmaecem ao aparecer (troca de opacidade
+      não incomoda quem é sensível a movimento). O botão "Menos animação" desliga tudo (abaixo). */
+@media (prefers-reduced-motion: reduce) {
+    .site-header { animation-name: jbFadeIn; }
+    .dropdown-menu.show:not(.user-menu) { animation-name: jbFadeIn; }
+    .jb-pop, .jb-bump { animation: none !important; }
+    .btn:not(:disabled):not(.disabled):active, .news-card:active, .column-card:active, .live-card:active, .mini-feature:active, .svc-card:active, .match-card:active { transform: none; }
+    .news-card:hover, .column-card:hover, .live-card:hover, .editorial-card:hover, .special-card:hover, .svc-card:hover, .team-card:hover, .match-card:hover { transform: none !important; }
+    .news-card:hover .card-thumb { transform: none !important; }
+    .jb-progress span { transition: none; }
+    html.jb-motion .jb-reveal, html.jb-motion .jb-reveal[data-reveal] { transform: none; transition: opacity .45s ease-out; transition-delay: var(--jb-delay, 0ms); }
+}
+:root[data-motion="reduce"] *, :root[data-motion="reduce"] *::before, :root[data-motion="reduce"] *::after {
+    animation-duration: .01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important; transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+}
+:root[data-motion="reduce"] .ticker-track { animation-duration: 240s !important; animation-iteration-count: infinite !important; }
+:root[data-motion="reduce"] :is(.news-card, .column-card, .live-card, .editorial-card, .special-card, .svc-card, .team-card, .match-card, .card-thumb, .mini-feature-media img) { transform: none !important; }
+:root[data-motion="reduce"] .jb-reveal { opacity: 1 !important; transform: none !important; }
+
+/* 7. Impressão: tudo visível, sem barra */
+@media print {
+    .jb-progress { display: none !important; }
+    html.jb-motion .jb-reveal { opacity: 1 !important; transform: none !important; }
+    .site-header { animation: none; }
+}

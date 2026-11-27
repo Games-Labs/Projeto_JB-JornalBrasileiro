@@ -2,6 +2,32 @@
    manchete + últimas + mais lidas → em andamento (ao vivo) → resumo do dia + especial da semana →
    política e economia → investigação → esportes e tecnologia → editorial e opinião →
    verificação de fatos → mais notícias. Seções sem conteúdo ficam escondidas. */
+
+// Saudação do Hero e serviços: não dependem das notícias, aparecem na hora
+(function () {
+    'use strict';
+    const { util } = JB;
+    const $ = id => document.getElementById(id);
+    function greet() {
+        const d = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Sao_Paulo' });
+        $('greet-hello').textContent = util.greeting() + '!';
+        $('greet-date').textContent = d.charAt(0).toUpperCase() + d.slice(1);
+    }
+    greet();
+    setInterval(greet, 60000);   // aba aberta na virada de "Bom dia" para "Boa tarde"
+    // Previsão curta ao lado da saudação (mesmo cache do widget de tempo)
+    if (JB.Services) JB.Services.greetWeather($('greet-weather'));
+    // Widgets de serviço só carregam quando chegam perto da tela
+    const boxes = document.querySelectorAll('[data-service]');
+    const run = el => { const fn = JB.Services && JB.Services[el.dataset.service + 'Widget']; if (fn && !el.dataset.done) { el.dataset.done = '1'; fn(el); } };
+    if (!JB.Services) { boxes.forEach(el => el.closest('.home-services').remove()); return; }
+    if ('IntersectionObserver' in window) {
+        const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { io.unobserve(e.target); run(e.target); } }), { rootMargin: '300px' });
+        boxes.forEach(el => io.observe(el));
+    } else boxes.forEach(run);
+    document.addEventListener('jb:consent', () => boxes.forEach(el => { if (el.dataset.done) { delete el.dataset.done; run(el); } }));
+})();
+
 JB.ready.then(function () {
     'use strict';
     const { News, Authors, CATEGORIES, util } = JB;

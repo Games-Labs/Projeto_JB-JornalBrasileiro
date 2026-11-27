@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#941F2B">
+    <meta name="robots" content="noindex">
+    <title>Segurança — Painel — Jornal Brasileiro (JB)</title>
+    <link rel="icon" href="../assets/favicon/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon/favicon-16x16.png">
+    <link rel="apple-touch-icon" href="../assets/favicon/apple-touch-icon.png">
+    <link rel="manifest" href="../assets/favicon/site.webmanifest">
+    <!-- Fontes hospedadas no próprio site (Source Serif 4 e Inter, licença OFL): sem pedidos ao Google -->
+    <link rel="preload" href="../assets/fonts/source-serif-4-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="../assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="../assets/vendor/bootstrap/bootstrap.min.css">
+    <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="../assets/css/motion.css">
+    <script>try{var d=document.documentElement,s=localStorage;if(s.getItem('jb_theme')==='dark')d.setAttribute('data-bs-theme','dark');var a=JSON.parse(s.getItem('jb_a11y')||'{}')||{};if(a.font>0&&a.font<4)d.setAttribute('data-font',String(a.font|0));if(a.contrast)d.setAttribute('data-contrast','high')}catch(e){}</script>
+</head>
+<body data-root="../" data-page="admin" data-admin="seguranca">
+    <div id="site-top"></div>
+    <main class="container-fluid admin-main main-layout">
+        <div id="admin-loading" class="jb-loading" role="status"><span class="jb-spinner" aria-hidden="true"></span>Carregando o painel…</div>
+        <div id="admin-error"></div>
+        <div id="gate" class="auth-card text-center" hidden>
+            <h1 class="h3">Área restrita</h1>
+            <p>O Painel Administrativo é exclusivo para a equipe (jornalistas, professores do JB Educa, coordenadores e administradores).</p>
+            <a class="btn btn-primary" href="login.html?next=admin.html">Entrar com uma conta da redação</a>
+        </div>
+
+        <div id="panel" class="admin-shell" hidden>
+            <nav class="admin-nav" id="admin-nav" aria-label="Seções do painel"></nav>
+            <div class="admin-content">
+                <header class="admin-head">
+                    <p class="admin-kicker">Painel Administrativo</p>
+                    <h1 class="page-title">Segurança</h1>
+                    <p class="page-lead">Modo lockdown, proteções do site, verificação em duas etapas da equipe, notificações e auditoria.</p>
+                </header>
+                <div class="role-note mb-3" id="role-note"></div>
+                <div class="alert" id="admin-msg" role="status" hidden></div>
+                <div id="admin-section"><div>
+                    <div class="row g-4">
+                        <div class="col-12">
+                            <div class="panel-box lockdown-panel" id="lockdown-panel">
+                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                                    <h2 class="h5 mb-0">Modo lockdown</h2>
+                                    <span class="badge" id="lockdown-state">…</span>
+                                </div>
+                                <p class="small mb-2">Fecha o site para o público numa emergência (invasão, vazamento, conteúdo indevido no ar). Ligado, o banco de dados passa a:</p>
+                                <ul class="small mb-3 lockdown-locks">
+                                    <li>entregar matérias, autores, comentários e perfis públicos <strong>só para a equipe</strong> logada (com a verificação em duas etapas);</li>
+                                    <li>recusar comentários, denúncias, newsletter, favoritos e edição de perfil de quem não é da equipe;</li>
+                                    <li>suspender <strong>novos cadastros</strong> e a contagem de leituras;</li>
+                                    <li>mostrar a todos os outros uma tela de “site temporariamente fechado”, com o link de login para a equipe.</li>
+                                </ul>
+                                <form id="lockdown-form" method="post" novalidate>
+                                    <label class="form-label small fw-bold" for="lockdown-msg">Mensagem para o público (opcional)</label>
+                                    <textarea class="form-control mb-2" id="lockdown-msg" name="message" rows="2" maxlength="500" placeholder="Ex.: Estamos fazendo uma manutenção de segurança. Voltamos em breve."></textarea>
+                                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                                        <button class="btn btn-danger" type="submit" id="lockdown-toggle">Ligar o modo lockdown</button>
+                                        <small class="text-muted" id="lockdown-info"></small>
+                                    </div>
+                                </form>
+                                <div class="alert mt-3 mb-0" id="lockdown-alert" role="status" hidden></div>
+                            </div>
+                        </div>
+                        <div class="col-lg-5">
+                            <div class="panel-box mb-3">
+                                <div class="d-flex justify-content-between align-items-center gap-2 mb-2"><h2 class="h5 mb-0">Proteções</h2><button type="button" class="btn btn-sm btn-outline-dark" id="sec-recheck">Verificar de novo</button></div>
+                                <ul class="security-checks" id="sec-checks"></ul>
+                            </div>
+                            <div class="panel-box">
+                                <h2 class="h5 mb-2">Equipe: verificação em duas etapas</h2>
+                                <p class="small text-muted mb-2">Obrigatória para jornalistas, professores, coordenadores e administradores: sem ela o banco recusa qualquer ação da redação.</p>
+                                <div id="sec-staff"></div>
+                            </div>
+                        </div>
+                        <div class="col-lg-7">
+                            <div class="panel-box">
+                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                                    <h2 class="h5 mb-0">Auditoria</h2>
+                                    <select class="form-select form-select-sm w-auto" id="audit-filter" aria-label="Filtrar a auditoria">
+                                        <option value="">Tudo</option><option value="news">Matérias</option><option value="account">Contas e logins</option>
+                                        <option value="role">Cargos</option><option value="comment">Moderação</option><option value="report">Denúncias</option><option value="author">Autores</option>
+                                        <option value="badge">Selos</option><option value="tag">Tags</option><option value="site">Lockdown</option>
+                                    </select>
+                                </div>
+                                <p class="small text-muted">Gravada pelo próprio banco de dados (gatilhos): ninguém consegue editar ou apagar um registro pelo site.</p>
+                                <div id="audit-rows"></div>
+                                <button type="button" class="btn btn-sm btn-outline-dark mt-2" id="audit-more" hidden>Carregar mais</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    <div id="site-bottom"></div>
+    <script src="../assets/vendor/bootstrap/bootstrap.bundle.min.js"></script>
+    <script src="../assets/vendor/supabase/supabase.js"></script>
+    <script src="../assets/js/config.js"></script>
+    <script src="../assets/js/storage.js"></script>
+    <script src="../assets/js/supabase-backend.js"></script>
+    <script src="../assets/js/layout.js"></script>
+    <script src="../assets/js/motion.js"></script>
+    <script src="../assets/js/admin.js"></script>
+</body>
+</html>

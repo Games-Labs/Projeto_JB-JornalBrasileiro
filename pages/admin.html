@@ -16,193 +16,53 @@
     <link rel="preload" href="../assets/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="../assets/vendor/bootstrap/bootstrap.min.css">
     <link rel="stylesheet" href="../assets/css/style.css">
+    <link rel="stylesheet" href="../assets/css/motion.css">
     <script>try{var d=document.documentElement,s=localStorage;if(s.getItem('jb_theme')==='dark')d.setAttribute('data-bs-theme','dark');var a=JSON.parse(s.getItem('jb_a11y')||'{}')||{};if(a.font>0&&a.font<4)d.setAttribute('data-font',String(a.font|0));if(a.contrast)d.setAttribute('data-contrast','high')}catch(e){}</script>
 </head>
-<body data-root="../" data-page="admin">
+<body data-root="../" data-page="admin" data-admin="geral">
     <div id="site-top"></div>
-    <main class="container main-layout">
+    <main class="container-fluid admin-main main-layout">
         <div id="admin-loading" class="jb-loading" role="status"><span class="jb-spinner" aria-hidden="true"></span>Carregando o painel…</div>
         <div id="admin-error"></div>
         <div id="gate" class="auth-card text-center" hidden>
             <h1 class="h3">Área restrita</h1>
-            <p>O Painel Administrativo é exclusivo para a equipe da redação (jornalistas, coordenadores e administradores).</p>
+            <p>O Painel Administrativo é exclusivo para a equipe (jornalistas, professores do JB Educa, coordenadores e administradores).</p>
             <a class="btn btn-primary" href="login.html?next=admin.html">Entrar com uma conta da redação</a>
         </div>
 
-        <div id="panel" hidden>
-            <h1 class="page-title">Painel Administrativo</h1>
-            <p class="page-lead">Gerencie as matérias, a equipe, as denúncias, os comentários e acompanhe a audiência do portal.</p>
-            <div class="role-note mb-3" id="role-note"></div>
-            <div class="alert" id="admin-msg" role="status" hidden></div>
+        <div id="panel" class="admin-shell" hidden>
+            <nav class="admin-nav" id="admin-nav" aria-label="Seções do painel"></nav>
+            <div class="admin-content">
+                <header class="admin-head">
+                    <p class="admin-kicker">Painel Administrativo</p>
+                    <h1 class="page-title">Visão geral</h1>
+                    <p class="page-lead">Números da redação, visitantes do site e o que está pendente.</p>
+                </header>
+                <div class="role-note mb-3" id="role-note"></div>
+                <div class="alert" id="admin-msg" role="status" hidden></div>
+                <div id="admin-section">
+            <p class="overview-greeting" id="overview-greeting"></p>
             <div class="row g-3 mb-4" id="stats"></div>
-
-            <ul class="nav nav-tabs mb-4 admin-tabs" role="tablist">
-                <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-news" type="button" role="tab">Notícias (<span id="news-count">0</span>)</button></li>
-                <li class="nav-item" data-editor-only hidden><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-authors" type="button" role="tab">Autores (<span id="authors-count">0</span>)</button></li>
-                <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-audience" type="button" role="tab">Audiência</button></li>
-                <li class="nav-item" data-editor-only hidden><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-reports" type="button" role="tab">Denúncias (<span id="reports-count">0</span>)</button></li>
-                <li class="nav-item" data-editor-only hidden><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-comments" type="button" role="tab">Comentários (<span id="comments-count">0</span>)</button></li>
-                <li class="nav-item" data-editor-only hidden><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-team" type="button" role="tab">Equipe e cargos</button></li>
-                <li class="nav-item" data-editor-only hidden><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-security" type="button" role="tab">Segurança</button></li>
-            </ul>
-
-            <div class="tab-content">
-                <div class="tab-pane fade show active" id="tab-news" role="tabpanel">
-                    <div class="news-toolbar">
-                        <a class="btn btn-primary" href="editor.html" id="new-news-btn">+ Nova matéria</a>
-                        <input type="search" class="form-control form-control-sm admin-filter" id="news-q" placeholder="Filtrar por título ou autor" aria-label="Filtrar por título ou autor">
-                        <select class="form-select form-select-sm admin-filter" id="news-status" aria-label="Filtrar por status"><option value="">Todos os status</option></select>
-                        <select class="form-select form-select-sm admin-filter" id="news-kind" aria-label="Filtrar por tipo"><option value="">Todos os tipos</option></select>
-                        <div class="form-check form-switch mb-0"><input class="form-check-input" type="checkbox" id="news-mine"><label class="form-check-label small" for="news-mine">Só as minhas</label></div>
-                    </div>
-                    <p class="small text-muted">As matérias são escritas e editadas no <a href="editor.html">editor de matérias</a>, em página inteira, com formatação de texto, vídeo do YouTube, gráficos e rascunho automático.</p>
-                    <div class="table-responsive panel-box">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead><tr><th></th><th>Título</th><th>Editoria</th><th>Status</th><th>Data</th><th>Ações</th></tr></thead>
-                            <tbody id="news-rows"></tbody>
-                        </table>
-                    </div>
+            <div class="row g-4">
+                <div class="col-xl-8">
+                    <section class="panel-box h-100" aria-labelledby="visits-title">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                            <h2 class="h5 mb-0" id="visits-title">Visitantes do site</h2>
+                            <select class="form-select form-select-sm w-auto" id="visits-range" aria-label="Período"><option value="7">7 dias</option><option value="14">14 dias</option><option value="30" selected>30 dias</option><option value="90">90 dias</option></select>
+                        </div>
+                        <div class="visits-summary" id="visits-summary"></div>
+                        <div id="visits-chart"></div>
+                        <p class="small text-muted mb-0">Páginas vistas: contadas sempre, só como número. Visitantes diferentes: contados uma vez por dia por navegador, apenas de quem aceitou “Estatísticas” nos cookies (o número real é maior). Dia pelo horário de Brasília. Páginas do painel não contam.</p>
+                    </section>
                 </div>
-
-                <div class="tab-pane fade" id="tab-authors" role="tabpanel">
-                    <div class="row g-4">
-                        <div class="col-lg-5">
-                            <form id="author-form" class="panel-box" novalidate>
-                                <h2 class="h5 mb-3" id="author-form-title">Novo autor</h2>
-                                <input type="hidden" name="authorId">
-                                <div class="mb-3"><label class="form-label" for="au-name">Nome (como aparece na assinatura)</label><input class="form-control" id="au-name" name="name" maxlength="120" required><div class="invalid-feedback">Informe o nome.</div></div>
-                                <div class="mb-3"><label class="form-label" for="au-role">Cargo / função</label><input class="form-control" id="au-role" name="role" maxlength="80" placeholder="Repórter, Editor, Colunista de Economia…"></div>
-                                <div class="mb-3"><label class="form-label" for="au-bio">Minibiografia</label><textarea class="form-control" id="au-bio" name="bio" rows="3" maxlength="1000"></textarea></div>
-                                <div class="mb-3">
-                                    <span class="form-label d-block">Foto</span>
-                                    <div class="d-flex align-items-center gap-3 mb-2"><span id="au-avatar-preview"></span><input type="file" class="form-control form-control-sm" id="au-file" accept="image/*" aria-label="Enviar foto"></div>
-                                    <input type="hidden" name="avatar">
-                                    <button type="button" class="btn btn-sm btn-outline-dark" id="au-avatar-clear">Remover foto</button>
-                                    <div class="small mt-1" id="au-avatar-msg" role="status"></div>
-                                </div>
-                                <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="au-col" name="columnist"><label class="form-check-label" for="au-col">Colunista (aparece em Opinião)</label></div>
-                                <div class="form-check mb-3"><input class="form-check-input" type="checkbox" id="au-official" name="official"><label class="form-check-label" for="au-official">Perfil oficial da redação (mostra o selo do JB)</label></div>
-                                <button class="btn btn-primary" type="submit">Salvar autor</button>
-                                <button class="btn btn-outline-dark" type="button" id="author-cancel">Limpar</button>
-                            </form>
-                        </div>
-                        <div class="col-lg-7"><div id="author-rows"></div></div>
-                    </div>
-                </div>
-
-                <div class="tab-pane fade" id="tab-audience" role="tabpanel">
-                    <p class="small text-muted">Leituras contadas de forma anônima (só matérias publicadas). Os números servem para o ranking “Mais lidas” e para planejar a cobertura.</p>
-                    <div class="row g-4">
-                        <div class="col-lg-6"><div class="panel-box h-100" id="aud-cat"></div></div>
-                        <div class="col-lg-6"><div class="panel-box h-100" id="aud-kind"></div></div>
-                        <div class="col-lg-6"><div class="panel-box h-100" id="aud-month"></div></div>
-                        <div class="col-lg-6"><div class="panel-box h-100"><h2 class="h6 fw-bold">Matérias mais lidas</h2><ol class="most-read-list" id="aud-top"></ol></div></div>
-                    </div>
-                </div>
-
-                <div class="tab-pane fade" id="tab-reports" role="tabpanel"><div id="report-rows"></div></div>
-                <div class="tab-pane fade" id="tab-comments" role="tabpanel"><div id="comment-rows"></div></div>
-
-                <div class="tab-pane fade" id="tab-team" role="tabpanel">
-                    <div class="row g-4">
-                        <div class="col-lg-8">
-                            <div class="panel-box">
-                                <h2 class="h5 mb-2">Cargos e selos da redação</h2>
-                                <p class="small mb-3" id="team-rules"></p>
-                                <form id="team-search" class="d-flex gap-2 mb-2" role="search" method="post">
-                                    <input type="search" class="form-control" name="q" maxlength="120" placeholder="Buscar por nome ou e-mail" aria-label="Buscar conta por nome ou e-mail">
-                                    <button class="btn btn-primary" type="submit">Buscar</button>
-                                </form>
-                                <p class="small text-muted mb-3" id="team-scope">Mostrando a equipe e quem tem selo. Busque um nome ou e-mail para achar qualquer conta.</p>
-                                <div class="alert" id="team-msg" role="status" hidden></div>
-                                <div id="team-rows"></div>
-                            </div>
-                        </div>
-                        <div class="col-lg-4">
-                            <div class="panel-box mb-3">
-                                <h2 class="h6 fw-bold">Hierarquia</h2>
-                                <ol class="role-ladder small mb-0">
-                                    <li><strong>Administrador</strong> — tudo. Só é dado pelo SQL do Supabase.</li>
-                                    <li><strong>Coordenador</strong> — publica, arquiva, corrige e exclui matérias; denúncias, comentários e autores; coloca e tira jornalistas.</li>
-                                    <li><strong>Jornalista</strong> — cria e edita as próprias matérias até “Aprovada”; quem publica é o coordenador.</li>
-                                    <li><strong>Leitor</strong> — conta comum do portal.</li>
-                                </ol>
-                            </div>
-                            <div class="panel-box mb-3">
-                                <h2 class="h6 fw-bold">Selos de perfil</h2>
-                                <p class="small mb-2">Aparecem no perfil público e nos comentários. Não dão nenhum poder na redação.</p>
-                                <ul class="small mb-0 ps-3" id="badge-legend"></ul>
-                            </div>
-                            <div class="panel-box">
-                                <h2 class="h6 fw-bold">Últimas mudanças de cargo</h2>
-                                <ul class="admin-list small mb-0" id="team-log"></ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="tab-pane fade" id="tab-security" role="tabpanel">
-                    <div class="row g-4">
-                        <div class="col-12">
-                            <div class="panel-box lockdown-panel" id="lockdown-panel">
-                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-                                    <h2 class="h5 mb-0">Modo lockdown</h2>
-                                    <span class="badge" id="lockdown-state">…</span>
-                                </div>
-                                <p class="small mb-2">Fecha o site para o público numa emergência (invasão, vazamento, conteúdo indevido no ar). Ligado, o banco de dados passa a:</p>
-                                <ul class="small mb-3 lockdown-locks">
-                                    <li>entregar matérias, autores, comentários e perfis públicos <strong>só para a equipe</strong> logada (com a verificação em duas etapas);</li>
-                                    <li>recusar comentários, denúncias, newsletter, favoritos e edição de perfil de quem não é da equipe;</li>
-                                    <li>suspender <strong>novos cadastros</strong> e a contagem de leituras;</li>
-                                    <li>mostrar a todos os outros uma tela de “site temporariamente fechado”, com o link de login para a equipe.</li>
-                                </ul>
-                                <form id="lockdown-form" method="post" novalidate>
-                                    <label class="form-label small fw-bold" for="lockdown-msg">Mensagem para o público (opcional)</label>
-                                    <textarea class="form-control mb-2" id="lockdown-msg" name="message" rows="2" maxlength="500" placeholder="Ex.: Estamos fazendo uma manutenção de segurança. Voltamos em breve."></textarea>
-                                    <div class="d-flex flex-wrap gap-2 align-items-center">
-                                        <button class="btn btn-danger" type="submit" id="lockdown-toggle">Ligar o modo lockdown</button>
-                                        <small class="text-muted" id="lockdown-info"></small>
-                                    </div>
-                                </form>
-                                <div class="alert mt-3 mb-0" id="lockdown-alert" role="status" hidden></div>
-                            </div>
-                        </div>
-                        <div class="col-lg-5">
-                            <div class="panel-box mb-3">
-                                <div class="d-flex justify-content-between align-items-center gap-2 mb-2"><h2 class="h5 mb-0">Proteções</h2><button type="button" class="btn btn-sm btn-outline-dark" id="sec-recheck">Verificar de novo</button></div>
-                                <ul class="security-checks" id="sec-checks"></ul>
-                            </div>
-                            <div class="panel-box">
-                                <h2 class="h5 mb-2">Equipe: verificação em duas etapas</h2>
-                                <p class="small text-muted mb-2">Obrigatória para jornalistas, coordenadores e administradores: sem ela o banco recusa qualquer ação da redação.</p>
-                                <div id="sec-staff"></div>
-                            </div>
-                        </div>
-                        <div class="col-lg-7">
-                            <div class="panel-box">
-                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-                                    <h2 class="h5 mb-0">Auditoria</h2>
-                                    <select class="form-select form-select-sm w-auto" id="audit-filter" aria-label="Filtrar a auditoria">
-                                        <option value="">Tudo</option><option value="news">Matérias</option><option value="account">Contas e logins</option>
-                                        <option value="role">Cargos</option><option value="comment">Moderação</option><option value="report">Denúncias</option><option value="author">Autores</option>
-                                        <option value="badge">Selos</option><option value="site">Lockdown</option>
-                                    </select>
-                                </div>
-                                <p class="small text-muted">Gravada pelo próprio banco de dados (gatilhos): ninguém consegue editar ou apagar um registro pelo site.</p>
-                                <div id="audit-rows"></div>
-                                <button type="button" class="btn btn-sm btn-outline-dark mt-2" id="audit-more" hidden>Carregar mais</button>
-                            </div>
-                        </div>
-                    </div>
+                <div class="col-xl-4">
+                    <section class="panel-box mb-3" aria-labelledby="todo-title"><h2 class="h6 fw-bold" id="todo-title">Pendências</h2><ul class="todo-list" id="todo-list"></ul></section>
+                    <section class="panel-box mb-3" aria-labelledby="quick-title"><h2 class="h6 fw-bold" id="quick-title">Atalhos</h2><div class="d-flex flex-wrap gap-2" id="quick-links"></div></section>
+                    <div id="overview-lock"></div>
                 </div>
             </div>
-        </div>
-
-        <div class="modal fade" id="versionsModal" tabindex="-1" aria-labelledby="versionsTitle" aria-hidden="true">
-            <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
-                <div class="modal-header"><h5 class="modal-title" id="versionsTitle">Histórico de versões</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
-                <div class="modal-body" id="versions-body"></div>
-            </div></div>
+                </div>
+            </div>
         </div>
     </main>
     <div id="site-bottom"></div>
@@ -212,6 +72,7 @@
     <script src="../assets/js/storage.js"></script>
     <script src="../assets/js/supabase-backend.js"></script>
     <script src="../assets/js/layout.js"></script>
+    <script src="../assets/js/motion.js"></script>
     <script src="../assets/js/admin.js"></script>
 </body>
 </html>
